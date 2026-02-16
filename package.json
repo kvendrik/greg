@@ -3,9 +3,7 @@
   "scripts": {
     "agent": "bun run agent/server.ts",
     "clients:cli": "bun run clients/cli.ts",
-    "clients:whatsapp": "bun run clients/whatsapp.ts",
-    "memory:create": "bun run memory/create.ts",
-    "memory:clear": "rm -rf memory/.data && bun run qmd collection remove journal"
+    "clients:whatsapp": "bun run clients/whatsapp.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
