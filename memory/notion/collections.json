@@ -1,0 +1,11 @@
+{
+  "journal": {
+    "splitIntoEntries": true,
+    "description": "Personal daily journal",
+    "pages": {
+      "2026": "2e05b5081ad780769fe6d9d45f1fcb41",
+      "2025-from-oct": "2815b5081ad78073bb0ecfa52221bdfd",
+      "2025-to-oct": "1745b5081ad780028f08d7ad107c67d6"
+    }
+  }
+}
