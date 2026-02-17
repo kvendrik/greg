@@ -55,11 +55,15 @@ export async function prompt(
     }
 
     if (value?.length) {
-      const data = JSON.parse(decoder.decode(value, { stream: true }));
-      if (data.type === 'content') {
-        onContent(data.chunk);
-      } else if (data.type === 'thinking') {
-        onThinking(data.chunk);
+      try {
+        const data = JSON.parse(decoder.decode(value, { stream: true }));
+        if (data.type === 'content') {
+          onContent(data.chunk);
+        } else if (data.type === 'thinking') {
+          onThinking(data.chunk);
+        }
+      } catch (error) {
+        onThinking(error.message);
       }
     }
   }

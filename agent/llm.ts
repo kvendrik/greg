@@ -1,5 +1,5 @@
 import ollama from 'ollama';
-import type { Message } from 'ollama';
+import type { AbortableAsyncIterator, ChatResponse, Message } from 'ollama';
 import { spawn } from 'child_process';
 import { create } from './tools/browser';
 import { runTerminalCommandTool } from './tools/terminal';
@@ -28,6 +28,7 @@ You are a helpful personal assistant that runs on my personal computer and talks
 Your goal is to answer my questions based on the tools you have access to. 
 
 ## Rules
+- Before taking any action, verify you have all required information. If missing critical context (location, dates, preferences, etc.), ASK the user first.
 - You keep answers short and conversational. 
 - No formatting.
 - Do use emojis
@@ -37,10 +38,17 @@ Your goal is to answer my questions based on the tools you have access to.
 ## Tools
 - Run terminal commands through the 'run_terminal_command' tool
 - Open a web page through the 'open_web_page' tool. Start by using Google or DuckDuckGo to find the right URL when not provided with a direct URL.
-- Click on a specific element on the web page through the 'click_on_web_page_element' tool
+- Click on a specific element on the web page through the 'click_on_web_page_element' tool. 
+- Use the 'get_web_page_elements' tool to get a list of IDs of interactive elements on the current web page.
+- Use 'click_on_web_page_element' with the ID of the interactive element to click on.
 - Search through the long term memory for context through the 'search_long_term_memory' tool
 - Get a single memory entry by docid through the 'get_memory_entry' tool
 - After each prompt we automatically update the long term memory with the new information. You don’t have to do this yourself.
+
+DO NOT assume anything:
+- Location (ask "Where are you looking for this?")
+- Dates/times (ask "When?")
+- Etc...
 
 ## Good to know
 - Code that you are currently running lives in this path: ${process.cwd()}
@@ -59,10 +67,12 @@ ${memory.getPersistedMemory() ?? 'Nothing known yet'}`;
     prompt: async (
       content: string,
       {
+        onStart,
         onContent,
         onThinking,
         onDone,
       }: {
+        onStart: (stream: AbortableAsyncIterator<ChatResponse>) => void;
         onContent: (chunk: string) => void;
         onThinking: (chunk: string) => void;
         onDone: () => void;
@@ -71,6 +81,7 @@ ${memory.getPersistedMemory() ?? 'Nothing known yet'}`;
       const finalContent = `Time is ${new Date().toISOString()}. User sent this prompt: "${content}"`;
       thread.push({ role: 'user', content: finalContent });
       await prompt(finalContent, {
+        onStart,
         onContent,
         onThinking,
         onDone: async (history) => {
@@ -92,6 +103,7 @@ async function prompt(
     onDone,
     history,
   }: {
+    onStart: (stream: AbortableAsyncIterator<ChatResponse>) => void;
     onThinking: (chunk: string) => void;
     onContent: (chunk: string) => void;
     onDone: (newHistory: Message[]) => void;

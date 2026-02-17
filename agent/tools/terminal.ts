@@ -47,7 +47,7 @@ export const runTerminalCommandTool: Tool<{ command: string }> = {
         const result = execSync(command).toString();
         return { content: result };
       } catch (error) {
-        return { content: error };
+        return { content: error.message };
       }
     }
 

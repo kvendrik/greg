@@ -45,46 +45,107 @@ export async function create(): Promise<{ state: State; tools: Tool<any>[] }> {
 
       try {
         await state.page.goto(url, {
-          waitUntil: 'domcontentloaded',
+          waitUntil: 'load',
         });
-      } catch (error) {
-        return { content: 'Error getting web page content' };
-      }
+        await state.page.waitForLoadState('networkidle');
 
-      const content = await state.page.content();
-      const markdown = convert(content, {
-        skipImages: true,
-      });
-      return { content: markdown };
+        const content = await state.page.content();
+        const markdown = convert(content, {
+          skipImages: true,
+        });
+
+        return { content: markdown };
+      } catch (error) {
+        return { content: 'Error getting web page content: ' + error };
+      }
     },
   };
 
-  const clickOnWebPageElementTool: Tool<{ selector: string }> = {
+  const getWebPageElementsTool: Tool<{ selector: string }> = {
+    spec: {
+      type: 'function',
+      function: {
+        name: 'get_web_page_elements',
+        description: 'Get all interactive elements on the current web page',
+      },
+    },
+    handler: async () => {
+      const elements = await getInteractiveElements(state.page);
+      console.log(elements);
+      return { content: elements };
+    },
+  };
+
+  const clickOnWebPageElementTool: Tool<{ id: number }> = {
     spec: {
       type: 'function',
       function: {
         name: 'click_on_web_page_element',
-        description: 'Click on a specific element on the web page',
+        description: 'Click on a specific element on the current web page',
         parameters: {
           type: 'object',
-          required: ['url'],
+          required: ['id'],
           properties: {
-            selector: {
-              type: 'string',
-              description: 'The JavaScript selector of the element to click on',
+            id: {
+              type: 'number',
+              description: 'The id of the element to click on',
             },
           },
         },
       },
     },
-    handler: async ({ selector }) => {
-      await state.page.click(selector);
-      return { content: `Clicked on ${selector}` };
+    handler: async ({ id }) => {
+      const el = state.page.locator(INTERACTIVE_SELECTOR).nth(id);
+      await el.scrollIntoViewIfNeeded();
+      await el.click();
+      return { content: `Clicked on element [${id}]` };
     },
   };
 
   return {
     state,
-    tools: [getWebPageContentTool, clickOnWebPageElementTool],
+    tools: [
+      getWebPageContentTool,
+      clickOnWebPageElementTool,
+      getWebPageElementsTool,
+    ],
   };
+}
+
+const INTERACTIVE_SELECTOR = [
+  'a[href]',
+  'button',
+  'input',
+  'textarea',
+  'select',
+  '[role="button"]',
+  '[role="link"]',
+  '[role="checkbox"]',
+  '[role="menuitem"]',
+  '[onclick]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+async function getInteractiveElements(page: playwright.Page): Promise<string> {
+  const elements = page.locator(INTERACTIVE_SELECTOR);
+  const count = await elements.count();
+
+  const lines: string[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const el = elements.nth(i);
+
+    const tag = await el.evaluate((e) => e.tagName.toLowerCase());
+    const text = (await el.textContent())?.trim().slice(0, 50) || '';
+    const attrs = await el.evaluate((e) => {
+      return ['href', 'name', 'type', 'placeholder', 'aria-label']
+        .map((a) => (e.getAttribute(a) ? `${a}="${e.getAttribute(a)}"` : ''))
+        .filter(Boolean)
+        .join(' ');
+    });
+
+    lines.push(`[${i}] <${tag}${attrs ? ' ' + attrs : ''}>${text}</${tag}>`);
+  }
+
+  return lines.join('\n');
 }

@@ -84,15 +84,44 @@ export async function postprocess(messages: Message[]) {
     messages: [
       ...messages,
       {
+        role: 'system',
+        content: `
+Extract ONLY persistent facts about the user that will be relevant across many future conversations.
+
+## SAVE (durable facts)
+- Identity: name, location, timezone, language
+- Preferences: communication style, tone, formats
+- Context: job, company, projects, expertise
+- Constraints: allergies, accessibility needs, budgets
+- Relationships: family, team members mentioned repeatedly
+
+## DO NOT SAVE (ephemeral)
+- Current task or query ("looking for jazz concerts")
+- Temporal requests ("wants X today/tomorrow")
+- One-time instructions ("create a skill when next asked")
+- Pending actions or todos
+- Anything with "today", "now", "this", "next"
+
+## Test
+Ask: "Will this matter in a conversation 2 weeks from now?"
+- "User lives in Amsterdam" → YES, save
+- "User’s favorite color is blue" → YES, save
+- "User wants jazz concerts today" → NO, skip
+- "Wants more information about John's professional background"  → NO, skip
+
+Return only facts that pass this test.
+`,
+      },
+      {
         role: 'user',
         content: `
-Your job is to extract persistent user facts from the conversation and update the existing facts. 
-Do not delete facts unless the user has specifically asked you to do so.
-Return ONLY the updated facts as markdown.
+## Conversation to analyze
+${messages.map((m) => `${m.role}: ${m.content}`).join('\n\n')}
 
 ## Existing facts
 ${currentMemory ?? 'No existing facts found'}
-`,
+
+Extract and return the complete updated fact list.`,
       },
     ],
     think: true,

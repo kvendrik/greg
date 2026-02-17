@@ -7,6 +7,10 @@ NOTION_API_KEY=XXXX
 # If you want to use the WhatsApp client using `bun run clients:whatsapp`
 TWILIO_ACCOUNT_SECRET=XXXX
 TWILIO_ACCOUNT_SID=XXXX
+
+# ID of the only sender allowed to send messages to the bot
+TELEGRAM_SENDER_ID=XXX
+TELEGRAM_BOT_TOKEN=XXX
 ```
 
 We need to build up the agents initial context. This is done using:

@@ -1,9 +1,10 @@
 import http from 'node:http';
 import { start } from './llm';
+import type { AbortableAsyncIterator, ChatResponse } from 'ollama';
 import pc from 'picocolors';
 
 let llm = await start();
-let working = false;
+let currentStream: AbortableAsyncIterator<ChatResponse> | null = null;
 
 process.on('SIGINT', () => {
   llm.kill();
@@ -19,10 +20,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.url === '/abort' && working) {
+  if (req.url === '/abort' && currentStream) {
+    currentStream.abort();
     llm.kill();
     llm = await start();
-    working = false;
+    currentStream = null;
     res.writeHead(202, { 'Content-Type': 'application/json' });
     res.end();
     return;
@@ -34,14 +36,22 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (working) {
-    console.log(pc.red(`[POST] /prompt 503 Agent is already working`));
-    res.writeHead(503, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Agent is already working' }));
+  if (currentStream) {
+    // console.log(pc.red(`[POST] /prompt 503 Agent is already working`));
+    // res.writeHead(503, { 'Content-Type': 'application/json' });
+    // res.end(JSON.stringify({ error: 'Agent is already working' }));
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.write(
+      JSON.stringify({ type: 'content', chunk: 'Working on that request...' })
+    );
+    res.end();
     return;
   }
-
-  working = true;
 
   let body = '';
 
@@ -77,6 +87,9 @@ const server = http.createServer(async (req, res) => {
 
     try {
       await llm.thread.prompt(userPrompt.trim(), {
+        onStart(stream) {
+          currentStream = stream;
+        },
         onContent(chunk) {
           res.write(JSON.stringify({ type: 'content', chunk }));
         },
@@ -92,7 +105,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: String(err) }));
     } finally {
-      working = false;
+      currentStream = null;
     }
   });
 });

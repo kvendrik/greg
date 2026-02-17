@@ -1,4 +1,4 @@
-import { prompt, ping, abort } from '../agent/utilities';
+import { prompt as promptAgent, ping, abort } from '../agent/utilities';
 import { text, isCancel, stream } from '@clack/prompts';
 import pc from 'picocolors';
 
@@ -42,14 +42,14 @@ async function promptForInput(placeholder: string, initialValue?: string) {
 
 async function* streamPrompt(input: string) {
   const chunks: string[] = [];
-  let resolver: (() => void) | null = null;
 
+  let resolver: (() => void) | null = null;
   let thinking = true;
   let done = false;
 
   chunks.push(pc.gray('Thinking...\n'));
 
-  prompt(input, {
+  promptAgent(input, {
     onThinking: (chunk) => {
       chunks.push(pc.gray(chunk));
       resolver?.();
@@ -59,6 +59,7 @@ async function* streamPrompt(input: string) {
         thinking = false;
         chunks.push('\n\n');
       }
+
       chunks.push(chunk);
       resolver?.();
     },
