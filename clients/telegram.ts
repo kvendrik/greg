@@ -1,6 +1,6 @@
 import { Bot, type Context } from 'grammy';
 import { FileFlavor, hydrateFiles } from '@grammyjs/files';
-import { prompt, abort, ping } from '../agent/utilities';
+import { prompt, abort, ping } from './agent-sdk';
 import { pipeline } from '@xenova/transformers';
 import ffmpeg from 'fluent-ffmpeg';
 import pc from 'picocolors';

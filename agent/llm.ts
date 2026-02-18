@@ -1,12 +1,21 @@
-import ollama from 'ollama';
-import type { AbortableAsyncIterator, ChatResponse, Message } from 'ollama';
 import { spawn } from 'child_process';
 import { create } from './tools/browser';
 import { runTerminalCommandTool } from './tools/terminal';
 import * as memory from './tools/memory';
+import { Anthropic } from '@anthropic-ai/sdk';
+import type {
+  MessageParam,
+  ToolUseBlock,
+} from '@anthropic-ai/sdk/resources/messages';
+
+const MODEL = 'claude-sonnet-4-20250514';
+const MAX_TOKENS = 8192;
+
+type ThreadHistory = { system: string; messages: MessageParam[] };
 
 const browser = await create();
 const tools = [runTerminalCommandTool, ...browser.tools, ...memory.tools];
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function start() {
   const proc = spawn('ollama', ['serve'], { detached: true, stdio: 'ignore' });
@@ -21,172 +30,169 @@ export async function start() {
 }
 
 async function thread() {
-  const INSTRUCTIONS = `# Instructions
-
-## About you
+  const baseInstructions = `
 You are a helpful personal assistant that runs on my personal computer and talks to me through a chat interface.
-Your goal is to answer my questions based on the tools you have access to. 
+Answer in plain text. You have tools (terminal, browser, memory) for when the user asks you to do something—use them only then.
 
-## Rules
-- Before taking any action, verify you have all required information. If missing critical context (location, dates, preferences, etc.), ASK the user first.
-- You keep answers short and conversational. 
-- No formatting.
-- Do use emojis
-- Don't make up information.
-- When you have the option always lean towards solving problems yourself instead of giving instructions.
+## Saving to memory
+When something is worth remembering, after replying call the right tool:
 
-## Tools
-- Run terminal commands through the 'run_terminal_command' tool
-- Open a web page through the 'open_web_page' tool. Start by using Google or DuckDuckGo to find the right URL when not provided with a direct URL.
-- Click on a specific element on the web page through the 'click_on_web_page_element' tool. 
-- Use the 'get_web_page_elements' tool to get a list of IDs of interactive elements on the current web page.
-- Use 'click_on_web_page_element' with the ID of the interactive element to click on.
-- Search through the long term memory for context through the 'search_long_term_memory' tool
-- Get a single memory entry by docid through the 'get_memory_entry' tool
-- After each prompt we automatically update the long term memory with the new information. You don’t have to do this yourself.
+1. **Persistent user facts** (name, preferences, context) → \`update_user_memory\` with the full updated content for ~/.pa-agent/MEMORY.md. Merge with "Information about the user" below so it stays accurate.
+2. **Conversation/task info** (what was discussed, decisions—not durable user facts) → \`save_conversation_note\` to append to ~/.pa-agent/YYYY-MM-DD.md. Use the \`conversation_start_iso\` value from below.
+`;
 
-DO NOT assume anything:
-- Location (ask "Where are you looking for this?")
-- Dates/times (ask "When?")
-- Etc...
-
-## Good to know
-- Code that you are currently running lives in this path: ${process.cwd()}
-
-## Information about the user
-${memory.getPersistedMemory() ?? 'Nothing known yet'}`;
-
-  let thread: Message[] = [
-    {
-      role: 'system',
-      content: INSTRUCTIONS,
-    },
-  ];
+  let messages: MessageParam[] = [];
+  let conversationStartTime: string | null = null;
 
   return {
     prompt: async (
       content: string,
       {
-        onStart,
         onContent,
         onThinking,
         onDone,
       }: {
-        onStart: (stream: AbortableAsyncIterator<ChatResponse>) => void;
         onContent: (chunk: string) => void;
         onThinking: (chunk: string) => void;
         onDone: () => void;
       }
     ) => {
+      if (conversationStartTime === null)
+        conversationStartTime = new Date().toISOString();
+      const system =
+        baseInstructions +
+        `\n## Information about the user\n${memory.getPersistedMemory() ?? 'Nothing known yet'}` +
+        `\n\nConversation started at: ${conversationStartTime}`;
       const finalContent = `Time is ${new Date().toISOString()}. User sent this prompt: "${content}"`;
-      thread.push({ role: 'user', content: finalContent });
-      await prompt(finalContent, {
-        onStart,
+      await runPrompt(finalContent, {
+        history: { system, messages },
         onContent,
         onThinking,
-        onDone: async (history) => {
-          thread = history;
-          memory.postprocess([{ role: 'user', content: finalContent }]);
+        onDone: (next) => {
+          messages = next;
           onDone();
         },
-        history: thread,
       });
     },
   };
 }
 
-async function prompt(
+function parseResponse(
+  content: Array<{ type: string; [k: string]: unknown }> | undefined
+) {
+  const blocks = content ?? [];
+  const text = blocks
+    .filter((b) => b.type === 'text')
+    .map((b) => ('text' in b ? String(b.text) : ''))
+    .join('');
+  const toolUse = blocks.filter(
+    (b) => b.type === 'tool_use'
+  ) as unknown as ToolUseBlock[];
+  return { text, toolUse };
+}
+
+function buildAssistantBlocks(
+  text: string,
+  toolUse: ToolUseBlock[]
+): MessageParam['content'] {
+  const out: MessageParam['content'] = text ? [{ type: 'text', text }] : [];
+  for (const b of toolUse) {
+    (
+      out as Array<{
+        type: 'tool_use';
+        id: string;
+        name: string;
+        input: unknown;
+      }>
+    ).push({
+      type: 'tool_use',
+      id: b.id,
+      name: b.name,
+      input: b.input ?? {},
+    });
+  }
+  return out;
+}
+
+async function runToolCalls(
+  toolUse: ToolUseBlock[]
+): Promise<
+  Array<{ type: 'tool_result'; tool_use_id: string; content: string }>
+> {
+  const results = [];
+  for (const block of toolUse) {
+    const tool = tools.find((t) => t.spec.name === block.name);
+    const content = tool
+      ? (
+          await tool.handler(
+            (block.input ?? {}) as Parameters<typeof tool.handler>[0]
+          )
+        ).content
+      : `Unknown tool: ${block.name}`;
+    results.push({ type: 'tool_result', tool_use_id: block.id, content });
+  }
+  return results;
+}
+
+async function runPrompt(
   content: string,
-  {
-    onContent,
-    onThinking,
-    onDone,
-    history,
-  }: {
-    onStart: (stream: AbortableAsyncIterator<ChatResponse>) => void;
-    onThinking: (chunk: string) => void;
+  opts: {
+    history: ThreadHistory;
     onContent: (chunk: string) => void;
-    onDone: (newHistory: Message[]) => void;
-    history: Message[];
+    onThinking: (chunk: string) => void;
+    onDone: (messages: MessageParam[]) => void;
   }
 ) {
-  const messages: Message[] = [...history, { role: 'user', content: content }];
+  const messages: MessageParam[] = [
+    ...opts.history.messages,
+    { role: 'user', content },
+  ];
 
   while (true) {
-    const stream = await ollama.chat({
-      model: 'gpt-oss:latest',
+    const stream = anthropic.messages.stream({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system: opts.history.system,
       messages,
-      tools: tools.map((tool) => tool.spec),
+      tools: tools.map((t) => t.spec),
+      tool_choice: { type: 'auto' },
       stream: true,
-      think: true,
+      thinking: { type: 'enabled', budget_tokens: 1024 },
     });
 
-    let thinking = '';
-    let content = '';
-
-    const toolCalls: any[] = [];
-    let isThinking = true;
-
-    for await (const chunk of stream) {
-      if (chunk.message.thinking) {
-        thinking += chunk.message.thinking;
-        onThinking(chunk.message.thinking);
-      }
-
-      if (chunk.message.content) {
-        if (isThinking) {
-          isThinking = false;
+    stream.on('text', opts.onContent);
+    stream.on('thinking', opts.onThinking);
+    stream.on(
+      'contentBlock',
+      (block: { type: string; name?: string; input?: unknown }) => {
+        if (block.type === 'tool_use' && block.name != null) {
+          opts.onThinking(
+            `[${block.name}(${JSON.stringify(block.input ?? {})})] `
+          );
         }
-        content += chunk.message.content;
-        onContent(chunk.message.content);
       }
+    );
 
-      if (chunk.message.tool_calls?.length) {
-        toolCalls.push(...chunk.message.tool_calls);
-        //console.log(chunk.message.tool_calls);
-        const call = chunk.message.tool_calls[0];
-        onThinking(
-          `[${call.function.name}(${JSON.stringify(call.function.arguments)})] `
-        );
-      }
-    }
+    const finalMessage = await stream.finalMessage();
 
-    if (thinking || content || toolCalls.length) {
-      messages.push({
-        role: 'assistant',
-        thinking,
-        content,
-        tool_calls: toolCalls,
-      });
-    }
+    const { text, toolUse } = parseResponse(
+      (finalMessage.content ?? []) as unknown as Array<{
+        type: string;
+        [k: string]: unknown;
+      }>
+    );
 
-    if (!toolCalls.length) {
-      break;
-    }
+    messages.push({
+      role: 'assistant',
+      content: buildAssistantBlocks(text, toolUse),
+    });
 
-    for (const call of toolCalls) {
-      const tool = tools.find(
-        (tool) => tool.spec.function.name === call.function.name
-      );
+    if (toolUse.length === 0) break;
 
-      if (!tool) {
-        messages.push({
-          role: 'tool',
-          tool_name: call.function.name,
-          content: `Unknown tool: ${call.function.name}`,
-        });
-        continue;
-      }
+    const toolResults = await runToolCalls(toolUse);
 
-      const result = await tool.handler(call.function.arguments);
-
-      messages.push({
-        role: 'tool',
-        tool_name: call.function.name,
-        content: result.content,
-      });
-    }
+    messages.push({ role: 'user', content: toolResults });
   }
 
-  onDone(messages);
+  opts.onDone(messages);
 }

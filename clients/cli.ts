@@ -1,4 +1,4 @@
-import { prompt as promptAgent, ping, abort } from '../agent/utilities';
+import { prompt as promptAgent, ping, abort } from './agent-sdk';
 import { text, isCancel, stream } from '@clack/prompts';
 import pc from 'picocolors';
 

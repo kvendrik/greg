@@ -47,7 +47,8 @@ const server = http.createServer(async (req, res) => {
       'Access-Control-Allow-Origin': '*',
     });
     res.write(
-      JSON.stringify({ type: 'content', chunk: 'Working on that request...' })
+      JSON.stringify({ type: 'content', chunk: 'Working on that request...' }) +
+        '\n'
     );
     res.end();
     return;
@@ -87,14 +88,11 @@ const server = http.createServer(async (req, res) => {
 
     try {
       await llm.thread.prompt(userPrompt.trim(), {
-        onStart(stream) {
-          currentStream = stream;
-        },
         onContent(chunk) {
-          res.write(JSON.stringify({ type: 'content', chunk }));
+          res.write(JSON.stringify({ type: 'content', chunk }) + '\n');
         },
         onThinking(chunk) {
-          res.write(JSON.stringify({ type: 'thinking', chunk }));
+          res.write(JSON.stringify({ type: 'thinking', chunk }) + '\n');
         },
         onDone() {
           res.end();

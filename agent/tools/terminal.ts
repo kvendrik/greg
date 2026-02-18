@@ -4,18 +4,15 @@ import ollama from 'ollama';
 
 export const runTerminalCommandTool: Tool<{ command: string }> = {
   spec: {
-    type: 'function',
-    function: {
-      name: 'run_terminal_command',
-      description: 'Run a command in the terminal',
-      parameters: {
-        type: 'object',
-        required: ['command'],
-        properties: {
-          command: {
-            type: 'string',
-            description: 'The command to run',
-          },
+    name: 'run_terminal_command',
+    description: 'Run a command in the terminal when the user asks you to do something (e.g. run a script, check something). Only you see the output. Do not use for greetings or to generate your reply—say your reply in text.',
+    input_schema: {
+      type: 'object',
+      required: ['command'],
+      properties: {
+        command: {
+          type: 'string',
+          description: 'The command to run',
         },
       },
     },

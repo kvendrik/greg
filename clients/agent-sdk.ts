@@ -45,26 +45,44 @@ export async function prompt(
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
+  let buffer = '';
 
   while (true) {
     const { done, value } = await reader.read();
 
-    if (done) {
-      onContent(decoder.decode());
-      break;
+    if (value?.length) {
+      buffer += decoder.decode(value, { stream: true });
     }
 
-    if (value?.length) {
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
       try {
-        const data = JSON.parse(decoder.decode(value, { stream: true }));
+        const data = JSON.parse(line);
         if (data.type === 'content') {
-          onContent(data.chunk);
+          onContent(data.chunk ?? '');
         } else if (data.type === 'thinking') {
-          onThinking(data.chunk);
+          onThinking(data.chunk ?? '');
         }
-      } catch (error) {
-        onThinking(error.message);
+      } catch {
+        // Skip malformed lines; don't mix parse errors into content
       }
+    }
+
+    if (done) {
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        try {
+          const data = JSON.parse(buffer);
+          if (data.type === 'content') onContent(data.chunk ?? '');
+          else if (data.type === 'thinking') onThinking(data.chunk ?? '');
+        } catch {
+          // ignore
+        }
+      }
+      break;
     }
   }
 

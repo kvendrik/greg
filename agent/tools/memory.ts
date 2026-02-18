@@ -4,26 +4,34 @@ import type { Tool } from './types';
 import ollama, { type Message } from 'ollama';
 import { homedir } from 'os';
 import { join } from 'path';
-import { writeFileSync, mkdirSync } from 'fs';
 
 const memoryDir = join(homedir(), '.pa-agent');
 const memoryPath = join(memoryDir, 'MEMORY.md');
 const COLLECTION_NAME = 'pa-agent-memory';
 
+/** Ensure memory dir, MEMORY.md, and qmd collection exist (same as legacy postprocess). */
+function ensureCollectionExists() {
+  if (!fs.existsSync(memoryPath)) {
+    if (!fs.existsSync(memoryDir)) fs.mkdirSync(memoryDir, { recursive: true });
+    fs.writeFileSync(memoryPath, '');
+    execSync(
+      `[ -z "$(bun run qmd collection list | grep ${COLLECTION_NAME})" ] && bun run qmd collection add ${memoryDir} --name ${COLLECTION_NAME} && bun run qmd context add qmd://${COLLECTION_NAME} "PA Agent Long Term Memory"`
+    );
+  }
+}
+
 const searchMemoryTool: Tool<{ query: string }> = {
   spec: {
-    type: 'function',
-    function: {
-      name: 'search_long_term_memory',
-      description: 'Search through the long term memory for context',
-      parameters: {
-        type: 'object',
-        required: ['query'],
-        properties: {
-          query: {
-            type: 'string',
-            description: 'The query to search for',
-          },
+    name: 'search_long_term_memory',
+    description:
+      'Search long term memory only when the user explicitly asks about the past, preferences, or stored facts. Do not use for greetings, small talk, or general questions.',
+    input_schema: {
+      type: 'object',
+      required: ['query'],
+      properties: {
+        query: {
+          type: 'string',
+          description: 'The query to search for',
         },
       },
     },
@@ -39,18 +47,15 @@ const searchMemoryTool: Tool<{ query: string }> = {
 
 const getMemoryEntryTool: Tool<{ docid: string }> = {
   spec: {
-    type: 'function',
-    function: {
-      name: 'get_memory_entry',
-      description: 'Get a single memory entry by docid',
-      parameters: {
-        type: 'object',
-        required: ['docid'],
-        properties: {
-          docid: {
-            type: 'string',
-            description: 'The docid of the memory entry to get',
-          },
+    name: 'get_memory_entry',
+    description: 'Get a single memory entry by docid',
+    input_schema: {
+      type: 'object',
+      required: ['docid'],
+      properties: {
+        docid: {
+          type: 'string',
+          description: 'The docid of the memory entry to get',
         },
       },
     },
@@ -63,71 +68,107 @@ const getMemoryEntryTool: Tool<{ docid: string }> = {
   },
 };
 
-export const tools = [searchMemoryTool, getMemoryEntryTool];
+const updateUserMemoryTool: Tool<{ content: string }> = {
+  spec: {
+    name: 'update_user_memory',
+    description:
+      'Write or update ~/.pa-agent/MEMORY.md with persistent facts about the user. Pass the complete updated content (merge with existing so information stays accurate).',
+    input_schema: {
+      type: 'object',
+      required: ['content'],
+      properties: {
+        content: {
+          type: 'string',
+          description:
+            'The full content for MEMORY.md (include all existing facts plus updates)',
+        },
+      },
+    },
+  },
+  handler: async ({ content }) => {
+    ensureCollectionExists();
+    if (!fs.existsSync(memoryDir)) fs.mkdirSync(memoryDir, { recursive: true });
+    fs.writeFileSync(memoryPath, content, 'utf8');
+    execSync(`bun run qmd embed --collection ${COLLECTION_NAME}`);
+    return { content: 'MEMORY.md updated.' };
+  },
+};
+
+const saveConversationNoteTool: Tool<{
+  note: string;
+  conversation_start_iso: string;
+}> = {
+  spec: {
+    name: 'save_conversation_note',
+    description:
+      'Append a note to ~/.pa-agent/YYYY-MM-DD.md under the time the conversation started. Use for task-related info and other things discussed (not persistent user facts).',
+    input_schema: {
+      type: 'object',
+      required: ['note', 'conversation_start_iso'],
+      properties: {
+        note: {
+          type: 'string',
+          description:
+            'The note to save (task, topic, or conversation summary)',
+        },
+        conversation_start_iso: {
+          type: 'string',
+          description:
+            'ISO timestamp when this conversation started (use the value from the system prompt)',
+        },
+      },
+    },
+  },
+  handler: async ({ note, conversation_start_iso }) => {
+    const trimmed = note.trim();
+    if (!trimmed) return { content: 'No content to save.' };
+
+    ensureCollectionExists();
+
+    const d = new Date(conversation_start_iso);
+    const { date, time } = {
+      date: d.toLocaleDateString('en-CA'),
+      time: d.toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    };
+
+    const dayPath = join(memoryDir, `${date}.md`);
+    if (!fs.existsSync(memoryDir)) fs.mkdirSync(memoryDir, { recursive: true });
+    let body = fs.existsSync(dayPath) ? fs.readFileSync(dayPath, 'utf8') : '';
+    const heading = `## ${time}`;
+    // If this conversation time already has a section, append to it; otherwise add new section.
+    const re = new RegExp(
+      `(?:^|\\n)(${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?:\\s|$)`,
+      'm'
+    );
+    const match = body.match(re);
+    if (match && match.index != null) {
+      const afterHeading =
+        match.index + (body[match.index] === '\n' ? 1 : 0) + heading.length;
+      body =
+        body.slice(0, afterHeading) +
+        '\n\n' +
+        trimmed +
+        '\n\n' +
+        body.slice(afterHeading);
+    } else {
+      body = (body ? body + '\n\n' : '') + heading + '\n\n' + trimmed + '\n\n';
+    }
+    fs.writeFileSync(dayPath, body, 'utf8');
+    execSync(`bun run qmd embed --collection ${COLLECTION_NAME}`);
+    return { content: `Saved to ${date}.md under ${time}.` };
+  },
+};
+
+export const tools = [
+  searchMemoryTool,
+  getMemoryEntryTool,
+  updateUserMemoryTool,
+  saveConversationNoteTool,
+];
 
 export function getPersistedMemory() {
   return fs.existsSync(memoryPath) ? fs.readFileSync(memoryPath, 'utf8') : null;
-}
-
-export async function postprocess(messages: Message[]) {
-  if (!fs.existsSync(memoryPath)) {
-    fs.mkdirSync(memoryDir, { recursive: true });
-    fs.writeFileSync(memoryPath, '');
-    execSync(
-      `[ -z "$(bun run qmd collection list | grep ${COLLECTION_NAME})" ] && bun run qmd collection add ${memoryDir} --name ${COLLECTION_NAME} && bun run qmd context add qmd://${COLLECTION_NAME} "PA Agent Long Term Memory"`
-    );
-  }
-
-  const currentMemory = fs.readFileSync(memoryPath, 'utf8');
-  const memoryAgent = await ollama.chat({
-    model: 'gpt-oss:latest',
-    messages: [
-      ...messages,
-      {
-        role: 'system',
-        content: `
-Extract ONLY persistent facts about the user that will be relevant across many future conversations.
-
-## SAVE (durable facts)
-- Identity: name, location, timezone, language
-- Preferences: communication style, tone, formats
-- Context: job, company, projects, expertise
-- Constraints: allergies, accessibility needs, budgets
-- Relationships: family, team members mentioned repeatedly
-
-## DO NOT SAVE (ephemeral)
-- Current task or query ("looking for jazz concerts")
-- Temporal requests ("wants X today/tomorrow")
-- One-time instructions ("create a skill when next asked")
-- Pending actions or todos
-- Anything with "today", "now", "this", "next"
-
-## Test
-Ask: "Will this matter in a conversation 2 weeks from now?"
-- "User lives in Amsterdam" → YES, save
-- "User’s favorite color is blue" → YES, save
-- "User wants jazz concerts today" → NO, skip
-- "Wants more information about John's professional background"  → NO, skip
-
-Return only facts that pass this test.
-`,
-      },
-      {
-        role: 'user',
-        content: `
-## Conversation to analyze
-${messages.map((m) => `${m.role}: ${m.content}`).join('\n\n')}
-
-## Existing facts
-${currentMemory ?? 'No existing facts found'}
-
-Extract and return the complete updated fact list.`,
-      },
-    ],
-    think: true,
-    stream: false,
-  });
-
-  fs.writeFileSync(memoryPath, memoryAgent.message.content);
-  execSync(`bun run qmd embed --collection ${COLLECTION_NAME}`);
 }

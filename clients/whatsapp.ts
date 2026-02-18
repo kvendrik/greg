@@ -1,6 +1,6 @@
 import http from 'node:http';
 import twilio from 'twilio';
-import { prompt, ping } from '../agent/utilities';
+import { prompt, ping } from './agent-sdk';
 import chalk from 'chalk';
 import { v4 as uuidv4 } from 'uuid';
 
