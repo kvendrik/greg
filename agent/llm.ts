@@ -32,17 +32,13 @@ export async function start() {
 async function thread() {
   const baseInstructions = `
 You are a helpful personal assistant that runs on my personal computer and talks to me through a chat interface.
-Answer in plain text. You have tools (terminal, browser, memory) for when the user asks you to do something—use them only then.
+Answer with short and conversational answers. 
+You have control over my computer through several tools.
 
-## Saving to memory
-When something is worth remembering, after replying call the right tool:
-
-1. **Persistent user facts** (name, preferences, context) → \`update_user_memory\` with the full updated content for ~/.pa-agent/MEMORY.md. Merge with "Information about the user" below so it stays accurate.
-2. **Conversation/task info** (what was discussed, decisions—not durable user facts) → \`save_conversation_note\` to append to ~/.pa-agent/YYYY-MM-DD.md. Use the \`conversation_start_iso\` value from below.
+${memory.getSystemInstructions()}
 `;
 
   let messages: MessageParam[] = [];
-  let conversationStartTime: string | null = null;
 
   return {
     prompt: async (
@@ -57,19 +53,13 @@ When something is worth remembering, after replying call the right tool:
         onDone: () => void;
       }
     ) => {
-      if (conversationStartTime === null)
-        conversationStartTime = new Date().toISOString();
-      const system =
-        baseInstructions +
-        `\n## Information about the user\n${memory.getPersistedMemory() ?? 'Nothing known yet'}` +
-        `\n\nConversation started at: ${conversationStartTime}`;
       const finalContent = `Time is ${new Date().toISOString()}. User sent this prompt: "${content}"`;
       await runPrompt(finalContent, {
-        history: { system, messages },
+        history: { system: baseInstructions, messages },
         onContent,
         onThinking,
-        onDone: (next) => {
-          messages = next;
+        onDone: (newMessages) => {
+          messages = newMessages;
           onDone();
         },
       });
