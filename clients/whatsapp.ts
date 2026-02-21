@@ -1,7 +1,7 @@
 import http from 'node:http';
 import twilio from 'twilio';
 import { prompt, ping } from './agent-sdk';
-import chalk from 'chalk';
+import pc from 'picocolors';
 import { v4 as uuidv4 } from 'uuid';
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -60,10 +60,10 @@ const server = http.createServer((req, res) => {
 
     prompt(messageBody, {
       onThinking: (chunk) => {
-        process.stdout.write(chalk.gray(chunk));
+        process.stdout.write(pc.gray(chunk));
       },
       onContent: (chunk) => {
-        process.stdout.write(chalk.green(chunk));
+        process.stdout.write(pc.green(chunk));
         llmState.response += chunk;
       },
       onDone: async () => {
@@ -75,7 +75,7 @@ const server = http.createServer((req, res) => {
         });
         llmState.working = false;
         llmState.response += '';
-        process.stdout.write(`done. ${chalk.green('✓')}\n`);
+        process.stdout.write(`done. ${pc.green('✓')}\n`);
       },
     });
   });

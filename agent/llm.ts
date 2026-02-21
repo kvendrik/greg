@@ -1,7 +1,5 @@
 import { spawn } from 'child_process';
-import { create } from './tools/browser';
-import { runTerminalCommandTool } from './tools/terminal';
-import * as memory from './tools/memory';
+import { tools, getSystemInstructions } from './tools';
 import { Anthropic } from '@anthropic-ai/sdk';
 import type {
   MessageParam,
@@ -13,18 +11,13 @@ const MAX_TOKENS = 8192;
 
 type ThreadHistory = { system: string; messages: MessageParam[] };
 
-const browser = await create();
-const tools = [runTerminalCommandTool, ...browser.tools, ...memory.tools];
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function start() {
   const proc = spawn('ollama', ['serve'], { detached: true, stdio: 'ignore' });
   proc.unref();
   return {
-    kill: () => {
-      proc.kill();
-      browser.state.browser?.close();
-    },
+    kill: () => proc.kill(),
     thread: await thread(),
   };
 }
@@ -35,7 +28,7 @@ You are a helpful personal assistant that runs on my personal computer and talks
 Answer with short and conversational answers. 
 You have control over my computer through several tools.
 
-${memory.getSystemInstructions()}
+${getSystemInstructions()}
 `;
 
   let messages: MessageParam[] = [];
@@ -113,11 +106,7 @@ async function runToolCalls(
   for (const block of toolUse) {
     const tool = tools.find((t) => t.spec.name === block.name);
     const content = tool
-      ? (
-          await tool.handler(
-            (block.input ?? {}) as Parameters<typeof tool.handler>[0]
-          )
-        ).content
+      ? (await tool.handler((block.input ?? {}) as any)).content
       : `Unknown tool: ${block.name}`;
     results.push({ type: 'tool_result', tool_use_id: block.id, content });
   }

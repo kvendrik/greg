@@ -2,15 +2,17 @@
   "type": "module",
   "scripts": {
     "agent": "bun run agent/server.ts",
+    "agent:tools-cli": "bun run scripts/tools-cli.ts",
     "clients:cli": "bun run clients/cli.ts",
     "clients:telegram": "bun run clients/telegram.ts",
     "clients:whatsapp": "bun run clients/whatsapp.ts"
   },
   "dependencies": {
+    "commander": "^12.0.0",
     "@anthropic-ai/sdk": "^0.76.0",
     "@clack/prompts": "^1.0.1",
     "@grammyjs/files": "^1.2.0",
-    "@kreuzberg/html-to-markdown-node": "^2.25.0",
+    "turndown": "^7.2.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@notionhq/client": "^5.9.0",
     "@xenova/transformers": "^2.17.2",
@@ -20,7 +22,7 @@
     "notion-to-md": "^3.1.9",
     "ollama": "^0.6.3",
     "picocolors": "^1.1.1",
-    "playwright": "^1.58.2",
+    "chrome-remote-interface": "^0.33.2",
     "qmd": "^0.0.0",
     "twilio": "^5.12.1",
     "uuid": "^13.0.0",
@@ -28,6 +30,7 @@
     "zod-from-json-schema": "^0.1.0"
   },
   "devDependencies": {
+    "@types/chrome-remote-interface": "^0.31.14",
     "@types/node": "^25.2.3",
     "prettier": "^3.4.2"
   }

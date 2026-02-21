@@ -114,6 +114,13 @@ async function readAudioAsFloat32(pcmPath: string): Promise<Float32Array> {
   return float32Array;
 }
 
+function sendMessage(message: string, ctx?: BotContext) {
+  if (ctx) {
+    return ctx.reply(message);
+  }
+  return bot.api.sendMessage(process.env.TELEGRAM_SENDER_ID, message);
+}
+
 async function handoffToAgent(message: string, ctx: BotContext) {
   console.log(`\n\nPrompting: "${message}"`);
 
