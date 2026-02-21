@@ -16,24 +16,32 @@ const INTERACTIVE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
-const getWebPageContentTool: Tool<{ url: string }> = {
+async function getCurrentUrl(client: CDPClient): Promise<string> {
+  try {
+    const result = await client.Runtime.evaluate({
+      expression: 'window.location.href',
+      returnByValue: true,
+    });
+    return typeof result.result?.value === 'string' ? result.result.value : '';
+  } catch {
+    return '';
+  }
+}
+
+const readWebPageTool: Tool<{ url: string }> = {
   spec: {
     name: 'read_web_page',
     description: 'Read the contents for the page that is currently open as Markdown',
     input_schema: {
       type: 'object',
-      required: ['url'],
-      properties: {
-        url: {
-          type: 'string',
-          description: 'The URL of the web page to open',
-        },
-      },
+      required: [],
+      properties: {},
     },
   },
   handler: async () => {
     try {
       const client = await getCDPClient();
+      const currentUrl = await getCurrentUrl(client);
       
       const htmlResult = await client.Runtime.evaluate({
         expression: 'document.documentElement.outerHTML',
@@ -42,7 +50,7 @@ const getWebPageContentTool: Tool<{ url: string }> = {
 
       if (htmlResult.exceptionDetails) {
         return {
-          content: `Error reading page content: ${htmlResult.exceptionDetails.exception?.description ?? htmlResult.exceptionDetails.text}`,
+          content: `Current URL: ${currentUrl}\n\nError reading page content: ${htmlResult.exceptionDetails.exception?.description ?? htmlResult.exceptionDetails.text}`,
         };
       }
 
@@ -64,28 +72,34 @@ const getWebPageContentTool: Tool<{ url: string }> = {
         replacement: () => '',
       });
 
-      const content = service
+      const markdownContent = service
         .turndown(html)
         .replace(/\s+/g, ' ');
 
       return {
-        content,
+        content: `Current URL: ${currentUrl}\n\n${markdownContent}`,
       };
     } catch (error) {
-      return { content: `Error fetching web page: ${formatError(error)}` };
+      const client = await getCDPClient().catch(() => null);
+      const currentUrl = client ? await getCurrentUrl(client).catch(() => '') : '';
+      return { content: `Current URL: ${currentUrl}\n\nError fetching web page: ${formatError(error)}` };
     }
   },
 };
 
-const getWebPageElementsTool: Tool<{ url: string }> = {
+const openWebPageTool: Tool<{ url: string }> = {
   spec: {
-    name: 'snapshot_web_page',
-    description:
-      'Open web page and get interactive element IDs. Use with click_on_web_page_element for navigation and read_web_page to read the page’s contents as Markdown.',
+    name: 'open_web_page',
+    description: 'Open web page. Use snapshot_web_page to get interactive element IDs.',
     input_schema: {
       type: 'object',
-      required: [],
-      properties: {},
+      required: ['url'],
+      properties: {
+        url: {
+          type: 'string',
+          description: 'The URL of the web page to open',
+        },
+      },
     },
   },
   handler: async ({ url }) => {
@@ -106,11 +120,40 @@ const getWebPageElementsTool: Tool<{ url: string }> = {
       });
       await client.Page.navigate({ url });
       await loadDone;
-      await waitForNetworkIdle(client, 500, 5_000);
-      return { content: await getInteractiveElements(client) };
+      const currentUrl = await getCurrentUrl(client);
+      return { content: `Opened web page. Current URL: ${currentUrl}` };
     } catch (error) {
+      const client = await getCDPClient().catch(() => null);
+      const currentUrl = client ? await getCurrentUrl(client).catch(() => '') : '';
       return {
-        content: `Error getting web page content: ${formatError(error)}`,
+        content: `Current URL: ${currentUrl}\n\nError getting web page content: ${formatError(error)}`,
+      };
+    }
+  },
+};
+
+const getWebPageElementsTool: Tool<{ url: string }> = {
+  spec: {
+    name: 'snapshot_web_page',
+    description:
+      'Open web page and get interactive element IDs. Use with click_on_web_page_element for navigation and read_web_page to read the page’s contents as Markdown.',
+    input_schema: {
+      type: 'object',
+      required: [],
+      properties: {},
+    },
+  },
+  handler: async () => {
+    try {
+      const client = await getCDPClient();
+      const currentUrl = await getCurrentUrl(client);
+      const elements = await getInteractiveElements(client);
+      return { content: `Current URL: ${currentUrl}\n\n${elements}` };
+    } catch (error) {
+      const client = await getCDPClient().catch(() => null);
+      const currentUrl = client ? await getCurrentUrl(client).catch(() => '') : '';
+      return {
+        content: `Current URL: ${currentUrl}\n\nError getting web page content: ${formatError(error)}`,
       };
     }
   },
@@ -150,37 +193,118 @@ const clickOnWebPageElementTool: Tool<{ id: number }> = {
         returnByValue: true,
       });
 
+      const currentUrl = await getCurrentUrl(client);
+
       if (result.exceptionDetails) {
         return {
-          content: `Error clicking element [${id}]: ${result.exceptionDetails.exception?.description ?? result.exceptionDetails.text}`,
+          content: `Current URL: ${currentUrl}\n\nError clicking element [${id}]: ${result.exceptionDetails.exception?.description ?? result.exceptionDetails.text}`,
         };
       }
 
       if (typeof result.result?.value === 'string') {
         try {
           if (!(JSON.parse(result.result.value) as { ok: boolean }).ok) {
-            return { content: `Element [${id}] not found` };
+            return { content: `Current URL: ${currentUrl}\n\nElement [${id}] not found` };
           }
         } catch {
           return {
-            content: `Element [${id}] click result invalid`,
+            content: `Current URL: ${currentUrl}\n\nElement [${id}] click result invalid`,
           };
         }
       }
 
-      return { content: `Clicked on element [${id}]` };
+      return { content: `Current URL: ${currentUrl}\n\nClicked on element [${id}]` };
     } catch (error) {
+      const client = await getCDPClient().catch(() => null);
+      const currentUrl = client ? await getCurrentUrl(client).catch(() => '') : '';
       return {
-        content: `Error interacting with web page: ${formatError(error)}`,
+        content: `Current URL: ${currentUrl}\n\nError interacting with web page: ${formatError(error)}`,
+      };
+    }
+  },
+};
+
+const typeIntoWebPageElementTool: Tool<{ id: string; text: string }> = {
+  spec: {
+    name: 'type_into_web_page_element',
+    description:
+      'Type text into an input or textarea on the current web page. Use the id from snapshot_web_page. Use for search boxes, login fields, and other text inputs.',
+    input_schema: {
+      type: 'object',
+      required: ['id', 'text'],
+      properties: {
+        id: {
+          type: 'string',
+          description:
+            'The id of the input/textarea element (from snapshot_web_page)',
+        },
+        text: {
+          type: 'string',
+          description: 'The text to type into the element',
+        },
+      },
+    },
+  },
+  handler: async ({ id, text }) => {
+    try {
+      const client = await getCDPClient();
+      const result = await client.Runtime.evaluate({
+        expression: `
+          (function() {
+            var els = document.querySelectorAll(${JSON.stringify(INTERACTIVE_SELECTOR)});
+            var el = [...els].find(el => el.getAttribute('data-agent-id') === "${id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}");
+            if (!el) return JSON.stringify({ ok: false, error: 'not found' });
+            var tag = (el.tagName || '').toLowerCase();
+            if (tag !== 'input' && tag !== 'textarea') return JSON.stringify({ ok: false, error: 'not an input or textarea' });
+            el.scrollIntoView({ block: 'center' });
+            el.focus();
+            el.value = ${JSON.stringify(text)};
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            return JSON.stringify({ ok: true });
+          })()
+        `,
+        returnByValue: true,
+      });
+
+      const currentUrl = await getCurrentUrl(client);
+
+      if (result.exceptionDetails) {
+        return {
+          content: `Current URL: ${currentUrl}\n\nError typing into element [${id}]: ${result.exceptionDetails.exception?.description ?? result.exceptionDetails.text}`,
+        };
+      }
+
+      if (typeof result.result?.value === 'string') {
+        try {
+          const parsed = JSON.parse(result.result.value) as { ok: boolean; error?: string };
+          if (!parsed.ok) {
+            return { content: `Current URL: ${currentUrl}\n\n${parsed.error === 'not found' ? `Element [${id}] not found` : `Element [${id}] is not an input or textarea`}` };
+          }
+        } catch {
+          return {
+            content: `Current URL: ${currentUrl}\n\nType-into result invalid for element [${id}]`,
+          };
+        }
+      }
+
+      return { content: `Current URL: ${currentUrl}\n\nTyped into element [${id}]` };
+    } catch (error) {
+      const client = await getCDPClient().catch(() => null);
+      const currentUrl = client ? await getCurrentUrl(client).catch(() => '') : '';
+      return {
+        content: `Current URL: ${currentUrl}\n\nError typing into web page element: ${formatError(error)}`,
       };
     }
   },
 };
 
 export const tools = [
-  getWebPageContentTool,
-  clickOnWebPageElementTool,
+  openWebPageTool,
+  readWebPageTool,
   getWebPageElementsTool,
+  clickOnWebPageElementTool,
+  typeIntoWebPageElementTool,
 ];
 
 /**
