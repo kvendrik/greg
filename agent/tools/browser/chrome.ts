@@ -31,9 +31,9 @@ export async function getCDPClient(): Promise<CDPClient> {
     removeStaleSingletonLock(userDataDir);
 
     const chromeArgs = [
-      '--headless=new',
+      //'--headless=new',
       `--remote-debugging-port=${state.port}`,
-      // `--user-data-dir=${userDataDir}`,
+      `--user-data-dir=${userDataDir}`,
       '--no-first-run',
       '--no-default-browser-check',
       '--disable-sync',
@@ -43,8 +43,7 @@ export async function getCDPClient(): Promise<CDPClient> {
       '--disable-session-crashed-bubble',
       '--hide-crash-restore-bubble',
       '--password-store=basic',
-      '--headless=new',
-      '--disable-gpu', // often breaks headless on macOS
+      '--disable-gpu',
       '--disable-blink-features=AutomationControlled',
       'about:blank',
     ];
@@ -106,6 +105,9 @@ export async function getCDPClient(): Promise<CDPClient> {
     ...cdpOpts,
     target: pageTarget,
   });
+
+  await client.Page.enable();
+  await client.Runtime.enable();
 
   return client;
 }
