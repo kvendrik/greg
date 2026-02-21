@@ -29,6 +29,8 @@ Answer with short and conversational answers.
 You have control over my computer through several tools.
 
 ${getSystemInstructions()}
+
+The code you’re running on is at: ${__dirname}
 `;
 
   let messages: MessageParam[] = [];

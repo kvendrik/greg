@@ -4,7 +4,7 @@ import { join } from 'path';
 import type { Tool } from './types';
 import { getWorkspacePath } from '../utilities';
 
-const COLLECTION_NAME = 'pa-agent-chats';
+const COLLECTION_NAME = 'agent-chats';
 
 function getChatsPath(): string {
   return join(getWorkspacePath(), 'chats');

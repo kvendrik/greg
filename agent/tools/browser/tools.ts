@@ -299,12 +299,93 @@ const typeIntoWebPageElementTool: Tool<{ id: string; text: string }> = {
   },
 };
 
+const webSearchTool: Tool<{ query: string }> = {
+  spec: {
+    name: 'web_search',
+    description: 'Search the web using DuckDuckGo API. Returns search results including abstracts, related topics, and links.',
+    input_schema: {
+      type: 'object',
+      required: ['query'],
+      properties: {
+        query: {
+          type: 'string',
+          description: 'The search query to look up',
+        },
+      },
+    },
+  },
+  handler: async ({ query }) => {
+    try {
+      const url = `https://api.duckduckgo.com/html/?q=${encodeURIComponent(query)}&format=json`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        return {
+          content: `Error fetching search results: ${response.status} ${response.statusText}`,
+        };
+      }
+
+      const html = await response.text();
+
+      const service = new TurndownService();
+
+      service.addRule('stripImg', { filter: 'img', replacement: () => '' });
+
+      service.addRule('stripStyle', {
+        filter: 'style',
+        replacement: () => '',
+      });
+
+      service.addRule('stripScript', {
+        filter: 'script',
+        replacement: () => '',
+      });
+
+      service.addRule('cleanDuckDuckGoLinks', {
+        filter: (node) => {
+          return node.nodeName === 'A' && node.getAttribute('href')?.includes('/l/?uddg=');
+        },
+        replacement: (content, node) => {
+          // Skip empty links (icon/image links with no text)
+          if (!content || content.trim() === '') {
+            return '';
+          }
+          const href = (node as HTMLElement).getAttribute('href') || '';
+          const match = href.match(/\/l\/\?uddg=([^&]+)/);
+          if (match) {
+            try {
+              const decodedUrl = decodeURIComponent(match[1]);
+              return `[${content}](${decodedUrl})`;
+            } catch {
+              return `[${content}](${href})`;
+            }
+          }
+          return `[${content}](${href})`;
+        },
+      });
+
+      const markdownContent = service
+        .turndown(html)
+        .replace(/\s+/g, ' ');
+
+      return {
+        content: markdownContent,
+      };
+    } catch (error) {
+      return {
+        content: `Error performing web search: ${formatError(error)}`,
+      };
+    }
+  },
+};
+
 export const tools = [
   openWebPageTool,
   readWebPageTool,
   getWebPageElementsTool,
   clickOnWebPageElementTool,
   typeIntoWebPageElementTool,
+  webSearchTool,
 ];
 
 /**
