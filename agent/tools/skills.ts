@@ -83,7 +83,7 @@ export function discoverSkills(): SkillMeta[] {
   return result;
 }
 
-export function getAvailableSkillsPrompt(): string {
+export function getInstructions(): string {
   const skills = discoverSkills();
   if (skills.length === 0) return '';
   const items = skills
@@ -102,6 +102,10 @@ export function getAvailableSkillsPrompt(): string {
 When a user request matches an available skill, read that skill's full content from its <location> (e.g. with the terminal: cat "<location>") and follow the instructions.
 
 When you learn or establish something reusable (workflow, rule, convention, or capability), you must call save_skill before considering the exchange complete. Examples: a new CLI or editor workflow, a project convention, a preference for how to do X, or any instruction you give that the user might want applied again. If in doubt, save it as a skill.
+
+### Browser Automation
+
+Before using browser automation tools (such as running \`bun run browser-use\`), you MUST first read the browser-use skill file at \`skills/browser-use/SKILL.md\` to understand how to use browser automation correctly. Read the skill file using the read_file tool or terminal command before executing any browser-related commands.
 `;
 }
 

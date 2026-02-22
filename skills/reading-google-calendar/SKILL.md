@@ -9,26 +9,23 @@ description: 'How to properly read and interpret Google Calendar'
 
 **NEVER read calendar events without completing ALL steps below in order.**
 
-### Step 1: USE READ_WEB_PAGE FIRST
+### Step 1: USE BROWSER-USE TO READ CALENDAR
 
-1. **Open calendar.google.com**
-2. **Use read_web_page** - This gives accurate text data that's easier to parse than visual interpretation
-3. **Find today's date** - Look for "today" marker in the text output
-4. **Note today's day name and date** - Write it down: "Today is [DAY] [DATE]"
+Use `bun run browser-use` with a detailed task description:
 
-### Step 2: READ COLUMN BY COLUMN FROM TEXT
+```bash
+bun run browser-use "Navigate to https://calendar.google.com and read all calendar events for the current week. Identify today's date clearly. For each event, extract: day name, date, time, title, and determine if it's past, today, or upcoming. Click through to get full details (description, attendees, location, organizer) for any events with vague titles or when those details are needed. Organize the output by day with clear markers for past/today/upcoming events."
+```
 
-**NEVER assume positions. ALWAYS match day names to dates from the text output.**
+### Step 2: VERIFY THE OUTPUT
 
-Go through each day systematically from the read_web_page output:
+**NEVER assume positions. ALWAYS verify dates and timing.**
 
-1. **MON [Date]**: [List events] - PAST/TODAY/FUTURE?
-2. **TUE [Date]**: [List events] - PAST/TODAY/FUTURE?
-3. **WED [Date]**: [List events] - PAST/TODAY/FUTURE?
-4. **THU [Date]**: [List events] - PAST/TODAY/FUTURE?
-5. **FRI [Date]**: [List events] - PAST/TODAY/FUTURE?
-6. **SAT [Date]**: [List events] - PAST/TODAY/FUTURE?
-7. **SUN [Date]**: [List events] - PAST/TODAY/FUTURE?
+After browser-use completes, verify:
+
+1. **What day is today?** - Confirm the day name and date from the output
+2. **Match events to correct days** - Verify each event is assigned to the correct date
+3. **Categorize correctly** - Ensure events are marked as past/today/upcoming correctly
 
 ### Step 3: MANDATORY VERIFICATION CHECKLIST
 
@@ -39,6 +36,7 @@ Before reporting anything, answer these questions:
 - [ ] Which events are TODAY?
 - [ ] Which events are FUTURE (after today)?
 - [ ] Have I matched EVERY event to the correct day column?
+- [ ] Have I clicked through for full details when needed?
 
 ### Step 4: REPORT WITH TIMELINE MARKERS
 
@@ -51,43 +49,41 @@ Before reporting anything, answer these questions:
 - **Today - Wednesday 19th**: Yoga 12:00-13:00
 - **Thursday 20th** _(upcoming)_: Dinner 19:00-21:00
 
-### Step 5: DIG DEEPER WHEN NEEDED
+### Step 5: REQUEST DETAILS WHEN NEEDED
 
-**ALWAYS click through to get full event details when:**
+**ALWAYS request full event details when:**
 
 - Event titles are vague or intriguing
 - You need to know who else is attending
 - Location details matter
 - There might be descriptions with key info
 
-**Process:**
-
-1. Use `snapshot_web_page` to get interactive element IDs
-2. Click on the specific event element
-3. Use `read_web_page` again to see the detailed event popup
-4. Look for: descriptions, attendees, full location details, organizer info
+**Include in task description:**
+- "Click through to get full details (description, attendees, location, organizer) for any events with vague titles"
+- Or specify: "Get full details for event '[event title]'"
 
 ## CRITICAL RULES
 
-- **USE read_web_page as primary method** - More accurate than screenshot interpretation
-- **Screenshot only for verification if text is unclear**
-- **NEVER assume event timing without verification**
-- **NEVER read dates left-to-right without checking day names**
-- **NEVER report events as "coming up" without confirming they're after today**
-- **ALWAYS identify today before reading any events**
-- **ALWAYS click through for full details** - Calendar summaries often hide key information
+- **USE browser-use with detailed task description** - The agent will handle navigation and extraction
+- **ALWAYS request identification of today's date** - Include this in the task description
+- **NEVER assume event timing without verification** - Verify dates and times from the output
+- **NEVER read dates left-to-right without checking day names** - Verify day names match dates
+- **NEVER report events as "coming up" without confirming they're after today** - Verify timing
+- **ALWAYS identify today before reading any events** - Include this requirement in the task
+- **ALWAYS request full details when needed** - Include click-through instructions in task description
 
 ## Common Error Prevention
 
 - Events showing on calendar ≠ upcoming events
 - Past events display on calendar just like future ones
 - Weekend layouts can be confusing - always verify day names
-- Today is marked as "today" in the text output - use this as your anchor point
-- Text parsing is more reliable than visual interpretation of screenshots
-- Event descriptions contain crucial details not visible in the grid view
-- Attendee information is only visible in detailed event view
+- Today should be clearly identified - include this requirement in the task description
+- Request text extraction rather than relying on screenshots
+- Event descriptions contain crucial details not visible in the grid view - request click-through
+- Attendee information is only visible in detailed event view - request full details when needed
 
 ## Key Insights
 
 - **Most important info is sometimes in the details** - "Goats goats goats 🐐" looked basic but contained "So excited to go with Petri" in the description
 - **Click-through reveals the story** - Surface view shows what/when, detailed view shows who/why/context
+- **Include click-through instructions** - Always request full event details in the task description when details matter
