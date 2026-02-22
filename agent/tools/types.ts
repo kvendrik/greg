@@ -15,7 +15,25 @@ export interface AnthropicToolSpec {
   };
 }
 
+/**
+ * Content block for tool results that the LLM can consume (e.g. text + image).
+ * Matches Anthropic tool_result content: string or array of TextBlockParam | ImageBlockParam.
+ */
+export type ToolResultContent =
+  | string
+  | Array<
+      | { type: 'text'; text: string }
+      | {
+          type: 'image';
+          source: {
+            type: 'base64';
+            media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+            data: string;
+          };
+        }
+    >;
+
 export interface Tool<Args extends object> {
   spec: AnthropicToolSpec;
-  handler: (args: Args) => Promise<{ content: string }>;
+  handler: (args: Args) => Promise<{ content: ToolResultContent }>;
 }

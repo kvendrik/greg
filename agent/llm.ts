@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import { tools, getSystemInstructions } from './tools';
+import type { ToolResultContent } from './tools/types';
 import { Anthropic } from '@anthropic-ai/sdk';
 import type {
   MessageParam,
@@ -102,12 +103,16 @@ function buildAssistantBlocks(
 async function runToolCalls(
   toolUse: ToolUseBlock[]
 ): Promise<
-  Array<{ type: 'tool_result'; tool_use_id: string; content: string }>
+  Array<{
+    type: 'tool_result';
+    tool_use_id: string;
+    content: ToolResultContent;
+  }>
 > {
   const results = [];
   for (const block of toolUse) {
     const tool = tools.find((t) => t.spec.name === block.name);
-    const content = tool
+    const content: ToolResultContent = tool
       ? (await tool.handler((block.input ?? {}) as any)).content
       : `Unknown tool: ${block.name}`;
     results.push({ type: 'tool_result', tool_use_id: block.id, content });

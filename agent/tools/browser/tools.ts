@@ -31,7 +31,8 @@ async function getCurrentUrl(client: CDPClient): Promise<string> {
 const readWebPageTool: Tool<{ url: string }> = {
   spec: {
     name: 'read_web_page',
-    description: 'Read the contents for the page that is currently open as Markdown',
+    description:
+      'Read the contents for the page that is currently open as Markdown',
     input_schema: {
       type: 'object',
       required: [],
@@ -42,7 +43,7 @@ const readWebPageTool: Tool<{ url: string }> = {
     try {
       const client = await getCDPClient();
       const currentUrl = await getCurrentUrl(client);
-      
+
       const htmlResult = await client.Runtime.evaluate({
         expression: 'document.documentElement.outerHTML',
         returnByValue: true,
@@ -54,9 +55,10 @@ const readWebPageTool: Tool<{ url: string }> = {
         };
       }
 
-      const html = typeof htmlResult.result?.value === 'string' 
-        ? htmlResult.result.value 
-        : '';
+      const html =
+        typeof htmlResult.result?.value === 'string'
+          ? htmlResult.result.value
+          : '';
 
       const service = new TurndownService();
 
@@ -72,17 +74,19 @@ const readWebPageTool: Tool<{ url: string }> = {
         replacement: () => '',
       });
 
-      const markdownContent = service
-        .turndown(html)
-        .replace(/\s+/g, ' ');
+      const markdownContent = service.turndown(html).replace(/\s+/g, ' ');
 
       return {
         content: `Current URL: ${currentUrl}\n\n${markdownContent}`,
       };
     } catch (error) {
       const client = await getCDPClient().catch(() => null);
-      const currentUrl = client ? await getCurrentUrl(client).catch(() => '') : '';
-      return { content: `Current URL: ${currentUrl}\n\nError fetching web page: ${formatError(error)}` };
+      const currentUrl = client
+        ? await getCurrentUrl(client).catch(() => '')
+        : '';
+      return {
+        content: `Current URL: ${currentUrl}\n\nError fetching web page: ${formatError(error)}`,
+      };
     }
   },
 };
@@ -90,7 +94,8 @@ const readWebPageTool: Tool<{ url: string }> = {
 const openWebPageTool: Tool<{ url: string }> = {
   spec: {
     name: 'open_web_page',
-    description: 'Open web page. Use snapshot_web_page to get interactive element IDs.',
+    description:
+      'Open web page. Use snapshot_web_page to get interactive element IDs.',
     input_schema: {
       type: 'object',
       required: ['url'],
@@ -124,7 +129,9 @@ const openWebPageTool: Tool<{ url: string }> = {
       return { content: `Opened web page. Current URL: ${currentUrl}` };
     } catch (error) {
       const client = await getCDPClient().catch(() => null);
-      const currentUrl = client ? await getCurrentUrl(client).catch(() => '') : '';
+      const currentUrl = client
+        ? await getCurrentUrl(client).catch(() => '')
+        : '';
       return {
         content: `Current URL: ${currentUrl}\n\nError getting web page content: ${formatError(error)}`,
       };
@@ -151,7 +158,9 @@ const getWebPageElementsTool: Tool<{ url: string }> = {
       return { content: `Current URL: ${currentUrl}\n\n${elements}` };
     } catch (error) {
       const client = await getCDPClient().catch(() => null);
-      const currentUrl = client ? await getCurrentUrl(client).catch(() => '') : '';
+      const currentUrl = client
+        ? await getCurrentUrl(client).catch(() => '')
+        : '';
       return {
         content: `Current URL: ${currentUrl}\n\nError getting web page content: ${formatError(error)}`,
       };
@@ -204,7 +213,9 @@ const clickOnWebPageElementTool: Tool<{ id: number }> = {
       if (typeof result.result?.value === 'string') {
         try {
           if (!(JSON.parse(result.result.value) as { ok: boolean }).ok) {
-            return { content: `Current URL: ${currentUrl}\n\nElement [${id}] not found` };
+            return {
+              content: `Current URL: ${currentUrl}\n\nElement [${id}] not found`,
+            };
           }
         } catch {
           return {
@@ -213,10 +224,14 @@ const clickOnWebPageElementTool: Tool<{ id: number }> = {
         }
       }
 
-      return { content: `Current URL: ${currentUrl}\n\nClicked on element [${id}]` };
+      return {
+        content: `Current URL: ${currentUrl}\n\nClicked on element [${id}]`,
+      };
     } catch (error) {
       const client = await getCDPClient().catch(() => null);
-      const currentUrl = client ? await getCurrentUrl(client).catch(() => '') : '';
+      const currentUrl = client
+        ? await getCurrentUrl(client).catch(() => '')
+        : '';
       return {
         content: `Current URL: ${currentUrl}\n\nError interacting with web page: ${formatError(error)}`,
       };
@@ -277,9 +292,14 @@ const typeIntoWebPageElementTool: Tool<{ id: string; text: string }> = {
 
       if (typeof result.result?.value === 'string') {
         try {
-          const parsed = JSON.parse(result.result.value) as { ok: boolean; error?: string };
+          const parsed = JSON.parse(result.result.value) as {
+            ok: boolean;
+            error?: string;
+          };
           if (!parsed.ok) {
-            return { content: `Current URL: ${currentUrl}\n\n${parsed.error === 'not found' ? `Element [${id}] not found` : `Element [${id}] is not an input or textarea`}` };
+            return {
+              content: `Current URL: ${currentUrl}\n\n${parsed.error === 'not found' ? `Element [${id}] not found` : `Element [${id}] is not an input or textarea`}`,
+            };
           }
         } catch {
           return {
@@ -288,12 +308,61 @@ const typeIntoWebPageElementTool: Tool<{ id: string; text: string }> = {
         }
       }
 
-      return { content: `Current URL: ${currentUrl}\n\nTyped into element [${id}]` };
+      return {
+        content: `Current URL: ${currentUrl}\n\nTyped into element [${id}]`,
+      };
     } catch (error) {
       const client = await getCDPClient().catch(() => null);
-      const currentUrl = client ? await getCurrentUrl(client).catch(() => '') : '';
+      const currentUrl = client
+        ? await getCurrentUrl(client).catch(() => '')
+        : '';
       return {
         content: `Current URL: ${currentUrl}\n\nError typing into web page element: ${formatError(error)}`,
+      };
+    }
+  },
+};
+
+const screenshotWebPageTool: Tool<Record<string, never>> = {
+  spec: {
+    name: 'screenshot_web_page',
+    description:
+      'Take a full-page screenshot of the currently open web page. Returns the image for the LLM to see. Use after opening or navigating to a page.',
+    input_schema: {
+      type: 'object',
+      required: [],
+      properties: {},
+    },
+  },
+  handler: async () => {
+    try {
+      const client = await getCDPClient();
+      const currentUrl = await getCurrentUrl(client);
+      const { data } = await client.Page.captureScreenshot({
+        format: 'png',
+        captureBeyondViewport: true,
+      });
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Full page screenshot. URL: ${currentUrl}`,
+          },
+          {
+            type: 'image' as const,
+            source: {
+              type: 'base64' as const,
+              media_type: 'image/png' as const,
+              data,
+            },
+          },
+        ],
+      };
+    } catch (error) {
+      const client = await getCDPClient();
+      const currentUrl = await getCurrentUrl(client);
+      return {
+        content: `Current URL: ${currentUrl}\n\nError taking screenshot: ${formatError(error)}`,
       };
     }
   },
@@ -302,7 +371,8 @@ const typeIntoWebPageElementTool: Tool<{ id: string; text: string }> = {
 const webSearchTool: Tool<{ query: string }> = {
   spec: {
     name: 'web_search',
-    description: 'Search the web using DuckDuckGo API. Returns search results including abstracts, related topics, and links.',
+    description:
+      'Search the web using DuckDuckGo API. Returns search results including abstracts, related topics, and links.',
     input_schema: {
       type: 'object',
       required: ['query'],
@@ -318,7 +388,7 @@ const webSearchTool: Tool<{ query: string }> = {
     try {
       const url = `https://api.duckduckgo.com/html/?q=${encodeURIComponent(query)}&format=json`;
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         return {
           content: `Error fetching search results: ${response.status} ${response.statusText}`,
@@ -343,7 +413,10 @@ const webSearchTool: Tool<{ query: string }> = {
 
       service.addRule('cleanDuckDuckGoLinks', {
         filter: (node) => {
-          return node.nodeName === 'A' && node.getAttribute('href')?.includes('/l/?uddg=');
+          return (
+            node.nodeName === 'A' &&
+            node.getAttribute('href')?.includes('/l/?uddg=')
+          );
         },
         replacement: (content, node) => {
           // Skip empty links (icon/image links with no text)
@@ -364,9 +437,7 @@ const webSearchTool: Tool<{ query: string }> = {
         },
       });
 
-      const markdownContent = service
-        .turndown(html)
-        .replace(/\s+/g, ' ');
+      const markdownContent = service.turndown(html).replace(/\s+/g, ' ');
 
       return {
         content: markdownContent,
@@ -385,6 +456,7 @@ export const tools = [
   getWebPageElementsTool,
   clickOnWebPageElementTool,
   typeIntoWebPageElementTool,
+  screenshotWebPageTool,
   webSearchTool,
 ];
 
