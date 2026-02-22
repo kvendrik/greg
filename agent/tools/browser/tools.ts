@@ -10,6 +10,7 @@ const INTERACTIVE_SELECTOR = [
   'select',
   '[role="button"]',
   '[role="link"]',
+  '[role="tab"]',
   '[role="checkbox"]',
   '[role="menuitem"]',
   '[onclick]',
@@ -498,27 +499,20 @@ async function getInteractiveElements(client: CDPClient): Promise<string> {
       (function() {
         var selector = ${JSON.stringify(INTERACTIVE_SELECTOR)};
         var els = document.querySelectorAll(selector);
-        var allowedTag = { A: 1, BUTTON: 1, INPUT: 1, TEXTAREA: 1, SELECT: 1 };
-        var allowedRole = { button: 1, link: 1, checkbox: 1, menuitem: 1 };
-        return JSON.stringify(Array.from(els).filter(function(e) {
-          if (allowedTag[e.tagName]) return true;
-          var role = (e.getAttribute('role') || '').toLowerCase();
-          return allowedRole[role];
-        }).map(function(e) {
+        return JSON.stringify(Array.from(els).map(function(e) {
           var tag = e.tagName.toLowerCase();
           var role = (e.getAttribute('role') || '');
           var text = (e.textContent || e.value || e.getAttribute('aria-label') || '').trim().replace(/\\s+/g, ' ').slice(0, 50);
+          var label = e.getAttribute('aria-label') || '';
           var typeAttr = tag === 'input' ? (e.getAttribute('type') || 'text') : '';
           e.setAttribute('data-agent-id', Math.random().toString(36).substring(2, 15));
-          return { id: e.getAttribute('data-agent-id'), tag: tag, text: text, typeAttr: typeAttr, roleAttr: role };
+          return { id: e.getAttribute('data-agent-id'), tag: tag, text: text, typeAttr: typeAttr, roleAttr: role, label };
         }));
       })()
     `,
       returnByValue: true,
     })
   ).result?.value;
-
-  console.log(raw);
 
   if (typeof raw !== 'string') return '';
 
@@ -527,16 +521,19 @@ async function getInteractiveElements(client: CDPClient): Promise<string> {
       id: string;
       tag: string;
       text: string;
+      label: string;
       typeAttr: string;
       roleAttr?: string;
     }>;
-    return items
+    const formatted = items
       .map((item, i) => {
-        const label = item.text || '(no text)';
-        const type = `${item.tag}${item.typeAttr ? ` type="${item.typeAttr}"` : ''} ${item.roleAttr ? `role="${item.roleAttr}"` : ''}`;
-        return `[${item.id}] "${label}" <${type} />`;
+        const text = item.text || '(no text)';
+        const type = `${item.tag}${item.typeAttr ? ` type="${item.typeAttr}"` : ''} ${item.roleAttr ? `role="${item.roleAttr}"` : ''} ${item.label ? `aria-label="${item.label}"` : ''}`;
+        return `[${item.id}] "${text}" <${type} />`;
       })
       .join('\n');
+    console.log(formatted);
+    return formatted;
   } catch {
     throw new Error('Failed to parse interactive elements');
   }
