@@ -3,6 +3,7 @@ import { formatDate } from './utilities';
 import type { ToolResultContent } from './tools/types';
 import { prepareMessages, MODEL } from './context';
 import { Anthropic } from '@anthropic-ai/sdk';
+import pc from 'picocolors';
 import type {
   MessageParam,
   ToolUseBlock,
@@ -30,11 +31,11 @@ async function thread() {
   const baseInstructions = `
 You are a helpful personal assistant that runs on my personal computer and talks to me through a chat interface.
 Answer with short and conversational answers. 
-You have control over my computer through several tools.
+You have control over my computer through several tools and skills.
 
 ${getInstructions(conversationStartIso)}
 
-The code you’re running on is at: ${__dirname}
+The code you’re running on is at: ${__dirname}.
 `;
 
   let messages: MessageParam[] = [];
@@ -124,6 +125,9 @@ async function runToolCalls(toolUse: ToolUseBlock[]): Promise<
     const content: ToolResultContent = tool
       ? (await tool.handler((block.input ?? {}) as any)).content
       : `Unknown tool: ${block.name}`;
+    console.info(
+      `\n\n===\n[${tool.spec.name}(${JSON.stringify(block.input)})]\n\n${pc.gray(content)}\n\n===`
+    );
     results.push({ type: 'tool_result', tool_use_id: block.id, content });
   }
   return results;

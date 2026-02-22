@@ -8,6 +8,7 @@ const INTERACTIVE_SELECTOR = [
   'input',
   'textarea',
   'select',
+  '[contenteditable="true"]',
   '[role="button"]',
   '[role="link"]',
   '[role="tab"]',
@@ -17,23 +18,33 @@ const INTERACTIVE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
-async function getCurrentUrl(client: CDPClient): Promise<string> {
-  try {
-    const result = await client.Runtime.evaluate({
-      expression: 'window.location.href',
-      returnByValue: true,
-    });
-    return typeof result.result?.value === 'string' ? result.result.value : '';
-  } catch {
-    return '';
-  }
+export const instructions =
+  '## Browser\nBefore replying to the first message always run \`web_page_status\` and SILENTLY take note of what URL is open in the browser.';
+
+async function getPageDetails(
+  client: CDPClient
+): Promise<{ href: string; title: string; detailsHeader: string }> {
+  // Optimize: combine both evaluations into a single CDP call
+  const result = await client.Runtime.evaluate({
+    expression:
+      'JSON.stringify({ href: window.location.href, title: window.document.title })',
+    returnByValue: true,
+  });
+  const details = JSON.parse(result.result.value as string) as {
+    href: string;
+    title: string;
+  };
+  return {
+    ...details,
+    detailsHeader: `- URL: "${details.href}".\n- Title: "${details.title}".\n\n---\n\n`,
+  };
 }
 
 const readWebPageTool: Tool<{ url: string }> = {
   spec: {
     name: 'read_web_page',
     description:
-      'Read the contents for the page that is currently open as Markdown',
+      'Read the contents for the page that is currently open as Markdown. If there’s images on the page always use screenshot_web_page as well so you can see whats there.',
     input_schema: {
       type: 'object',
       required: [],
@@ -41,10 +52,10 @@ const readWebPageTool: Tool<{ url: string }> = {
     },
   },
   handler: async () => {
-    try {
-      const client = await getCDPClient();
-      const currentUrl = await getCurrentUrl(client);
+    const client = await getCDPClient();
+    const { detailsHeader } = await getPageDetails(client);
 
+    try {
       const htmlResult = await client.Runtime.evaluate({
         expression: 'document.documentElement.outerHTML',
         returnByValue: true,
@@ -52,7 +63,7 @@ const readWebPageTool: Tool<{ url: string }> = {
 
       if (htmlResult.exceptionDetails) {
         return {
-          content: `Current URL: ${currentUrl}\n\nError reading page content: ${htmlResult.exceptionDetails.exception?.description ?? htmlResult.exceptionDetails.text}`,
+          content: `${detailsHeader}Error reading page content: ${htmlResult.exceptionDetails.exception?.description ?? htmlResult.exceptionDetails.text}`,
         };
       }
 
@@ -76,17 +87,14 @@ const readWebPageTool: Tool<{ url: string }> = {
       });
 
       const markdownContent = service.turndown(html).replace(/\s+/g, ' ');
+      const content = `${detailsHeader}${markdownContent}`;
 
       return {
-        content: `Current URL: ${currentUrl}\n\n${markdownContent}`,
+        content,
       };
     } catch (error) {
-      const client = await getCDPClient().catch(() => null);
-      const currentUrl = client
-        ? await getCurrentUrl(client).catch(() => '')
-        : '';
       return {
-        content: `Current URL: ${currentUrl}\n\nError fetching web page: ${formatError(error)}`,
+        content: `${detailsHeader}Error fetching web page: ${formatError(error)}`,
       };
     }
   },
@@ -126,15 +134,17 @@ const openWebPageTool: Tool<{ url: string }> = {
       });
       await client.Page.navigate({ url });
       await loadDone;
-      const currentUrl = await getCurrentUrl(client);
-      return { content: `Opened web page. Current URL: ${currentUrl}` };
+      const { detailsHeader } = await getPageDetails(client);
+      return { content: `Opened web page.\n\n${detailsHeader}` };
     } catch (error) {
       const client = await getCDPClient().catch(() => null);
-      const currentUrl = client
-        ? await getCurrentUrl(client).catch(() => '')
-        : '';
+      const pageDetails = client
+        ? await getPageDetails(client).catch(() => null)
+        : null;
+      const detailsHeader =
+        pageDetails?.detailsHeader ?? 'Current URL: (unknown)\n\n---\n\n';
       return {
-        content: `Current URL: ${currentUrl}\n\nError getting web page content: ${formatError(error)}`,
+        content: `${detailsHeader}Error getting web page content: ${formatError(error)}`,
       };
     }
   },
@@ -154,22 +164,27 @@ const getWebPageElementsTool: Tool<{ url: string }> = {
   handler: async () => {
     try {
       const client = await getCDPClient();
-      const currentUrl = await getCurrentUrl(client);
+      const { detailsHeader } = await getPageDetails(client);
       const elements = await getInteractiveElements(client);
-      return { content: `Current URL: ${currentUrl}\n\n${elements}` };
+      const content = `${detailsHeader}What follows is a list of interactive elements by their ID. Keep in mind that the IDs are unique to this session.\n\n${elements}`;
+      return {
+        content,
+      };
     } catch (error) {
       const client = await getCDPClient().catch(() => null);
-      const currentUrl = client
-        ? await getCurrentUrl(client).catch(() => '')
-        : '';
+      const pageDetails = client
+        ? await getPageDetails(client).catch(() => null)
+        : null;
+      const detailsHeader =
+        pageDetails?.detailsHeader ?? 'Current URL: (unknown)\n\n---\n\n';
       return {
-        content: `Current URL: ${currentUrl}\n\nError getting web page content: ${formatError(error)}`,
+        content: `${detailsHeader}Error getting web page content: ${formatError(error)}`,
       };
     }
   },
 };
 
-const clickOnWebPageElementTool: Tool<{ id: number }> = {
+const clickOnWebPageElementTool: Tool<{ id: string }> = {
   spec: {
     name: 'click_on_web_page_element',
     description:
@@ -189,52 +204,93 @@ const clickOnWebPageElementTool: Tool<{ id: number }> = {
   handler: async ({ id }) => {
     try {
       const client = await getCDPClient();
+      // Optimize: query directly by data-agent-id attribute instead of querying all interactive elements
       const result = await client.Runtime.evaluate({
         expression: `
           (function() {
-            var els = document.querySelectorAll(${JSON.stringify(INTERACTIVE_SELECTOR)});
-            var el = [...els].find(el => el.getAttribute('data-agent-id') === "${id}");
+            var el = document.querySelector('[data-agent-id="${id}"]');
             if (!el) return JSON.stringify({ ok: false, error: 'not found' });
             el.scrollIntoView({ block: 'center' });
-            el.click();
-            return JSON.stringify({ ok: true });
+            el.focus();
+            var r = el.getBoundingClientRect();
+            var centerX = r.left + r.width / 2;
+            var centerY = r.top + r.height / 2;
+            return JSON.stringify({ ok: true, x: centerX, y: centerY });
           })()
         `,
         returnByValue: true,
       });
 
-      const currentUrl = await getCurrentUrl(client);
-
       if (result.exceptionDetails) {
+        const { detailsHeader } = await getPageDetails(client);
         return {
-          content: `Current URL: ${currentUrl}\n\nError clicking element [${id}]: ${result.exceptionDetails.exception?.description ?? result.exceptionDetails.text}`,
+          content: `${detailsHeader}Error clicking element [${id}]: ${result.exceptionDetails.exception?.description ?? result.exceptionDetails.text}`,
         };
       }
 
-      if (typeof result.result?.value === 'string') {
-        try {
-          if (!(JSON.parse(result.result.value) as { ok: boolean }).ok) {
-            return {
-              content: `Current URL: ${currentUrl}\n\nElement [${id}] not found`,
-            };
-          }
-        } catch {
-          return {
-            content: `Current URL: ${currentUrl}\n\nElement [${id}] click result invalid`,
-          };
-        }
+      if (typeof result.result?.value !== 'string') {
+        const { detailsHeader } = await getPageDetails(client);
+        return {
+          content: `${detailsHeader}Element [${id}] click result invalid`,
+        };
       }
 
+      let parsed: { ok: boolean; x?: number; y?: number };
+      try {
+        parsed = JSON.parse(result.result.value) as {
+          ok: boolean;
+          x?: number;
+          y?: number;
+        };
+      } catch {
+        const { detailsHeader } = await getPageDetails(client);
+        return {
+          content: `${detailsHeader}Element [${id}] click result invalid`,
+        };
+      }
+
+      if (!parsed.ok) {
+        const { detailsHeader } = await getPageDetails(client);
+        return {
+          content: `${detailsHeader}Element [${id}] not found`,
+        };
+      }
+
+      const x = parsed.x ?? 0;
+      const y = parsed.y ?? 0;
+      const timestamp = Date.now() / 1000;
+
+      await client.Input.dispatchMouseEvent({
+        type: 'mousePressed',
+        x,
+        y,
+        button: 'left',
+        clickCount: 1,
+        timestamp,
+      });
+      await client.Input.dispatchMouseEvent({
+        type: 'mouseReleased',
+        x,
+        y,
+        button: 'left',
+        clickCount: 1,
+        timestamp: Date.now() / 1000,
+      });
+
+      // Only fetch page details after successful click (lazy evaluation)
+      const { detailsHeader } = await getPageDetails(client);
       return {
-        content: `Current URL: ${currentUrl}\n\nClicked on element [${id}]`,
+        content: `${detailsHeader}Clicked on element [${id}]`,
       };
     } catch (error) {
       const client = await getCDPClient().catch(() => null);
-      const currentUrl = client
-        ? await getCurrentUrl(client).catch(() => '')
-        : '';
+      const pageDetails = client
+        ? await getPageDetails(client).catch(() => null)
+        : null;
+      const detailsHeader =
+        pageDetails?.detailsHeader ?? 'Current URL: (unknown)\n\n---\n\n';
       return {
-        content: `Current URL: ${currentUrl}\n\nError interacting with web page: ${formatError(error)}`,
+        content: `${detailsHeader}Error interacting with web page: ${formatError(error)}`,
       };
     }
   },
@@ -244,7 +300,7 @@ const typeIntoWebPageElementTool: Tool<{ id: string; text: string }> = {
   spec: {
     name: 'type_into_web_page_element',
     description:
-      'Type text into an input or textarea on the current web page. Use the id from snapshot_web_page. Use for search boxes, login fields, and other text inputs.',
+      'Clear and type new text into an input, textarea, or contenteditable element on the current web page. Use the id from snapshot_web_page. Use for search boxes, login fields, rich text editors, and other text inputs.',
     input_schema: {
       type: 'object',
       required: ['id', 'text'],
@@ -252,7 +308,7 @@ const typeIntoWebPageElementTool: Tool<{ id: string; text: string }> = {
         id: {
           type: 'string',
           description:
-            'The id of the input/textarea element (from snapshot_web_page)',
+            'The id of the input/textarea/contenteditable element (from snapshot_web_page)',
         },
         text: {
           type: 'string',
@@ -264,61 +320,150 @@ const typeIntoWebPageElementTool: Tool<{ id: string; text: string }> = {
   handler: async ({ id, text }) => {
     try {
       const client = await getCDPClient();
+      // Optimize: query directly by data-agent-id attribute instead of querying all interactive elements
       const result = await client.Runtime.evaluate({
         expression: `
           (function() {
-            var els = document.querySelectorAll(${JSON.stringify(INTERACTIVE_SELECTOR)});
-            var el = [...els].find(el => el.getAttribute('data-agent-id') === "${id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}");
+            var el = document.querySelector('[data-agent-id="${id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]');
             if (!el) return JSON.stringify({ ok: false, error: 'not found' });
             var tag = (el.tagName || '').toLowerCase();
-            if (tag !== 'input' && tag !== 'textarea') return JSON.stringify({ ok: false, error: 'not an input or textarea' });
+            var isContentEditable = el.contentEditable === 'true' || el.getAttribute('contenteditable') === 'true';
+            var isInputOrTextarea = tag === 'input' || tag === 'textarea';
+            if (!isInputOrTextarea && !isContentEditable) return JSON.stringify({ ok: false, error: 'not an input, textarea, or contenteditable element' });
             el.scrollIntoView({ block: 'center' });
             el.focus();
-            el.value = ${JSON.stringify(text)};
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            return JSON.stringify({ ok: true });
+            var r = el.getBoundingClientRect();
+            var centerX = r.left + r.width / 2;
+            var centerY = r.top + r.height / 2;
+            return JSON.stringify({ ok: true, x: centerX, y: centerY });
           })()
         `,
         returnByValue: true,
       });
 
-      const currentUrl = await getCurrentUrl(client);
-
       if (result.exceptionDetails) {
+        const { detailsHeader } = await getPageDetails(client);
         return {
-          content: `Current URL: ${currentUrl}\n\nError typing into element [${id}]: ${result.exceptionDetails.exception?.description ?? result.exceptionDetails.text}`,
+          content: `${detailsHeader}Error typing into element [${id}]: ${result.exceptionDetails.exception?.description ?? result.exceptionDetails.text}`,
         };
       }
 
-      if (typeof result.result?.value === 'string') {
-        try {
-          const parsed = JSON.parse(result.result.value) as {
-            ok: boolean;
-            error?: string;
-          };
-          if (!parsed.ok) {
-            return {
-              content: `Current URL: ${currentUrl}\n\n${parsed.error === 'not found' ? `Element [${id}] not found` : `Element [${id}] is not an input or textarea`}`,
-            };
-          }
-        } catch {
-          return {
-            content: `Current URL: ${currentUrl}\n\nType-into result invalid for element [${id}]`,
-          };
+      if (typeof result.result?.value !== 'string') {
+        const { detailsHeader } = await getPageDetails(client);
+        return {
+          content: `${detailsHeader}Element [${id}] type-into result invalid`,
+        };
+      }
+
+      let parsed: { ok: boolean; x?: number; y?: number; error?: string };
+      try {
+        parsed = JSON.parse(result.result.value) as {
+          ok: boolean;
+          x?: number;
+          y?: number;
+          error?: string;
+        };
+      } catch {
+        const { detailsHeader } = await getPageDetails(client);
+        return {
+          content: `${detailsHeader}Element [${id}] type-into result invalid`,
+        };
+      }
+
+      if (!parsed.ok) {
+        const { detailsHeader } = await getPageDetails(client);
+        return {
+          content: `${detailsHeader}${parsed.error === 'not found' ? `Element [${id}] not found` : `Element [${id}] is not an input, textarea, or contenteditable element`}`,
+        };
+      }
+
+      const x = parsed.x ?? 0;
+      const y = parsed.y ?? 0;
+      const timestamp = Date.now() / 1000;
+
+      // Click on the element to ensure focus
+      await client.Input.dispatchMouseEvent({
+        type: 'mousePressed',
+        x,
+        y,
+        button: 'left',
+        clickCount: 1,
+        timestamp,
+      });
+      await client.Input.dispatchMouseEvent({
+        type: 'mouseReleased',
+        x,
+        y,
+        button: 'left',
+        clickCount: 1,
+        timestamp: Date.now() / 1000,
+      });
+
+      // Clear existing text: Select All using the commands parameter (more reliable)
+      await client.Input.dispatchKeyEvent({
+        type: 'keyDown',
+        modifiers: process.platform === 'darwin' ? 4 : 2, // Meta/Command=4 on Mac, Control=2 on others
+        windowsVirtualKeyCode: 65, // 'A' key
+        code: 'KeyA',
+        key: 'a',
+        commands: ['selectAll'],
+        timestamp: Date.now() / 1000,
+      });
+      await client.Input.dispatchKeyEvent({
+        type: 'keyUp',
+        modifiers: process.platform === 'darwin' ? 4 : 2,
+        windowsVirtualKeyCode: 65,
+        code: 'KeyA',
+        key: 'a',
+        timestamp: Date.now() / 1000,
+      });
+
+      // Delete selected text
+      await client.Input.dispatchKeyEvent({
+        type: 'keyDown',
+        windowsVirtualKeyCode: 46, // Delete key
+        code: 'Delete',
+        key: 'Delete',
+        timestamp: Date.now() / 1000,
+      });
+      await client.Input.dispatchKeyEvent({
+        type: 'keyUp',
+        windowsVirtualKeyCode: 46,
+        code: 'Delete',
+        key: 'Delete',
+        timestamp: Date.now() / 1000,
+      });
+
+      // Use native CDP insertText for reliable typing
+      // This triggers all proper input events and works with React/Vue/etc.
+      try {
+        await client.Input.insertText({ text });
+      } catch (insertError) {
+        // Fallback: if insertText is not available, type character by character
+        // This can happen if CDP version doesn't support insertText
+        for (const char of text) {
+          await client.Input.dispatchKeyEvent({
+            type: 'char',
+            text: char,
+            timestamp: Date.now() / 1000,
+          });
         }
       }
 
+      // Only fetch page details after successful typing (lazy evaluation)
+      const { detailsHeader } = await getPageDetails(client);
       return {
-        content: `Current URL: ${currentUrl}\n\nTyped into element [${id}]`,
+        content: `${detailsHeader}Typed into element [${id}]`,
       };
     } catch (error) {
       const client = await getCDPClient().catch(() => null);
-      const currentUrl = client
-        ? await getCurrentUrl(client).catch(() => '')
-        : '';
+      const pageDetails = client
+        ? await getPageDetails(client).catch(() => null)
+        : null;
+      const detailsHeader =
+        pageDetails?.detailsHeader ?? 'Current URL: (unknown)\n\n---\n\n';
       return {
-        content: `Current URL: ${currentUrl}\n\nError typing into web page element: ${formatError(error)}`,
+        content: `${detailsHeader}Error typing into web page element: ${formatError(error)}`,
       };
     }
   },
@@ -338,7 +483,7 @@ const screenshotWebPageTool: Tool<Record<string, never>> = {
   handler: async () => {
     try {
       const client = await getCDPClient();
-      const currentUrl = await getCurrentUrl(client);
+      const { detailsHeader } = await getPageDetails(client);
       const { data } = await client.Page.captureScreenshot({
         format: 'png',
         captureBeyondViewport: false,
@@ -347,7 +492,7 @@ const screenshotWebPageTool: Tool<Record<string, never>> = {
         content: [
           {
             type: 'text' as const,
-            text: `Screenshot of URL: ${currentUrl}`,
+            text: `Screenshot:\n\n${detailsHeader}`,
           },
           {
             type: 'image' as const,
@@ -360,10 +505,14 @@ const screenshotWebPageTool: Tool<Record<string, never>> = {
         ],
       };
     } catch (error) {
-      const client = await getCDPClient();
-      const currentUrl = await getCurrentUrl(client);
+      const client = await getCDPClient().catch(() => null);
+      const pageDetails = client
+        ? await getPageDetails(client).catch(() => null)
+        : null;
+      const detailsHeader =
+        pageDetails?.detailsHeader ?? 'Current URL: (unknown)\n\n---\n\n';
       return {
-        content: `Current URL: ${currentUrl}\n\nError taking screenshot: ${formatError(error)}`,
+        content: `${detailsHeader}Error taking screenshot: ${formatError(error)}`,
       };
     }
   },
@@ -451,6 +600,40 @@ const webSearchTool: Tool<{ query: string }> = {
   },
 };
 
+const webPageStatusTool: Tool<Record<string, never>> = {
+  spec: {
+    name: 'web_page_status',
+    description:
+      'Check if a web page is currently open and return the current URL. Returns whether a page is open and which URL it is.',
+    input_schema: {
+      type: 'object',
+      required: [],
+      properties: {},
+    },
+  },
+  handler: async () => {
+    try {
+      const client = await getCDPClient();
+      const { detailsHeader, href } = await getPageDetails(client);
+
+      if (href && href !== '') {
+        return {
+          content: `Web page is open.\n\n${detailsHeader}`,
+        };
+      } else {
+        return {
+          content: 'No web page is currently open.',
+        };
+      }
+    } catch (error) {
+      // If we can't get the client, assume no page is open
+      return {
+        content: `No web page is currently open. Error: ${formatError(error)}`,
+      };
+    }
+  },
+};
+
 export const tools = [
   openWebPageTool,
   readWebPageTool,
@@ -459,6 +642,7 @@ export const tools = [
   typeIntoWebPageElementTool,
   screenshotWebPageTool,
   webSearchTool,
+  webPageStatusTool,
 ];
 
 /**
@@ -532,7 +716,6 @@ async function getInteractiveElements(client: CDPClient): Promise<string> {
         return `[${item.id}] "${text}" <${type} />`;
       })
       .join('\n');
-    console.log(formatted);
     return formatted;
   } catch {
     throw new Error('Failed to parse interactive elements');

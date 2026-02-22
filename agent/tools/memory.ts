@@ -151,7 +151,7 @@ const getConversationNoteTool: Tool<{
 const updateUserMemoryTool: Tool<{ content: string }> = {
   spec: {
     name: 'update_user_memory',
-    description: `Write or update ${getWorkspacePath()}/MEMORY.md with persistent facts about the user. Call whenever the user shares something about themselves (name, preferences, context). Pass the complete updated content (merge with existing so information stays accurate).`,
+    description: `Write or update ${getMemoryPath()} with persistent facts about the user. Call whenever the user shares something about themselves (name, preferences, context). Pass the complete updated content (merge with existing so information stays accurate).`,
     input_schema: {
       type: 'object',
       required: ['content'],
@@ -167,7 +167,7 @@ const updateUserMemoryTool: Tool<{ content: string }> = {
   handler: async ({ content }) => {
     ensureWorkspaceExists();
     fs.writeFileSync(getMemoryPath(), content, 'utf8');
-    return { content: 'MEMORY.md updated.' };
+    return { content: `${getMemoryPath()} updated.` };
   },
 };
 
@@ -285,6 +285,8 @@ export const tools = [
 
 export function getSystemInstructions(conversationStartIso: string): string {
   return `
+## Memory
+
 Before replying for the first time do a quick search through recent conversations using \`get_recent_conversation_notes\` to gather possibly relevant information.
 
 When you use that context (or "Information about the user" below), weave it in naturally. Do not say things like "I see that...", "I see we've...", "I noticed that...", or "Based on our previous conversation...". Just respond as if you remember—reference recent topics or the user's situation without acknowledging that you looked anything up.
@@ -296,8 +298,9 @@ At the end of each substantive reply, call the appropriate memory tool. Prefer s
 2. **Conversation/task info** → \`save_conversation_note\` for almost every non-trivial exchange: what was discussed, decisions made, tasks or topics, things you did for them. Append to the workspace YYYY-MM-DD.md. Always use the \`conversation_start_iso\` value from below (it is provided in this message).
 
 Call \`save_conversation_note\` when: the user shared a task or decision, you completed an action, you discussed a topic they might refer back to, or the exchange was more than a quick greeting. When in doubt, save a short note.
+Before ending your response: consider calling save_conversation_note (for what was discussed), update_user_memory (if they shared something about themselves), and/or save_skill (if something reusable was learned or established).
 
-## Information about the user
+### Information about the user
 ${fs.existsSync(getMemoryPath()) ? fs.readFileSync(getMemoryPath(), 'utf8') : 'Nothing known yet'}
 
 Conversation started: ${formatDate(conversationStartIso)}. For \`save_conversation_note\` use conversation_start_iso: \`${conversationStartIso}\`

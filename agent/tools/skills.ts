@@ -14,10 +14,7 @@ const MAX_DESCRIPTION_LENGTH = 1024;
 
 /** Per spec: lowercase letters, numbers, hyphens only; 1-64 chars; no leading/trailing/consecutive hyphens. */
 function normalizeAndValidateSkillName(input: string): string {
-  const normalized = input
-    .trim()
-    .toLowerCase()
-    .replace(/_/g, '-');
+  const normalized = input.trim().toLowerCase().replace(/_/g, '-');
   if (!normalized) {
     throw new Error('Skill name cannot be empty.');
   }
@@ -96,9 +93,15 @@ export function getAvailableSkillsPrompt(): string {
     )
     .join('\n');
   return `
+## Skills
+
 <available_skills>
   ${items}
 </available_skills>
+
+When a user request matches an available skill, read that skill's full content from its <location> (e.g. with the terminal: cat "<location>") and follow the instructions.
+
+When you learn or establish something reusable (workflow, rule, convention, or capability), you must call save_skill before considering the exchange complete. Examples: a new CLI or editor workflow, a project convention, a preference for how to do X, or any instruction you give that the user might want applied again. If in doubt, save it as a skill.
 `;
 }
 
@@ -115,7 +118,7 @@ export function saveSkill(
   name: string,
   description: string,
   content: string
-): string {
+): { name: string; path: string } {
   const skillName = normalizeAndValidateSkillName(name);
 
   const rawDescription = (description ?? '').trim();
@@ -146,7 +149,7 @@ description: "${safeDescription}"
 
 `;
   fs.writeFileSync(skillMdPath, frontmatter + content, 'utf8');
-  return skillName;
+  return { name: skillName, path: skillMdPath };
 }
 
 const saveSkillTool: Tool<{
@@ -165,7 +168,7 @@ const saveSkillTool: Tool<{
         name: {
           type: 'string',
           description:
-            'Skill name: 1-64 chars, lowercase letters numbers hyphens only; no leading/trailing/consecutive hyphens (underscores are converted to hyphens)',
+            'Skill name: 1-64 chars, lowercase letters numbers hyphens only; no leading/trailing/consecutive hyphens (underscores are converted to hyphens). Skills should have names that are specific to their use-case. E.g. a skill to read Gmail emails shouldn’t be called read-emails but read-gmail.',
         },
         description: {
           type: 'string',
@@ -182,8 +185,13 @@ const saveSkillTool: Tool<{
   },
   handler: async (args) => {
     try {
-      const skillName = saveSkill(args.name, args.description, args.content ?? '');
-      return { content: `Skill "${skillName}" saved.` };
+      const { name, path } = saveSkill(
+        args.name,
+        args.description,
+        args.content ?? ''
+      );
+      const content = `Skill "${name}" saved to ${path}.`;
+      return { content };
     } catch (err) {
       return { content: err instanceof Error ? err.message : String(err) };
     }
