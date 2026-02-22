@@ -6,29 +6,23 @@ description: "How to send messages to the user via Telegram using the built-in s
 # Telegram Messaging
 
 ## Overview
-The PA Agent has a built-in Telegram messaging capability that allows sending messages directly to the user via Telegram.
+This workspace has a built-in Telegram messaging capability that allows sending messages directly to the user via Telegram.
 
 ## How to Send Messages
 
-Use the terminal command with the predefined npm script:
+Use the terminal command with the predefined npm script. **Get the workspace path from your system prompt** (look for "The code you're running on is at:"). If that path is the repo root, use it as-is; if it points to a subfolder (e.g. the agent directory), use its parent as the workspace root.
 
 ```bash
-cd [PA_AGENT_ROOT] && bun run clients:telegram:send-message "Your message here"
+cd [WORKSPACE_ROOT] && bun run clients:telegram:send-message "Your message here"
 ```
-
-Where `[PA_AGENT_ROOT]` is the base directory of the pa-agent project.
-
-## Finding the Correct Path
-
-Check your system prompt for "The code you're running on is at:" - the pa-agent root directory is the parent of that path. 
-
-For example, if the system prompt says the code is at `/Users/koenvendrik/pa-agent/agent`, then the root is `/Users/koenvendrik/pa-agent`.
 
 ## Example Usage
 
 ```bash
-cd /Users/koenvendrik/pa-agent && bun run clients:telegram:send-message "Test message from Greg! 👋"
+cd /path/from/system/prompt && bun run clients:telegram:send-message "Test message! 👋"
 ```
+
+(Replace `/path/from/system/prompt` with the actual workspace root you derived from the system prompt.)
 
 ## When to Use
 
@@ -47,7 +41,7 @@ cd /Users/koenvendrik/pa-agent && bun run clients:telegram:send-message "Test me
 
 ## Notes
 
-- Always check the system prompt for the current pa-agent path
-- Make sure to run from the pa-agent root directory (parent of the agent folder)
+- Always derive the workspace root from the system prompt; do not assume a fixed path
+- Run the command from the workspace root (where package.json lives)
 - Messages should be wrapped in quotes to handle spaces and special characters
 - The connection is already set up, no additional configuration needed

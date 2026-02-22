@@ -34,7 +34,7 @@ You have control over my computer through several tools.
 
 ${getInstructions(conversationStartIso)}
 
-The code you’re running on is at: ${__dirname}
+The code you’re running on is at: ${process.env.WORKSPACE_PATH}
 `;
 
   let messages: MessageParam[] = [];
