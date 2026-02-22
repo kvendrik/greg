@@ -283,7 +283,7 @@ export const tools = [
   getRecentConversationNotesTool,
 ];
 
-export function getSystemInstructions(conversationStartIso: string): string {
+export function getInstructions(conversationStartIso: string): string {
   return `
 ## Memory
 

@@ -7,32 +7,31 @@ description: "How to help user reply to emails in Gmail by navigating the interf
 
 ### Process for Helping User Reply to Emails:
 
-1. **Open Gmail** 
-   - Navigate to https://mail.google.com
-   - Use `snapshot_web_page` to get current element IDs
+Use `bun run browser-use` with a task description that includes all the necessary steps:
 
-2. **Find the Email**
-   - Look in Primary tab first (most personal emails)
-   - Can also check Promotions and Updates tabs if needed
-   - Click on the email subject line to open it
+```bash
+bun run browser-use "Navigate to https://mail.google.com, find the email from [sender_email] with subject '[subject]' (or the most recent email from [sender_email]), open it, and draft a reply saying: '[reply_content]'. Do not send the email, just draft it."
+```
 
-3. **Open the Email**
-   - Use `click_on_web_page_element` with the email's ID
-   - Use `read_web_page` to see the full email content
-   - Review the email details to understand what needs to be replied to
+### Task Description Guidelines:
 
-4. **Access Reply Compose Area**
-   - Take a fresh `snapshot_web_page` after opening the email to get reply compose IDs
-   - Reply compose area usually appears automatically when viewing an email
-   - If not visible, look for and click a "Reply" button to open it
+1. **Specify the email to reply to:**
+   - Include sender email address if known
+   - Include subject line if known
+   - Or specify "most recent email from [sender]"
+   - Mention which tab to check (Primary, Promotions, or Updates)
 
-5. **Draft the Reply**
-   - Use `type_into_web_page_element` with the message body text area ID
-   - Draft an appropriate response based on the email content
+2. **Include the reply content:**
+   - Provide the full text of the reply
    - Follow user preferences for tone, language, and formatting
+   - Be clear and specific about what to write
 
-6. **Present for Approval**
-   - Show the drafted message to the user
+3. **Important instructions:**
+   - Always specify "Do not send the email, just draft it"
+   - The agent will draft the reply but leave it for user approval
+
+4. **After browser-use completes:**
+   - Review the drafted message with the user
    - Ask if they want any changes before sending
    - Explain next steps (they can send it or request modifications)
 
@@ -46,8 +45,8 @@ description: "How to help user reply to emails in Gmail by navigating the interf
 
 ### Technical Notes:
 
-- Gmail interface uses dynamic IDs that change between sessions
-- Always take fresh snapshots to get current element IDs after each navigation step
-- Look for text areas with labels like "Message Body" for typing replies
-- If compose area doesn't appear automatically, manually click Reply button
-- Check which Gmail account/tab is active if user has multiple accounts
+- The browser-use agent handles all navigation and interaction automatically
+- Gmail interface uses dynamic IDs - the agent adapts to these automatically
+- The agent will find the email, open it, and draft the reply autonomously
+- If multiple Gmail accounts are open, specify which account to use in the task description
+- The agent will leave the draft ready for review - it won't send automatically

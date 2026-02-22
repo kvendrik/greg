@@ -6,7 +6,7 @@
     "clients:cli": "bun run clients/cli.ts",
     "clients:telegram": "bun run clients/telegram.ts",
     "clients:telegram:send-message": "bun run clients/scripts/send-telegram-message.ts",
-    "clients:whatsapp": "bun run clients/whatsapp.ts"
+    "browser-use": "uv run --env-file .env --script browser-use.py"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.76.0",

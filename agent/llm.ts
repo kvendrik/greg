@@ -35,7 +35,7 @@ You have control over my computer through several tools and skills.
 
 ${getInstructions(conversationStartIso)}
 
-The code you’re running on is at: ${process.env.WORKSPACE_PATH}
+The code you’re running on is at: ${process.cwd()}
 `;
 
   let messages: MessageParam[] = [];
@@ -126,7 +126,7 @@ async function runToolCalls(toolUse: ToolUseBlock[]): Promise<
       ? (await tool.handler((block.input ?? {}) as any)).content
       : `Unknown tool: ${block.name}`;
     console.info(
-      `\n\n===\n[${tool.spec.name}(${JSON.stringify(block.input)})]\n\n${pc.gray(content)}\n\n===`
+      `\n\n===\n[${tool.spec.name}(${JSON.stringify(block.input)})]\n\n${pc.gray(content as any)}\n\n===`
     );
     results.push({ type: 'tool_result', tool_use_id: block.id, content });
   }
