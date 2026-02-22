@@ -1,10 +1,10 @@
 import http from 'node:http';
+import { APIUserAbortError } from '@anthropic-ai/sdk';
 import { start } from './llm';
-import type { AbortableAsyncIterator, ChatResponse } from 'ollama';
 import pc from 'picocolors';
 
-let llm = await start();
-let currentStream: AbortableAsyncIterator<ChatResponse> | null = null;
+const llm = await start();
+let currentAbortController: AbortController | null = null;
 
 process.on('SIGINT', () => {
   llm.kill();
@@ -20,11 +20,9 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.url === '/abort' && currentStream) {
-    currentStream.abort();
-    llm.kill();
-    llm = await start();
-    currentStream = null;
+  if (req.url === '/abort' && req.method === 'POST' && currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
     res.writeHead(202, { 'Content-Type': 'application/json' });
     res.end();
     return;
@@ -36,10 +34,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (currentStream) {
-    // console.log(pc.red(`[POST] /prompt 503 Agent is already working`));
-    // res.writeHead(503, { 'Content-Type': 'application/json' });
-    // res.end(JSON.stringify({ error: 'Agent is already working' }));
+  if (currentAbortController) {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -86,8 +81,12 @@ const server = http.createServer(async (req, res) => {
       'Access-Control-Allow-Origin': '*',
     });
 
+    const abortController = new AbortController();
+    currentAbortController = abortController;
+
     try {
       await llm.thread.prompt(userPrompt.trim(), {
+        signal: abortController.signal,
         onContent(chunk) {
           res.write(JSON.stringify({ type: 'content', chunk }) + '\n');
         },
@@ -99,11 +98,15 @@ const server = http.createServer(async (req, res) => {
         },
       });
     } catch (err) {
-      console.error(err);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: String(err) }));
+      if (err instanceof APIUserAbortError) {
+        res.end();
+      } else {
+        console.error(err);
+        res.write(JSON.stringify({ type: 'error', error: String(err) }) + '\n');
+        res.end();
+      }
     } finally {
-      currentStream = null;
+      currentAbortController = null;
     }
   });
 });

@@ -72,9 +72,7 @@ const getRecentConversationNotesTool: Tool<{ max_notes?: number }> = {
     withMtime.sort((a, b) => b.mtime - a.mtime);
 
     const dayFiles = withMtime.slice(0, limit).map((e) => e.name);
-    const paths = dayFiles
-      .map((f) => `${f.replace(/\.md$/, '')}.md`)
-      .join(', ');
+    const paths = dayFiles.join(', ');
 
     const result = execSync(
       `bun run qmd multi-get "${paths}" --collection ${COLLECTION_NAME} --json`
@@ -84,7 +82,7 @@ const getRecentConversationNotesTool: Tool<{ max_notes?: number }> = {
   },
 };
 
-const searchConversationNotesTool: Tool<{ query: string }> = {
+const searchConversationNotesTool: Tool<{ search_query: string }> = {
   spec: {
     name: 'search_past_conversations',
     description: 'Search through past conversations.',
@@ -99,11 +97,11 @@ const searchConversationNotesTool: Tool<{ query: string }> = {
       },
     },
   },
-  handler: async ({ query }) => {
+  handler: async ({ search_query }) => {
     ensureWorkspaceExists();
     return {
       content: execSync(
-        `bun run qmd vsearch "${query}" --collection ${COLLECTION_NAME} --json`
+        `bun run qmd vsearch "${search_query}" --collection ${COLLECTION_NAME} --json`
       ).toString(),
     };
   },
@@ -173,6 +171,70 @@ const updateUserMemoryTool: Tool<{ content: string }> = {
   },
 };
 
+/**
+ * Append a conversation note to the workspace YYYY-MM-DD.md.
+ * Exported for use by context condense (agent/context.ts).
+ */
+export async function saveConversationNote(
+  note: string,
+  conversationStartIso: string
+): Promise<void> {
+  const trimmed = note.trim();
+  if (!trimmed) return;
+
+  const d = new Date(conversationStartIso);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`Invalid conversationStartIso: ${conversationStartIso}`);
+  }
+
+  ensureWorkspaceExists();
+
+  const date = d.toLocaleDateString('en-CA');
+  const time = d.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const dayPath = join(getChatsPath(), `${date}.md`);
+  const existingBody = fs.existsSync(dayPath)
+    ? fs.readFileSync(dayPath, 'utf8')
+    : '';
+
+  let body = insertNoteUnderTimeSection(existingBody, `## ${time}`, trimmed);
+  body = ensureDateH1(body, date);
+
+  fs.writeFileSync(dayPath, body.trimEnd() + '\n', 'utf8');
+  execSync(
+    `bun run qmd update --collection ${COLLECTION_NAME} && bun run qmd embed --collection ${COLLECTION_NAME}`
+  );
+
+  function ensureDateH1(body: string, date: string): string {
+    const h1 = `# ${date}`;
+    if (body.startsWith(h1)) return body;
+    const withoutH1 = body.replace(/^\s*# .*$/m, '').trimStart();
+    return h1 + '\n\n' + (withoutH1 || '');
+  }
+
+  function insertNoteUnderTimeSection(
+    body: string,
+    timeHeading: string,
+    note: string
+  ): string {
+    const escaped = timeHeading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(?:^|\\n)(${escaped})(?:\\s|$)`, 'm');
+    const match = body.match(re);
+    if (match && match.index != null) {
+      const insertAt =
+        match.index + (body[match.index] === '\n' ? 1 : 0) + timeHeading.length;
+      return (
+        body.slice(0, insertAt) + '\n\n' + note + '\n\n' + body.slice(insertAt)
+      );
+    }
+    const prefix = body ? body + '\n\n' : '';
+    return prefix + timeHeading + '\n\n' + note + '\n\n';
+  }
+}
+
 const saveConversationNoteTool: Tool<{
   note: string;
   conversation_start_iso: string;
@@ -201,8 +263,6 @@ const saveConversationNoteTool: Tool<{
     const trimmed = note.trim();
     if (!trimmed) return { content: 'No content to save.' };
 
-    ensureWorkspaceExists();
-
     const d = new Date(conversation_start_iso);
     const date = d.toLocaleDateString('en-CA');
     const time = d.toLocaleTimeString('en-GB', {
@@ -210,54 +270,8 @@ const saveConversationNoteTool: Tool<{
       minute: '2-digit',
     });
 
-    const dayPath = join(getChatsPath(), `${date}.md`);
-    const existingBody = fs.existsSync(dayPath)
-      ? fs.readFileSync(dayPath, 'utf8')
-      : '';
-
-    let body = insertNoteUnderTimeSection(existingBody, `## ${time}`, trimmed);
-    body = ensureDateH1(body, date);
-
-    fs.writeFileSync(dayPath, body.trimEnd() + '\n', 'utf8');
-    execSync(
-      `bun run qmd update --collection ${COLLECTION_NAME} && bun run qmd embed --collection ${COLLECTION_NAME}`
-    );
-
+    await saveConversationNote(note, conversation_start_iso);
     return { content: `Saved to ${date}.md under ${time}.` };
-
-    /** Insert note under existing ## time section, or append a new ## time section. */
-    function insertNoteUnderTimeSection(
-      body: string,
-      timeHeading: string,
-      note: string
-    ): string {
-      const escaped = timeHeading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const re = new RegExp(`(?:^|\\n)(${escaped})(?:\\s|$)`, 'm');
-      const match = body.match(re);
-      if (match && match.index != null) {
-        const insertAt =
-          match.index +
-          (body[match.index] === '\n' ? 1 : 0) +
-          timeHeading.length;
-        return (
-          body.slice(0, insertAt) +
-          '\n\n' +
-          note +
-          '\n\n' +
-          body.slice(insertAt)
-        );
-      }
-      const prefix = body ? body + '\n\n' : '';
-      return prefix + timeHeading + '\n\n' + note + '\n\n';
-    }
-
-    /** Ensure body starts with "# YYYY-MM-DD". */
-    function ensureDateH1(body: string, date: string): string {
-      const h1 = `# ${date}`;
-      if (body.startsWith(h1)) return body;
-      const withoutH1 = body.replace(/^\s*# .*$/m, '').trimStart();
-      return h1 + '\n\n' + (withoutH1 || '');
-    }
   },
 };
 
@@ -269,7 +283,7 @@ export const tools = [
   getRecentConversationNotesTool,
 ];
 
-export function getSystemInstructions() {
+export function getSystemInstructions(conversationStartIso: string): string {
   return `
 Before replying for the first time do a quick search through recent conversations using \`get_recent_conversation_notes\` to gather possibly relevant information.
 
@@ -284,6 +298,6 @@ When something is worth remembering, after replying call the right tool:
 ## Information about the user
 ${fs.existsSync(getMemoryPath()) ? fs.readFileSync(getMemoryPath(), 'utf8') : 'Nothing known yet'}
 
-Conversation started at: ${new Date().toISOString()}
+Conversation started at: ${conversationStartIso}
   `;
 }

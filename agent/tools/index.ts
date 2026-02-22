@@ -12,9 +12,12 @@ export const tools = [
   ...skillTools,
 ];
 
-export const instructions = `
-${getSystemInstructions()}
+/** Build tool instructions with an optional conversation start ISO (used when starting a thread). */
+export function getInstructions(conversationStartIso: string): string {
+  return `
+${getSystemInstructions(conversationStartIso)}
 ${getAvailableSkillsPrompt()}
 
 When a user request matches an available skill, read that skill's full content from its <location> (e.g. with the terminal: cat "<location>") and follow the instructions. When you learn something new worth reusing (a workflow, rule, or capability), save it with save_skill.
 `;
+}

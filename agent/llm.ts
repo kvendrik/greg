@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
-import { tools, instructions as toolInstructions } from './tools';
+import { tools, getInstructions } from './tools';
 import type { ToolResultContent } from './tools/types';
+import { prepareMessages, MODEL } from './context';
 import { Anthropic } from '@anthropic-ai/sdk';
 import type {
   MessageParam,
@@ -9,7 +10,11 @@ import type {
 
 const MAX_TOKENS = 8192;
 
-type ThreadHistory = { system: string; messages: MessageParam[] };
+type ThreadHistory = {
+  system: string;
+  messages: MessageParam[];
+  conversationStartIso: string;
+};
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -23,12 +28,13 @@ export async function start() {
 }
 
 async function thread() {
+  const conversationStartIso = new Date().toISOString();
   const baseInstructions = `
 You are a helpful personal assistant that runs on my personal computer and talks to me through a chat interface.
 Answer with short and conversational answers. 
 You have control over my computer through several tools.
 
-${toolInstructions}
+${getInstructions(conversationStartIso)}
 
 The code you’re running on is at: ${__dirname}
 `;
@@ -39,10 +45,12 @@ The code you’re running on is at: ${__dirname}
     prompt: async (
       content: string,
       {
+        signal,
         onContent,
         onThinking,
         onDone,
       }: {
+        signal?: AbortSignal;
         onContent: (chunk: string) => void;
         onThinking: (chunk: string) => void;
         onDone: () => void;
@@ -50,7 +58,12 @@ The code you’re running on is at: ${__dirname}
     ) => {
       const finalContent = `Time is ${new Date().toISOString()}. User sent this prompt: "${content}"`;
       await runPrompt(finalContent, {
-        history: { system: baseInstructions, messages },
+        signal,
+        history: {
+          system: baseInstructions,
+          messages,
+          conversationStartIso,
+        },
         onContent,
         onThinking,
         onDone: (newMessages) => {
@@ -120,28 +133,35 @@ async function runToolCalls(toolUse: ToolUseBlock[]): Promise<
 async function runPrompt(
   content: string,
   opts: {
+    signal?: AbortSignal;
     history: ThreadHistory;
     onContent: (chunk: string) => void;
     onThinking: (chunk: string) => void;
     onDone: (messages: MessageParam[]) => void;
   }
 ) {
-  const messages: MessageParam[] = [
-    ...opts.history.messages,
-    { role: 'user', content },
-  ];
+  const messages = await prepareMessages({
+    system: opts.history.system,
+    messages: opts.history.messages,
+    newUserContent: content,
+    tools: tools.map((t) => t.spec),
+    conversationStartIso: opts.history.conversationStartIso,
+  });
 
   while (true) {
-    const stream = anthropic.messages.stream({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: MAX_TOKENS,
-      system: opts.history.system,
-      messages,
-      tools: tools.map((t) => t.spec),
-      tool_choice: { type: 'auto' },
-      stream: true,
-      thinking: { type: 'enabled', budget_tokens: 1024 },
-    });
+    const stream = anthropic.messages.stream(
+      {
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        system: opts.history.system,
+        messages,
+        tools: tools.map((t) => t.spec),
+        tool_choice: { type: 'auto' },
+        stream: true,
+        thinking: { type: 'enabled', budget_tokens: 1024 },
+      },
+      { signal: opts.signal }
+    );
 
     stream.on('text', opts.onContent);
     stream.on('thinking', opts.onThinking);
