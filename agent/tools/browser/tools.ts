@@ -340,13 +340,13 @@ const screenshotWebPageTool: Tool<Record<string, never>> = {
       const currentUrl = await getCurrentUrl(client);
       const { data } = await client.Page.captureScreenshot({
         format: 'png',
-        captureBeyondViewport: true,
+        captureBeyondViewport: false,
       });
       return {
         content: [
           {
             type: 'text' as const,
-            text: `Full page screenshot. URL: ${currentUrl}`,
+            text: `Screenshot of URL: ${currentUrl}`,
           },
           {
             type: 'image' as const,

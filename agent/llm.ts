@@ -1,4 +1,3 @@
-import { spawn } from 'child_process';
 import { tools, getInstructions } from './tools';
 import type { ToolResultContent } from './tools/types';
 import { prepareMessages, MODEL } from './context';
@@ -19,10 +18,8 @@ type ThreadHistory = {
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function start() {
-  const proc = spawn('ollama', ['serve'], { detached: true, stdio: 'ignore' });
-  proc.unref();
   return {
-    kill: () => proc.kill(),
+    kill: () => {},
     thread: await thread(),
   };
 }

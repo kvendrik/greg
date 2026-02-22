@@ -5,6 +5,7 @@
     "agent:tools-cli": "bun run scripts/tools-cli.ts",
     "clients:cli": "bun run clients/cli.ts",
     "clients:telegram": "bun run clients/telegram.ts",
+    "clients:telegram:send-message": "bun run clients/scripts/send-telegram-message.ts",
     "clients:whatsapp": "bun run clients/whatsapp.ts"
   },
   "dependencies": {
@@ -22,7 +23,6 @@
     "grammy": "^1.40.0",
     "gray-matter": "^4.0.3",
     "notion-to-md": "^3.1.9",
-    "ollama": "^0.6.3",
     "picocolors": "^1.1.1",
     "turndown": "^7.2.0",
     "twilio": "^5.12.1",
