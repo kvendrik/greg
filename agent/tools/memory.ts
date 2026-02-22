@@ -2,7 +2,7 @@ import { execSync } from 'child_process';
 import fs from 'node:fs';
 import { join } from 'path';
 import type { Tool } from './types';
-import { getWorkspacePath } from '../utilities';
+import { formatDate, getWorkspacePath } from '../utilities';
 
 const COLLECTION_NAME = 'agent-chats';
 
@@ -151,7 +151,7 @@ const getConversationNoteTool: Tool<{
 const updateUserMemoryTool: Tool<{ content: string }> = {
   spec: {
     name: 'update_user_memory',
-    description: `Write or update ${getWorkspacePath()}/MEMORY.md with persistent facts about the user. Pass the complete updated content (merge with existing so information stays accurate).`,
+    description: `Write or update ${getWorkspacePath()}/MEMORY.md with persistent facts about the user. Call whenever the user shares something about themselves (name, preferences, context). Pass the complete updated content (merge with existing so information stays accurate).`,
     input_schema: {
       type: 'object',
       required: ['content'],
@@ -241,7 +241,7 @@ const saveConversationNoteTool: Tool<{
 }> = {
   spec: {
     name: 'save_conversation_note',
-    description: `Append a note to the workspace YYYY-MM-DD.md (under ${getWorkspacePath()}/chats) at the time the conversation started. Use for task-related info and other things discussed (not persistent user facts).`,
+    description: `Append a note to the workspace YYYY-MM-DD.md (under ${getWorkspacePath()}/chats) at the time the conversation started. Call at the end of substantive replies for task-related info, topics discussed, decisions, or actions taken (not persistent user facts). Prefer calling too often. Use conversation_start_iso from the system prompt.`,
     input_schema: {
       type: 'object',
       required: ['note', 'conversation_start_iso'],
@@ -289,15 +289,17 @@ Before replying for the first time do a quick search through recent conversation
 
 When you use that context (or "Information about the user" below), weave it in naturally. Do not say things like "I see that...", "I see we've...", "I noticed that...", or "Based on our previous conversation...". Just respond as if you remember—reference recent topics or the user's situation without acknowledging that you looked anything up.
 
-## Saving to memory
-When something is worth remembering, after replying call the right tool:
+## Saving to memory (do this often)
+At the end of each substantive reply, call the appropriate memory tool. Prefer saving too often rather than too rarely.
 
-1. **Persistent user facts** (name, preferences, context) → \`update_user_memory\` with the full updated content for the workspace MEMORY.md. Merge with "Information about the user" below so it stays accurate. Before saving something, ask yourself: "will this be true in 2 weeks?".
-2. **Conversation/task info** (what was discussed, decisions—not durable user facts) → \`save_conversation_note\` to append to the workspace YYYY-MM-DD.md. Use the \`conversation_start_iso\` value from below.
+1. **Persistent user facts** (name, preferences, context) → \`update_user_memory\` with the full updated content for the workspace MEMORY.md. Merge with "Information about the user" below so it stays accurate. Before saving something, ask yourself: "will this be true in 2 weeks?". Call whenever the user shares something about themselves.
+2. **Conversation/task info** → \`save_conversation_note\` for almost every non-trivial exchange: what was discussed, decisions made, tasks or topics, things you did for them. Append to the workspace YYYY-MM-DD.md. Always use the \`conversation_start_iso\` value from below (it is provided in this message).
+
+Call \`save_conversation_note\` when: the user shared a task or decision, you completed an action, you discussed a topic they might refer back to, or the exchange was more than a quick greeting. When in doubt, save a short note.
 
 ## Information about the user
 ${fs.existsSync(getMemoryPath()) ? fs.readFileSync(getMemoryPath(), 'utf8') : 'Nothing known yet'}
 
-Conversation started at: ${conversationStartIso}
+Conversation started: ${formatDate(conversationStartIso)}. For \`save_conversation_note\` use conversation_start_iso: \`${conversationStartIso}\`
   `;
 }

@@ -1,4 +1,5 @@
 import { tools, getInstructions } from './tools';
+import { formatDate } from './utilities';
 import type { ToolResultContent } from './tools/types';
 import { prepareMessages, MODEL } from './context';
 import { Anthropic } from '@anthropic-ai/sdk';
@@ -53,7 +54,8 @@ The code you’re running on is at: ${__dirname}
         onDone: () => void;
       }
     ) => {
-      const finalContent = `Time is ${new Date().toISOString()}. User sent this prompt: "${content}"`;
+      const nowIso = new Date().toISOString();
+      const finalContent = `Date and time is ${formatDate(nowIso)}. User sent this prompt: "${content}"`;
       await runPrompt(finalContent, {
         signal,
         history: {

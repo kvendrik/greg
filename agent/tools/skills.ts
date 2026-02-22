@@ -157,7 +157,7 @@ const saveSkillTool: Tool<{
   spec: {
     name: 'save_skill',
     description:
-      'Create or update a skill. Use when you learn something new worth reusing (workflow, rule, or capability).',
+      'Create or update a skill. Call whenever you learn or establish something reusable: a workflow, rule, convention, or capability. Prefer saving when in doubt. Use at the end of your response after teaching or applying something new (e.g. new CLI workflow, project convention, how the user wants something done).',
     input_schema: {
       type: 'object',
       required: ['name', 'description', 'content'],
