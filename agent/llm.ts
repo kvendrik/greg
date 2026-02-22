@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { tools, getSystemInstructions } from './tools';
+import { tools, instructions as toolInstructions } from './tools';
 import type { ToolResultContent } from './tools/types';
 import { Anthropic } from '@anthropic-ai/sdk';
 import type {
@@ -7,7 +7,6 @@ import type {
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
-const MODEL = 'claude-sonnet-4-20250514';
 const MAX_TOKENS = 8192;
 
 type ThreadHistory = { system: string; messages: MessageParam[] };
@@ -29,7 +28,7 @@ You are a helpful personal assistant that runs on my personal computer and talks
 Answer with short and conversational answers. 
 You have control over my computer through several tools.
 
-${getSystemInstructions()}
+${toolInstructions}
 
 The code you’re running on is at: ${__dirname}
 `;
@@ -100,9 +99,7 @@ function buildAssistantBlocks(
   return out;
 }
 
-async function runToolCalls(
-  toolUse: ToolUseBlock[]
-): Promise<
+async function runToolCalls(toolUse: ToolUseBlock[]): Promise<
   Array<{
     type: 'tool_result';
     tool_use_id: string;
@@ -136,7 +133,7 @@ async function runPrompt(
 
   while (true) {
     const stream = anthropic.messages.stream({
-      model: MODEL,
+      model: 'claude-sonnet-4-20250514',
       max_tokens: MAX_TOKENS,
       system: opts.history.system,
       messages,
