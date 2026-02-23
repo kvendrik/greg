@@ -26,7 +26,7 @@ except ImportError:
 
 browser: Browser | None = None
 agent: Agent | None = None
-task_lock = asyncio.Lock()
+# Lock and current_run_task are set on the app when the loop is running (see main/start_browser)
 current_run_task: asyncio.Task | None = None  # cancelled when /stop is called
 
 
@@ -88,7 +88,7 @@ async def handle_task(request: web.Request) -> web.Response:
             {"ok": False, "error": "Missing or invalid 'task' (string)"}, status=400
         )
     global current_run_task
-    async with task_lock:
+    async with request.app["task_lock"]:
         stream_queue: asyncio.Queue = asyncio.Queue()
         step_counter: list[int] = [0]
         on_start, on_end = _make_stream_hooks(stream_queue, step_counter)
@@ -180,6 +180,8 @@ async def handle_stop(request: web.Request) -> web.Response:
 
 async def start_browser(app: web.Application) -> None:
     global browser
+    # Create lock and future on the running event loop so they belong to this loop
+    app["task_lock"] = asyncio.Lock()
     workspace_path = os.environ.get("WORKSPACE_PATH")
     if not workspace_path:
         raise ValueError("WORKSPACE_PATH environment variable is not set")
@@ -203,8 +205,11 @@ def main():
     args = parser.parse_args()
     port = args.port or int(os.environ.get("BROWSER_USE_PORT", "8765"))
 
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    # Future must be created on this loop to avoid "future belongs to a different loop"
     app = web.Application()
-    app["shutdown_future"] = asyncio.Future()
+    app["shutdown_future"] = loop.create_future()
     app.add_routes([
         web.post("/task", handle_task),
         web.get("/status", handle_status),
@@ -214,8 +219,6 @@ def main():
     app.on_cleanup.append(stop_browser)
 
     runner = web.AppRunner(app)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
     loop.run_until_complete(runner.setup())
     site = web.TCPSite(runner, "127.0.0.1", port)
     loop.run_until_complete(site.start())
