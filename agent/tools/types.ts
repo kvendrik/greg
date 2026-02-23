@@ -33,7 +33,14 @@ export type ToolResultContent =
         }
     >;
 
+export interface ToolContext {
+  signal?: AbortSignal;
+}
+
 export interface Tool<Args extends object> {
   spec: AnthropicToolSpec;
-  handler: (args: Args) => Promise<{ content: ToolResultContent }>;
+  handler: (
+    args: Args,
+    context?: ToolContext
+  ) => Promise<{ content: ToolResultContent }>;
 }

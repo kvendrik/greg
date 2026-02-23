@@ -81,6 +81,9 @@ const server = http.createServer(async (req, res) => {
       'Access-Control-Allow-Origin': '*',
     });
 
+    // Disable socket timeout so long-running tool calls (e.g. exec) don't get cut off
+    req.socket.setTimeout(0);
+
     const abortController = new AbortController();
     currentAbortController = abortController;
 
@@ -98,7 +101,10 @@ const server = http.createServer(async (req, res) => {
         },
       });
     } catch (err) {
-      if (err instanceof APIUserAbortError) {
+      if (
+        err instanceof APIUserAbortError ||
+        (err instanceof Error && err.name === 'AbortError')
+      ) {
         res.end();
       } else {
         console.error(err);
@@ -110,6 +116,9 @@ const server = http.createServer(async (req, res) => {
     }
   });
 });
+
+// No timeout so long-running prompts (e.g. with exec) are not cut off
+server.timeout = 0;
 
 server.listen(3000, () => {
   console.log('Running...');
