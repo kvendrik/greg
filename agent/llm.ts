@@ -112,18 +112,22 @@ function buildAssistantBlocks(
   return out;
 }
 
-async function runToolCalls(toolUse: ToolUseBlock[]): Promise<
+async function runToolCalls(
+  toolUse: ToolUseBlock[],
+  signal?: AbortSignal
+): Promise<
   Array<{
     type: 'tool_result';
     tool_use_id: string;
     content: ToolResultContent;
   }>
 > {
+  const context = signal ? { signal } : undefined;
   const results = [];
   for (const block of toolUse) {
     const tool = tools.find((t) => t.spec.name === block.name);
     const content: ToolResultContent = tool
-      ? (await tool.handler((block.input ?? {}) as any)).content
+      ? (await tool.handler((block.input ?? {}) as any, context)).content
       : `Unknown tool: ${block.name}`;
     console.info(
       `\n\n===\n[${tool.spec.name}(${JSON.stringify(block.input)})]\n\n${pc.gray(content as any)}\n\n===`
@@ -195,7 +199,7 @@ async function runPrompt(
 
     if (toolUse.length === 0) break;
 
-    const toolResults = await runToolCalls(toolUse);
+    const toolResults = await runToolCalls(toolUse, opts.signal);
 
     messages.push({ role: 'user', content: toolResults });
   }

@@ -17,8 +17,10 @@ export const runTerminalCommandTool: Tool<{ command: string }> = {
       },
     },
   },
-  handler: async ({ command }) => {
-    return new Promise((resolve) => {
+  handler: async ({ command }, context) => {
+    const signal = context?.signal;
+
+    return new Promise((resolve, reject) => {
       const output: string[] = [];
       const errorOutput: string[] = [];
 
@@ -33,6 +35,37 @@ export const runTerminalCommandTool: Tool<{ command: string }> = {
         stdio: ['inherit', 'pipe', 'pipe'],
         shell: true,
       });
+
+      const finish = (result: { content: string }) => {
+        cleanup();
+        resolve(result);
+      };
+
+      const abort = () => {
+        try {
+          child.kill('SIGTERM');
+        } catch {
+          // process may already be gone
+        }
+        cleanup();
+        const err = new DOMException('Command aborted by user', 'AbortError');
+        reject(err);
+      };
+
+      let settled = false;
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener('abort', abort);
+      };
+
+      if (signal) {
+        if (signal.aborted) {
+          abort();
+          return;
+        }
+        signal.addEventListener('abort', abort, { once: true });
+      }
 
       // Stream stdout live
       child.stdout.on('data', (data: Buffer) => {
@@ -49,10 +82,13 @@ export const runTerminalCommandTool: Tool<{ command: string }> = {
       });
 
       child.on('close', (code) => {
+        if (settled) return;
+        settled = true;
         const fullOutput = output.join('');
         const fullError = errorOutput.join('');
-        const combined = fullOutput + (fullError ? `\n[stderr]\n${fullError}` : '');
-        
+        const combined =
+          fullOutput + (fullError ? `\n[stderr]\n${fullError}` : '');
+
         if (code !== 0) {
           resolve({
             content: `Command exited with code ${code}\n${combined}`,
@@ -65,7 +101,7 @@ export const runTerminalCommandTool: Tool<{ command: string }> = {
       child.on('error', (error) => {
         const errorMsg = `Failed to start command: ${error.message}`;
         console.error(pc.red(errorMsg));
-        resolve({ content: errorMsg });
+        finish({ content: errorMsg });
       });
     });
   },
