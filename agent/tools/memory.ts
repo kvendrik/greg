@@ -47,12 +47,12 @@ const getRecentConversationNotesRunnable: BetaRunnableTool = {
         type: 'number',
         description:
           'Max number of recent days to fetch notes for (each day file can contain multiple notes)',
-        default: 3,
+        default: 5,
       },
     },
   },
   parse: (c) => c as { max_notes?: number },
-  run: async ({ max_notes = 3 }) => {
+  run: async ({ max_notes = 5 }) => {
     ensureWorkspaceExists();
     const limit = Math.max(1, Math.min(50, max_notes));
 
@@ -143,8 +143,8 @@ const getConversationNoteRunnable: BetaRunnableTool = {
 };
 
 const updateUserMemoryRunnable: BetaRunnableTool = {
-  name: 'save_user_memory',
-  description: `Update ${getMemoryPath()} with persistent facts about the user. Call whenever the user shares something about themselves (name, preferences, context). Pass the complete updated content (merge with existing so information stays accurate).`,
+  name: 'update_user_memory',
+  description: `Write or update ${getMemoryPath()} with persistent facts about the user. Call whenever the user shares something about themselves (name, preferences, context). Pass the complete updated content (merge with existing so information stays accurate).`,
   input_schema: {
     type: 'object',
     required: ['content'],
@@ -197,7 +197,9 @@ export async function saveConversationNote(
   body = ensureDateH1(body, date);
 
   fs.writeFileSync(dayPath, body.trimEnd() + '\n', 'utf8');
-  execSync(`bun run agent:memory:index`);
+  execSync(
+    `bun run qmd update --collection ${COLLECTION_NAME} && bun run qmd embed --collection ${COLLECTION_NAME}`
+  );
 
   function ensureDateH1(body: string, date: string): string {
     const h1 = `# ${date}`;
@@ -289,10 +291,6 @@ Before ending your response: consider calling save_conversation_note (for what w
 ### Information about the user
 ${fs.existsSync(getMemoryPath()) ? fs.readFileSync(getMemoryPath(), 'utf8') : 'Nothing known yet'}
 
-### Files location
-Your workspace with all memory files etc is at: ${getWorkspacePath()}.
-
-### Conversation start time
-Conversation started: ${formatDate(conversationStartIso)}. For \`save_conversation_note\` use conversation_start_iso: \`${conversationStartIso}\`.
+Conversation started: ${formatDate(conversationStartIso)}. For \`save_conversation_note\` use conversation_start_iso: \`${conversationStartIso}\`
   `;
 }
