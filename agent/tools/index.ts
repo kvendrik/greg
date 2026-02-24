@@ -1,6 +1,9 @@
 import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
-import { createBrowserTools } from './browser';
 import { createExecTool } from './terminal';
+import {
+  get as getBrowserTools,
+  instructions as browserInstructions,
+} from './browser';
 import {
   tools as memoryTools,
   getInstructions as getMemoryInstructions,
@@ -11,7 +14,7 @@ import {
 } from './skills';
 
 export async function get(signal: AbortSignal): Promise<BetaRunnableTool[]> {
-  const browserTools = await createBrowserTools(signal);
+  const browserTools = await getBrowserTools(signal);
   return [
     createExecTool(signal),
     ...memoryTools,
@@ -25,5 +28,7 @@ export function getInstructions(conversationStartIso: string): string {
 ${getMemoryInstructions(conversationStartIso)}
 
 ${getSkillsInstructions()}
+
+${browserInstructions}
 `;
 }
