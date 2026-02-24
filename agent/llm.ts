@@ -1,19 +1,16 @@
-import { tools, getInstructions } from './tools';
+import { get as getTools, getInstructions } from './tools';
 import { formatDate } from './utilities';
-import type { ToolResultContent } from './tools/types';
 import { prepareMessages, MODEL } from './context';
 import { Anthropic } from '@anthropic-ai/sdk';
-import pc from 'picocolors';
-import type {
-  MessageParam,
-  ToolUseBlock,
-} from '@anthropic-ai/sdk/resources/messages';
+import type { BetaMessageParam } from '@anthropic-ai/sdk/resources/beta';
+import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 
 const MAX_TOKENS = 8192;
+const MAX_ITERATIONS = 25;
 
 type ThreadHistory = {
   system: string;
-  messages: MessageParam[];
+  messages: BetaMessageParam[];
   conversationStartIso: string;
 };
 
@@ -35,10 +32,10 @@ You have control over my computer through several tools and skills.
 
 ${getInstructions(conversationStartIso)}
 
-The code you’re running on is at: ${process.cwd()}
+The code you're running on is at: ${process.cwd()}
 `;
 
-  let messages: MessageParam[] = [];
+  let messages: BetaMessageParam[] = [];
 
   return {
     prompt: async (
@@ -75,68 +72,6 @@ The code you’re running on is at: ${process.cwd()}
   };
 }
 
-function parseResponse(
-  content: Array<{ type: string; [k: string]: unknown }> | undefined
-) {
-  const blocks = content ?? [];
-  const text = blocks
-    .filter((b) => b.type === 'text')
-    .map((b) => ('text' in b ? String(b.text) : ''))
-    .join('');
-  const toolUse = blocks.filter(
-    (b) => b.type === 'tool_use'
-  ) as unknown as ToolUseBlock[];
-  return { text, toolUse };
-}
-
-function buildAssistantBlocks(
-  text: string,
-  toolUse: ToolUseBlock[]
-): MessageParam['content'] {
-  const out: MessageParam['content'] = text ? [{ type: 'text', text }] : [];
-  for (const b of toolUse) {
-    (
-      out as Array<{
-        type: 'tool_use';
-        id: string;
-        name: string;
-        input: unknown;
-      }>
-    ).push({
-      type: 'tool_use',
-      id: b.id,
-      name: b.name,
-      input: b.input ?? {},
-    });
-  }
-  return out;
-}
-
-async function runToolCalls(
-  toolUse: ToolUseBlock[],
-  signal?: AbortSignal
-): Promise<
-  Array<{
-    type: 'tool_result';
-    tool_use_id: string;
-    content: ToolResultContent;
-  }>
-> {
-  const context = signal ? { signal } : undefined;
-  const results = [];
-  for (const block of toolUse) {
-    const tool = tools.find((t) => t.spec.name === block.name);
-    const content: ToolResultContent = tool
-      ? (await tool.handler((block.input ?? {}) as any, context)).content
-      : `Unknown tool: ${block.name}`;
-    console.info(
-      `\n\n===\n[${tool.spec.name}(${JSON.stringify(block.input)})]\n\n${pc.gray(content as any)}\n\n===`
-    );
-    results.push({ type: 'tool_result', tool_use_id: block.id, content });
-  }
-  return results;
-}
-
 async function runPrompt(
   content: string,
   opts: {
@@ -144,65 +79,58 @@ async function runPrompt(
     history: ThreadHistory;
     onContent: (chunk: string) => void;
     onThinking: (chunk: string) => void;
-    onDone: (messages: MessageParam[]) => void;
+    onDone: (messages: BetaMessageParam[]) => void;
   }
 ) {
+  const runnableTools = getTools(opts.signal);
+
   const messages = await prepareMessages({
     system: opts.history.system,
-    messages: opts.history.messages,
+    messages: opts.history.messages as MessageParam[],
     newUserContent: content,
-    tools: tools.map((t) => t.spec),
+    tools: runnableTools,
     conversationStartIso: opts.history.conversationStartIso,
   });
 
-  while (true) {
-    const stream = anthropic.messages.stream(
-      {
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        system: opts.history.system,
-        messages,
-        tools: tools.map((t) => t.spec),
-        tool_choice: { type: 'auto' },
-        stream: true,
-        thinking: { type: 'enabled', budget_tokens: 1024 },
-      },
-      { signal: opts.signal }
-    );
+  const runner = anthropic.beta.messages.toolRunner(
+    {
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system: opts.history.system,
+      messages: messages as BetaMessageParam[],
+      tools: runnableTools,
+      tool_choice: { type: 'auto' },
+      stream: true,
+      thinking: { type: 'enabled', budget_tokens: 1024 },
+      max_iterations: MAX_ITERATIONS,
+    },
+    { signal: opts.signal } as { headers?: Record<string, string> }
+  );
 
-    stream.on('text', opts.onContent);
-    stream.on('thinking', opts.onThinking);
-    stream.on(
-      'contentBlock',
-      (block: { type: string; name?: string; input?: unknown }) => {
-        if (block.type === 'tool_use' && block.name != null) {
-          opts.onThinking(
-            `[${block.name}(${JSON.stringify(block.input ?? {})})] `
-          );
+  for await (const value of runner) {
+    if (
+      value &&
+      typeof value === 'object' &&
+      'on' in value &&
+      typeof (value as { on: unknown }).on === 'function'
+    ) {
+      const stream = value as {
+        on: (event: string, cb: (...args: unknown[]) => void) => void;
+      };
+      stream.on('text', (delta: string) => opts.onContent(delta));
+      stream.on('thinking', (delta: string) => opts.onThinking(delta));
+      stream.on(
+        'contentBlock',
+        (block: { type: string; name?: string; input?: unknown }) => {
+          if (block.type === 'tool_use' && block.name != null) {
+            opts.onThinking(
+              `[${block.name}(${JSON.stringify(block.input ?? {})})] `
+            );
+          }
         }
-      }
-    );
-
-    const finalMessage = await stream.finalMessage();
-
-    const { text, toolUse } = parseResponse(
-      (finalMessage.content ?? []) as unknown as Array<{
-        type: string;
-        [k: string]: unknown;
-      }>
-    );
-
-    messages.push({
-      role: 'assistant',
-      content: buildAssistantBlocks(text, toolUse),
-    });
-
-    if (toolUse.length === 0) break;
-
-    const toolResults = await runToolCalls(toolUse, opts.signal);
-
-    messages.push({ role: 'user', content: toolResults });
+      );
+    }
   }
 
-  opts.onDone(messages);
+  opts.onDone(runner.params.messages);
 }

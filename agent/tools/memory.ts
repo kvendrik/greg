@@ -1,7 +1,7 @@
 import { execSync } from 'child_process';
 import fs from 'node:fs';
 import { join } from 'path';
-import type { Tool } from './types';
+import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
 import { formatDate, getWorkspacePath } from '../utilities';
 
 const COLLECTION_NAME = 'agent-chats';
@@ -36,24 +36,23 @@ function ensureWorkspaceExists() {
   }
 }
 
-const getRecentConversationNotesTool: Tool<{ max_notes?: number }> = {
-  spec: {
-    name: 'get_recent_conversation_notes',
-    description: 'Get the most recent conversation notes.',
-    input_schema: {
-      type: 'object',
-      required: [],
-      properties: {
-        max_notes: {
-          type: 'number',
-          description:
-            'Max number of recent days to fetch notes for (each day file can contain multiple notes)',
-          default: 5,
-        },
+const getRecentConversationNotesRunnable: BetaRunnableTool = {
+  name: 'get_recent_conversation_notes',
+  description: 'Get the most recent conversation notes.',
+  input_schema: {
+    type: 'object',
+    required: [],
+    properties: {
+      max_notes: {
+        type: 'number',
+        description:
+          'Max number of recent days to fetch notes for (each day file can contain multiple notes)',
+        default: 5,
       },
     },
   },
-  handler: async ({ max_notes = 5 }) => {
+  parse: (c) => c as { max_notes?: number },
+  run: async ({ max_notes = 5 }) => {
     ensureWorkspaceExists();
     const limit = Math.max(1, Math.min(50, max_notes));
 
@@ -61,7 +60,7 @@ const getRecentConversationNotesTool: Tool<{ max_notes?: number }> = {
     const mdFiles = files.filter((f) => f.endsWith('.md'));
 
     if (mdFiles.length === 0) {
-      return { content: 'No recent conversation notes.' };
+      return 'No recent conversation notes.';
     }
 
     const withMtime = mdFiles.map((f) => ({
@@ -78,96 +77,90 @@ const getRecentConversationNotesTool: Tool<{ max_notes?: number }> = {
       `bun run qmd multi-get "${paths}" --collection ${COLLECTION_NAME} --json`
     );
 
-    return { content: result.toString() };
+    return result.toString();
   },
 };
 
-const searchConversationNotesTool: Tool<{ search_query: string }> = {
-  spec: {
-    name: 'search_past_conversations',
-    description: 'Search through past conversations.',
-    input_schema: {
-      type: 'object',
-      required: ['search_query'],
-      properties: {
-        search_query: {
-          type: 'string',
-          description: 'The query to search for',
-        },
+const searchConversationNotesRunnable: BetaRunnableTool = {
+  name: 'search_past_conversations',
+  description: 'Search through past conversations.',
+  input_schema: {
+    type: 'object',
+    required: ['search_query'],
+    properties: {
+      search_query: {
+        type: 'string',
+        description: 'The query to search for',
       },
     },
   },
-  handler: async ({ search_query }) => {
+  parse: (c) => c as { search_query: string },
+  run: async ({ search_query }) => {
     ensureWorkspaceExists();
-    return {
-      content: execSync(
-        `bun run qmd vsearch "${search_query}" --collection ${COLLECTION_NAME} --json`
-      ).toString(),
-    };
+    return execSync(
+      `bun run qmd vsearch "${search_query}" --collection ${COLLECTION_NAME} --json`
+    ).toString();
   },
 };
 
-const getConversationNoteTool: Tool<{
-  docid: string;
-  start_line: string;
-  max_lines: string;
-}> = {
-  spec: {
-    name: 'get_past_conversation',
-    description: 'Get a single conversation by docid',
-    input_schema: {
-      type: 'object',
-      required: ['docid'],
-      properties: {
-        docid: {
-          type: 'string',
-          description:
-            'The docid of the memory entry to get (Starts with a hash symbol. Example: #79462a)',
-        },
-        start_line: {
-          type: 'number',
-          description: 'Line number to start from (0 is the first line)',
-        },
-        max_lines: {
-          type: 'number',
-          description: 'Max number of lines to return',
-        },
+const getConversationNoteRunnable: BetaRunnableTool = {
+  name: 'get_past_conversation',
+  description: 'Get a single conversation by docid',
+  input_schema: {
+    type: 'object',
+    required: ['docid'],
+    properties: {
+      docid: {
+        type: 'string',
+        description:
+          'The docid of the memory entry to get (Starts with a hash symbol. Example: #79462a)',
+      },
+      start_line: {
+        type: 'number',
+        description: 'Line number to start from (0 is the first line)',
+      },
+      max_lines: {
+        type: 'number',
+        description: 'Max number of lines to return',
       },
     },
   },
-  handler: async ({ docid, start_line, max_lines }) => {
+  parse: (c) => c as { docid: string; start_line?: string; max_lines?: string },
+  run: async ({ docid, start_line, max_lines }) => {
     ensureWorkspaceExists();
     try {
       const result = execSync(
         `bun run qmd get \\${docid}${start_line ? `:${start_line}` : ''}${max_lines ? ` -l ${max_lines}` : ''} --collection ${COLLECTION_NAME} --json`
       );
-      return { content: result.toString() };
-    } catch (err) {
-      return { content: 'Error getting conversation note: ' + err.message };
+      return result.toString();
+    } catch (err: unknown) {
+      return (
+        'Error getting conversation note: ' +
+        (err instanceof Error ? err.message : String(err))
+      );
     }
   },
 };
 
-const updateUserMemoryTool: Tool<{ content: string }> = {
-  spec: {
-    name: 'update_user_memory',
-    description: `Write or update ${getMemoryPath()} with persistent facts about the user. Call whenever the user shares something about themselves (name, preferences, context). Pass the complete updated content (merge with existing so information stays accurate).`,
-    input_schema: {
-      type: 'object',
-      required: ['content'],
-      properties: {
-        content: {
-          type: 'string',
-          description:
-            'The full content for MEMORY.md (include all existing facts plus updates)',
-        },
+const updateUserMemoryRunnable: BetaRunnableTool = {
+  name: 'update_user_memory',
+  description: `Write or update ${getMemoryPath()} with persistent facts about the user. Call whenever the user shares something about themselves (name, preferences, context). Pass the complete updated content (merge with existing so information stays accurate).`,
+  input_schema: {
+    type: 'object',
+    required: ['content'],
+    properties: {
+      content: {
+        type: 'string',
+        description:
+          'The full content for MEMORY.md (include all existing facts plus updates)',
       },
     },
   },
-  handler: async ({ content }) => {
+  parse: (c) => c as { content: string },
+  run: async ({ content }) => {
     ensureWorkspaceExists();
     fs.writeFileSync(getMemoryPath(), content, 'utf8');
-    return { content: `${getMemoryPath()} updated.` };
+    return `${getMemoryPath()} updated.`;
   },
 };
 
@@ -235,33 +228,28 @@ export async function saveConversationNote(
   }
 }
 
-const saveConversationNoteTool: Tool<{
-  note: string;
-  conversation_start_iso: string;
-}> = {
-  spec: {
-    name: 'save_conversation_note',
-    description: `Append a note to the workspace YYYY-MM-DD.md (under ${getWorkspacePath()}/chats) at the time the conversation started. Call at the end of substantive replies for task-related info, topics discussed, decisions, or actions taken (not persistent user facts). Prefer calling too often. Use conversation_start_iso from the system prompt.`,
-    input_schema: {
-      type: 'object',
-      required: ['note', 'conversation_start_iso'],
-      properties: {
-        note: {
-          type: 'string',
-          description:
-            'The note to save (task, topic, or conversation summary)',
-        },
-        conversation_start_iso: {
-          type: 'string',
-          description:
-            'ISO timestamp when this conversation started (use the value from the system prompt)',
-        },
+const saveConversationNoteRunnable: BetaRunnableTool = {
+  name: 'save_conversation_note',
+  description: `Append a note to the workspace YYYY-MM-DD.md (under ${getWorkspacePath()}/chats) at the time the conversation started. Call at the end of substantive replies for task-related info, topics discussed, decisions, or actions taken (not persistent user facts). Prefer calling too often. Use conversation_start_iso from the system prompt.`,
+  input_schema: {
+    type: 'object',
+    required: ['note', 'conversation_start_iso'],
+    properties: {
+      note: {
+        type: 'string',
+        description: 'The note to save (task, topic, or conversation summary)',
+      },
+      conversation_start_iso: {
+        type: 'string',
+        description:
+          'ISO timestamp when this conversation started (use the value from the system prompt)',
       },
     },
   },
-  handler: async ({ note, conversation_start_iso }) => {
+  parse: (c) => c as { note: string; conversation_start_iso: string },
+  run: async ({ note, conversation_start_iso }) => {
     const trimmed = note.trim();
-    if (!trimmed) return { content: 'No content to save.' };
+    if (!trimmed) return 'No content to save.';
 
     const d = new Date(conversation_start_iso);
     const date = d.toLocaleDateString('en-CA');
@@ -271,16 +259,16 @@ const saveConversationNoteTool: Tool<{
     });
 
     await saveConversationNote(note, conversation_start_iso);
-    return { content: `Saved to ${date}.md under ${time}.` };
+    return `Saved to ${date}.md under ${time}.`;
   },
 };
 
-export const tools = [
-  updateUserMemoryTool,
-  searchConversationNotesTool,
-  getConversationNoteTool,
-  saveConversationNoteTool,
-  getRecentConversationNotesTool,
+export const tools: BetaRunnableTool[] = [
+  updateUserMemoryRunnable,
+  searchConversationNotesRunnable,
+  getConversationNoteRunnable,
+  saveConversationNoteRunnable,
+  getRecentConversationNotesRunnable,
 ];
 
 export function getInstructions(conversationStartIso: string): string {

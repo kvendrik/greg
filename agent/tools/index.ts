@@ -1,4 +1,5 @@
-import { runTerminalCommandTool } from './terminal';
+import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
+import { createExecTool } from './terminal';
 import {
   tools as memoryTools,
   getInstructions as getMemoryInstructions,
@@ -8,7 +9,9 @@ import {
   getInstructions as getSkillsInstructions,
 } from './skills';
 
-export const tools = [runTerminalCommandTool, ...memoryTools, ...skillTools];
+export function get(signal?: AbortSignal): BetaRunnableTool[] {
+  return [createExecTool(signal), ...memoryTools, ...skillTools];
+}
 
 export function getInstructions(conversationStartIso: string): string {
   return `

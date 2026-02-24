@@ -120,7 +120,7 @@ const server = http.createServer(async (req, res) => {
 // No timeout so long-running prompts (e.g. with exec) are not cut off
 server.timeout = 0;
 
-server.listen(3000, () => {
+server.listen(4000, () => {
   console.log('Running...');
   console.log('Endpoints: POST /prompt, POST /abort, GET /ping');
   console.log(

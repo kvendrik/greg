@@ -1,30 +1,13 @@
-import type { Tool } from './types';
+import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
 import { spawn } from 'child_process';
 import pc from 'picocolors';
 
-export const runTerminalCommandTool: Tool<{ command: string }> = {
-  spec: {
-    name: 'exec',
-    description: 'Run a command in the terminal.',
-    input_schema: {
-      type: 'object',
-      required: ['command'],
-      properties: {
-        command: {
-          type: 'string',
-          description: 'The command to run',
-        },
-      },
-    },
-  },
-  handler: async ({ command }, context) => {
-    const signal = context?.signal;
-
-    return new Promise((resolve, reject) => {
+function create(signal: AbortSignal) {
+  return async ({ command }: { command: string }) => {
+    return new Promise<string>((resolve, reject) => {
       const output: string[] = [];
       const errorOutput: string[] = [];
 
-      // Parse command and arguments
       const parts = command.trim().split(/\s+/);
       const cmd = parts[0];
       const args = parts.slice(1);
@@ -36,7 +19,7 @@ export const runTerminalCommandTool: Tool<{ command: string }> = {
         shell: true,
       });
 
-      const finish = (result: { content: string }) => {
+      const finish = (result: string) => {
         cleanup();
         resolve(result);
       };
@@ -48,15 +31,14 @@ export const runTerminalCommandTool: Tool<{ command: string }> = {
           // process may already be gone
         }
         cleanup();
-        const err = new DOMException('Command aborted by user', 'AbortError');
-        reject(err);
+        reject(new DOMException('Command aborted by user', 'AbortError'));
       };
 
       let settled = false;
       const cleanup = () => {
         if (settled) return;
         settled = true;
-        signal?.removeEventListener('abort', abort);
+        signal.removeEventListener('abort', abort);
       };
 
       if (signal) {
@@ -67,15 +49,13 @@ export const runTerminalCommandTool: Tool<{ command: string }> = {
         signal.addEventListener('abort', abort, { once: true });
       }
 
-      // Stream stdout live
-      child.stdout.on('data', (data: Buffer) => {
+      child.stdout?.on('data', (data: Buffer) => {
         const text = data.toString();
         process.stdout.write(text);
         output.push(text);
       });
 
-      // Stream stderr live
-      child.stderr.on('data', (data: Buffer) => {
+      child.stderr?.on('data', (data: Buffer) => {
         const text = data.toString();
         process.stderr.write(pc.red(text));
         errorOutput.push(text);
@@ -90,19 +70,36 @@ export const runTerminalCommandTool: Tool<{ command: string }> = {
           fullOutput + (fullError ? `\n[stderr]\n${fullError}` : '');
 
         if (code !== 0) {
-          resolve({
-            content: `Command exited with code ${code}\n${combined}`,
-          });
+          resolve(`Command exited with code ${code}\n${combined}`);
         } else {
-          resolve({ content: combined || '(no output)' });
+          resolve(combined || '(no output)');
         }
       });
 
       child.on('error', (error) => {
         const errorMsg = `Failed to start command: ${error.message}`;
         console.error(pc.red(errorMsg));
-        finish({ content: errorMsg });
+        finish(errorMsg);
       });
     });
-  },
-};
+  };
+}
+
+export function createExecTool(signal: AbortSignal): BetaRunnableTool {
+  return {
+    name: 'exec',
+    description: 'Run a command in the terminal.',
+    input_schema: {
+      type: 'object' as const,
+      required: ['command'],
+      properties: {
+        command: {
+          type: 'string',
+          description: 'The command to run',
+        },
+      },
+    },
+    parse: (content: unknown) => content as { command: string },
+    run: create(signal),
+  };
+}
