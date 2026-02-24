@@ -1,3 +1,0 @@
-# For the browser-use server (browser-use-serve.py)
-browser-use
-aiohttp
