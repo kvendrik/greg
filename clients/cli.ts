@@ -51,7 +51,7 @@ async function* streamPrompt(input: string) {
 
   promptAgent(input, {
     onThinking: (chunk) => {
-      chunks.push(pc.gray(chunk));
+      chunks.push(pc.gray(chunk).replace(/\n/g, ''));
       resolver?.();
     },
     onContent: (chunk) => {
