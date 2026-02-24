@@ -4,6 +4,7 @@ import { prepareMessages, MODEL } from './context';
 import { Anthropic } from '@anthropic-ai/sdk';
 import type { BetaMessageParam } from '@anthropic-ai/sdk/resources/beta';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
+import { spawn } from 'node:child_process';
 
 const MAX_TOKENS = 8192;
 const MAX_ITERATIONS = 25;
@@ -32,7 +33,7 @@ You have control over my computer through several tools and skills.
 
 ${getInstructions(conversationStartIso)}
 
-The code you're running on is at: ${process.cwd()}
+The code you're running on is at: ${process.cwd()}.
 `;
 
   let messages: BetaMessageParam[] = [];
@@ -124,7 +125,7 @@ async function runPrompt(
         (block: { type: string; name?: string; input?: unknown }) => {
           if (block.type === 'tool_use' && block.name != null) {
             opts.onThinking(
-              `[${block.name}(${JSON.stringify(block.input ?? {})})] `
+              `\n\n[${block.name}(${JSON.stringify(block.input ?? {})})]`
             );
           }
         }
