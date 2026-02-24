@@ -1,5 +1,0 @@
----
-alwaysApply: true
----
-
-Only use variables if the value is used in more than 1 place
