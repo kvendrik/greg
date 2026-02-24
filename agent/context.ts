@@ -1,9 +1,18 @@
 import { Anthropic } from '@anthropic-ai/sdk';
-import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
-import type { AnthropicToolSpec } from './tools/types';
+import type {
+  MessageParam,
+  MessageCountTokensParams,
+} from '@anthropic-ai/sdk/resources/messages';
+import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
 import { saveConversationNote } from './tools/memory';
 
-const CONTEXT_CONDENSE_THRESHOLD = 150_000;
+export interface PrepareMessagesOpts {
+  system: string;
+  messages: MessageParam[];
+  newUserContent: string;
+  tools: BetaRunnableTool[];
+  conversationStartIso: string;
+}
 
 export const MODEL = 'claude-sonnet-4-20250514';
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -18,13 +27,14 @@ export async function prepareMessages(
 
   if (messages.length <= 1) return messages;
 
-  const inputTokens = await getInputTokenCount(
-    opts.system,
+  const { input_tokens } = await anthropic.messages.countTokens({
+    model: MODEL,
+    system: opts.system,
     messages,
-    opts.tools
-  );
+    tools: opts.tools as MessageCountTokensParams['tools'],
+  });
 
-  if (inputTokens < 0 || inputTokens < CONTEXT_CONDENSE_THRESHOLD) {
+  if (input_tokens < 0 || input_tokens < 150_000) {
     return messages;
   }
 
@@ -44,25 +54,6 @@ export async function prepareMessages(
   };
 
   return [condensedUserMessage];
-}
-
-async function getInputTokenCount(
-  system: string,
-  messages: MessageParam[],
-  tools: AnthropicToolSpec[]
-): Promise<number> {
-  try {
-    const { input_tokens } = await anthropic.messages.countTokens({
-      model: MODEL,
-      system,
-      messages,
-      tools,
-    });
-    return input_tokens;
-  } catch (err) {
-    console.error('[context] countTokens failed:', err);
-    return -1;
-  }
 }
 
 type SummarizeResult = { note: string; condensed_summary: string } | null;
@@ -142,13 +133,4 @@ async function summarizeConversation(
     console.error('[context] summarizeConversation failed:', err);
     return null;
   }
-}
-
-export interface PrepareMessagesOpts {
-  system: string;
-  messages: MessageParam[];
-  newUserContent: string;
-  tools: AnthropicToolSpec[];
-  /** ISO timestamp when this conversation/session started (from the thread). */
-  conversationStartIso: string;
 }
