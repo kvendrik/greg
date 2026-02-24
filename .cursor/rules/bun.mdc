@@ -1,5 +1,0 @@
----
-alwaysApply: true
----
-
-This workspace is `bun` enabled. Always use `bun` to install packages.

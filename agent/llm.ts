@@ -82,7 +82,7 @@ async function runPrompt(
     onDone: (messages: BetaMessageParam[]) => void;
   }
 ) {
-  const runnableTools = await getTools(opts.signal);
+  const runnableTools = getTools(opts.signal);
 
   const messages = await prepareMessages({
     system: opts.history.system,
