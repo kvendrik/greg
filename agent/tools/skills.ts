@@ -92,6 +92,23 @@ export function getInstructions(): string {
         `  <skill>\n    <name>${escapeXml(s.name)}</name>\n    <description>${escapeXml(s.description)}</description>\n    <location>${escapeXml(s.location)}</location>\n  </skill>`
     )
     .join('\n');
+  const browserUsageBody = getBrowserUsageSkillBody();
+  const browserSection =
+    browserUsageBody === ''
+      ? `
+### Browser Automation
+
+Before using the run_browser_task tool, read the **browser-usage** skill from the list above (use its <location> with read_file or cat) and follow it: send one step per call so the user gets frequent updates.`
+      : `
+### Browser Automation
+
+When using run_browser_task you must follow these rules (from the browser-usage skill):
+
+<browser_usage_skill>
+${browserUsageBody}
+</browser_usage_skill>
+
+Always send one clear action per run_browser_task call. Give the user a short update after each step when it makes sense. Use the next call to continue from where the previous one left off; the session is kept alive.`;
   return `
 ## Skills
 
@@ -102,11 +119,21 @@ export function getInstructions(): string {
 When a user request matches an available skill, read that skill's full content from its <location> (e.g. with the terminal: cat "<location>") and follow the instructions.
 
 When you learn or establish something reusable (workflow, rule, convention, or capability), you must call save_skill before considering the exchange complete. Examples: a new CLI or editor workflow, a project convention, a preference for how to do X, or any instruction you give that the user might want applied again. If in doubt, save it as a skill.
-
-### Browser Automation
-
-Before using the run_browser_task tool, read the **browser-step-by-step** skill from the list above (use its <location> with read_file or cat) and follow it: send one step per call so the user gets frequent updates.
+${browserSection}
 `;
+}
+
+const BROWSER_USAGE_SKILL_PATH = path.join(SKILLS_DIR, 'browser-usage', SKILL_FILENAME);
+
+function getBrowserUsageSkillBody(): string {
+  if (!fs.existsSync(BROWSER_USAGE_SKILL_PATH)) return '';
+  try {
+    const raw = fs.readFileSync(BROWSER_USAGE_SKILL_PATH, 'utf8');
+    const parsed = matter(raw);
+    return (parsed.content ?? '').trim();
+  } catch {
+    return '';
+  }
 }
 
 function escapeXml(s: string): string {
