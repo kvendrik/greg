@@ -1,9 +1,15 @@
 import type { BetaMessageParam } from '@anthropic-ai/sdk/resources/beta';
 import type { NeutralMessage } from '../types';
 
-export function neutralToAnthropic(messages: NeutralMessage[]): BetaMessageParam[] {
+export function neutralToAnthropic(
+  messages: NeutralMessage[]
+): BetaMessageParam[] {
   const result: BetaMessageParam[] = [];
-  let toolResultBlocks: Array<{ type: 'tool_result'; tool_use_id: string; content: string }> = [];
+  let toolResultBlocks: Array<{
+    type: 'tool_result';
+    tool_use_id: string;
+    content: string;
+  }> = [];
 
   function flushToolResults() {
     if (toolResultBlocks.length > 0) {
@@ -20,16 +26,26 @@ export function neutralToAnthropic(messages: NeutralMessage[]): BetaMessageParam
       flushToolResults();
       const blocks: Array<
         | { type: 'text'; text: string }
-        | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+        | {
+            type: 'tool_use';
+            id: string;
+            name: string;
+            input: Record<string, unknown>;
+          }
       > = [];
       if (msg.content) blocks.push({ type: 'text', text: msg.content });
       if (msg.toolCalls?.length) {
         for (const tc of msg.toolCalls) {
-          blocks.push({ type: 'tool_use', id: tc.id, name: tc.name, input: tc.args ?? {} });
+          blocks.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.name,
+            input: tc.args ?? {},
+          });
         }
       }
       const content: BetaMessageParam['content'] =
-        blocks.length > 0 ? blocks : (msg.content || '');
+        blocks.length > 0 ? blocks : msg.content || '';
       result.push({ role: 'assistant', content });
     } else {
       toolResultBlocks.push({
@@ -55,7 +71,11 @@ export function anthropicToNeutral(
     } else {
       const blocks = Array.isArray(msg.content) ? msg.content : [];
       let text = '';
-      const toolCalls: Array<{ id: string; name: string; args: Record<string, unknown> }> = [];
+      const toolCalls: Array<{
+        id: string;
+        name: string;
+        args: Record<string, unknown>;
+      }> = [];
       const toolResults: Array<{ toolCallId: string; content: string }> = [];
 
       for (const block of blocks) {
@@ -69,7 +89,10 @@ export function anthropicToNeutral(
         if (block.type === 'tool_result' && 'tool_use_id' in block)
           toolResults.push({
             toolCallId: block.tool_use_id,
-            content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
+            content:
+              typeof block.content === 'string'
+                ? block.content
+                : JSON.stringify(block.content),
           });
       }
 
@@ -78,12 +101,22 @@ export function anthropicToNeutral(
           role: 'assistant',
           content: text,
           ...(toolCalls.length
-            ? { toolCalls: toolCalls.map((tc) => ({ id: tc.id, name: tc.name, args: tc.args })) }
+            ? {
+                toolCalls: toolCalls.map((tc) => ({
+                  id: tc.id,
+                  name: tc.name,
+                  args: tc.args,
+                })),
+              }
             : {}),
         });
       }
       for (const tr of toolResults) {
-        result.push({ role: 'tool', toolCallId: tr.toolCallId, content: tr.content });
+        result.push({
+          role: 'tool',
+          toolCallId: tr.toolCallId,
+          content: tr.content,
+        });
       }
     }
   }

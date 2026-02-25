@@ -64,3 +64,11 @@ export type ProviderSummarize = (params: {
   messages: unknown;
   model: string;
 }) => Promise<SummarizeResult>;
+
+export type ProviderEntry = {
+  run: ProviderRun;
+  models: ProviderModelSet;
+  countTokens: ProviderCountTokens;
+  convertMessages: ProviderConvertMessages;
+  summarize: ProviderSummarize;
+};

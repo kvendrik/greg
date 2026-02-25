@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { Command } from 'commander';
+import { ping } from '../clients/agent-sdk';
 import { name, description, version, scripts } from '../package.json';
 
 if (!scripts.agent) {
@@ -82,5 +83,5 @@ const args = process.argv.slice(2);
 program.parse([
   process.argv[0],
   process.argv[1],
-  ...(args.length ? args : ['cli']),
+  ...(args.length ? args : [(await ping()) ? 'cli' : 'start']),
 ]);

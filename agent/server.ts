@@ -113,87 +113,89 @@ const server = http.createServer(async (req, res) => {
   }
 
   let body = '';
-    req.on('data', (chunk) => {
-      body += chunk;
+  req.on('data', (chunk) => {
+    body += chunk;
+  });
+
+  req.on('end', async () => {
+    let parsed: { prompt?: string };
+    try {
+      parsed = JSON.parse(body) as { prompt?: string };
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+      return;
+    }
+
+    const userPrompt = parsed?.prompt;
+    if (typeof userPrompt !== 'string' || !userPrompt.trim()) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing or empty "prompt" field' }));
+      return;
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
     });
 
-    req.on('end', async () => {
-      let parsed: { prompt?: string };
-      try {
-        parsed = JSON.parse(body) as { prompt?: string };
-      } catch {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Invalid JSON body' }));
-        return;
-      }
+    req.socket.setTimeout(0);
 
-      const userPrompt = parsed?.prompt;
-      if (typeof userPrompt !== 'string' || !userPrompt.trim()) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Missing or empty "prompt" field' }));
-        return;
-      }
+    const abortController = new AbortController();
+    state.abortController = abortController;
 
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-      });
-
-      req.socket.setTimeout(0);
-
-      const abortController = new AbortController();
-      state.abortController = abortController;
-
-      const promptOptions: PromptOptions = {
-        signal: abortController.signal,
-        onContent(chunk) {
-          res.write(JSON.stringify({ type: 'content', chunk }) + '\n');
-        },
-        onThinking(chunk) {
-          res.write(JSON.stringify({ type: 'thinking', chunk }) + '\n');
-        },
-        onDone() {
+    const promptOptions: PromptOptions = {
+      signal: abortController.signal,
+      onContent(chunk) {
+        res.write(JSON.stringify({ type: 'content', chunk }) + '\n');
+      },
+      onThinking(chunk) {
+        res.write(JSON.stringify({ type: 'thinking', chunk }) + '\n');
+      },
+      onDone() {
+        res.end();
+      },
+      onError(err) {
+        if (!res.writableEnded) {
+          res.write(JSON.stringify({ type: 'error', error: err }) + '\n');
           res.end();
-        },
-        onError(err) {
-          if (!res.writableEnded) {
-            res.write(JSON.stringify({ type: 'error', error: err }) + '\n');
-            res.end();
-          }
-        },
-      };
-
-      try {
-        await state.llm.prompt(userPrompt.trim(), promptOptions);
-      } catch (err) {
-        if (
-          err instanceof APIUserAbortError ||
-          (err instanceof Error && err.name === 'AbortError')
-        ) {
-          if (!res.writableEnded) res.end();
-        } else {
-          console.error(err);
-          if (!res.writableEnded) {
-            res.write(
-              JSON.stringify({ type: 'error', error: String(err) }) + '\n'
-            );
-            res.end();
-          }
         }
-      } finally {
-        state.abortController = null;
+      },
+    };
+
+    try {
+      await state.llm.prompt(userPrompt.trim(), promptOptions);
+    } catch (err) {
+      if (
+        err instanceof APIUserAbortError ||
+        (err instanceof Error && err.name === 'AbortError')
+      ) {
+        if (!res.writableEnded) res.end();
+      } else {
+        console.error(err);
+        if (!res.writableEnded) {
+          res.write(
+            JSON.stringify({ type: 'error', error: String(err) }) + '\n'
+          );
+          res.end();
+        }
       }
-    });
+    } finally {
+      state.abortController = null;
+    }
+  });
 });
 
 server.timeout = 0;
 
 const port = process.env.AGENT_PORT;
+
 if (port === undefined || port === '') {
   throw new Error('AGENT_PORT is required');
 }
+
 server.listen(Number(port), () => {
   console.log('Running...');
   console.log(

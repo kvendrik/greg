@@ -41,7 +41,7 @@ The code you're running on is at: ${process.cwd()}.
         conversationStartIso,
         onContent,
         onThinking,
-        onDone: (newMessages) => {
+        onDone(newMessages) {
           messages = newMessages;
           onDone();
         },
@@ -71,44 +71,47 @@ async function runPrompt(
   console.info(pc.gray(`\n"${userContent}"`));
 
   const resolved = await resolveModel(userContent, opts.signal, providerId);
+  const provider = providers[providerId];
 
   const tools = await getTools(opts.signal);
   const prepared = await prepareMessages({
-    providerEntry: providers[providerId],
+    providerEntry: provider,
     system: opts.system,
     messages: opts.messages,
     newUserContent: userContent,
-    tools,
     conversationStartIso: opts.conversationStartIso,
     model: resolved.modelId,
+    tools,
   });
 
   console.info(pc.gray(`Using ${resolved.label}.`));
 
-  await providers[providerId].run(
+  await provider.run(
     {
       system: opts.system,
       messages: prepared,
       model: resolved.modelId,
-      tools,
       conversationStartIso: opts.conversationStartIso,
       signal: opts.signal,
+      tools,
     },
     {
       onContent: opts.onContent,
-      onToolCall: (name, args) => console.info(pc.cyan(`[${name}(${args})]`)),
       onThinking: opts.onThinking,
-      onDone: (messages) => {
+      onToolCall(name, args) {
+        console.info(pc.cyan(`[${name}(${args})]`));
+      },
+      onDone(messages) {
         opts.onDone(messages);
         console.info(pc.green(`Done.\n`));
       },
-      onError: async (errorType) => {
+      async onError(errorType) {
         if (errorType === 'overloaded' && providerId === 'anthropic') {
           console.info(
             pc.yellow('Claude is overloaded. Trying again with OpenAI.')
           );
           await runPrompt('openai', content, opts);
-          return true;
+          return;
         }
         opts.onError(getErrorMessage(errorType));
       },

@@ -15,7 +15,8 @@ async def read_stdin():
     return await loop.run_in_executor(None, sys.stdin.readline)
 
 async def main():
-    browser = Browser(keep_alive=True)
+    # Use your actual Chrome profile (close Chrome first to avoid profile lock)
+    browser = Browser.from_system_chrome(keep_alive=True, headless=False, profile_directory='Default')
     await browser.start()
     agent = None
     current_task: asyncio.Task | None = None

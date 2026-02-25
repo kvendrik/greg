@@ -38,10 +38,6 @@ export async function prepareMessages(
     return messagesWithNew;
   }
 
-  if (!opts.providerEntry.summarize) {
-    return messagesWithNew;
-  }
-
   const nativeMessages = opts.providerEntry.convertMessages(messagesWithNew);
   const summarized = await opts.providerEntry.summarize({
     system: opts.system,

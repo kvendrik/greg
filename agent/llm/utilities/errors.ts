@@ -13,8 +13,7 @@ export type ErrorType =
 
 const ERROR_MESSAGES: { [K in ErrorType]: string } = {
   overloaded: 'The API is temporarily overloaded. Try again in a moment.',
-  server_error:
-    'An unexpected error has occurred. Try again in a moment.',
+  server_error: 'An unexpected error has occurred. Try again in a moment.',
   rate_limit:
     'Your account has hit a rate limit. Slow down or try again shortly.',
   request_too_large:
@@ -27,7 +26,8 @@ const ERROR_MESSAGES: { [K in ErrorType]: string } = {
   invalid_request:
     'There was an issue with the format or content of your request.',
   timeout: 'The request timed out. Try again.',
-  billing: 'Billing issue with your account. Check your provider billing settings.',
+  billing:
+    'Billing issue with your account. Check your provider billing settings.',
   context_length_exceeded:
     'Request exceeds the maximum context length. Try a shorter conversation.',
 };
