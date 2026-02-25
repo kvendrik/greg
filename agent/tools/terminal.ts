@@ -26,8 +26,6 @@ export function createExecTool(signal: AbortSignal): BetaRunnableTool {
         const cmd = parts[0];
         const args = parts.slice(1);
 
-        console.info(pc.cyan(`\n[exec] Running: ${command}\n`));
-
         const child = spawn(cmd, args, {
           stdio: ['inherit', 'pipe', 'pipe'],
           shell: true,
@@ -67,7 +65,7 @@ export function createExecTool(signal: AbortSignal): BetaRunnableTool {
 
         child.stdout?.on('data', (data: Buffer) => {
           const text = data.toString();
-          process.stdout.write(text);
+          process.stdout.write(pc.gray(text));
           output.push(text);
         });
 

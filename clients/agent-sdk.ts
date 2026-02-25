@@ -20,10 +20,12 @@ export async function prompt(
     onThinking,
     onContent,
     onDone,
+    onError,
   }: {
     onThinking: (chunk: string) => void;
     onContent: (chunk: string) => void;
     onDone: () => void;
+    onError: (error: string) => void;
   }
 ) {
   const res = await fetch('http://localhost:3000/prompt', {
@@ -65,6 +67,8 @@ export async function prompt(
           onContent(data.chunk ?? '');
         } else if (data.type === 'thinking') {
           onThinking(data.chunk ?? '');
+        } else if (data.type === 'error') {
+          onError?.(data.error ?? String(data));
         }
       } catch {
         // Skip malformed lines; don't mix parse errors into content
@@ -78,6 +82,7 @@ export async function prompt(
           const data = JSON.parse(buffer);
           if (data.type === 'content') onContent(data.chunk ?? '');
           else if (data.type === 'thinking') onThinking(data.chunk ?? '');
+          else if (data.type === 'error') onError?.(data.error ?? String(data));
         } catch {
           // ignore
         }

@@ -4,7 +4,7 @@ import type {
   MessageCountTokensParams,
 } from '@anthropic-ai/sdk/resources/messages';
 import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
-import { saveConversationNote } from './tools/memory';
+import { saveConversationNote } from '../tools/memory';
 
 export interface PrepareMessagesOpts {
   system: string;
@@ -12,9 +12,10 @@ export interface PrepareMessagesOpts {
   newUserContent: string;
   tools: BetaRunnableTool[];
   conversationStartIso: string;
+  model?: string;
 }
 
-export const MODEL = 'claude-sonnet-4-20250514';
+export const MODEL = 'claude-sonnet-4-6';
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function prepareMessages(
@@ -27,8 +28,9 @@ export async function prepareMessages(
 
   if (messages.length <= 1) return messages;
 
+  const model = opts.model ?? MODEL;
   const { input_tokens } = await anthropic.messages.countTokens({
-    model: MODEL,
+    model,
     system: opts.system,
     messages,
     tools: opts.tools as MessageCountTokensParams['tools'],
@@ -38,7 +40,7 @@ export async function prepareMessages(
     return messages;
   }
 
-  const summarized = await summarizeConversation(messages);
+  const summarized = await summarizeConversation(messages, model);
   if (!summarized) return messages;
 
   try {
@@ -86,11 +88,12 @@ function parseSummarizeResponse(text: string): SummarizeResult {
  * Returns null on parse failure or invalid response.
  */
 async function summarizeConversation(
-  messages: MessageParam[]
+  messages: MessageParam[],
+  model: string = MODEL
 ): Promise<SummarizeResult> {
   try {
     const message = await anthropic.messages.create({
-      model: MODEL,
+      model,
       max_tokens: 4096,
       thinking: { type: 'disabled' },
       system: `You are summarizing a long conversation so the assistant can continue in a new context.

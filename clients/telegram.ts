@@ -146,5 +146,11 @@ async function handoffToAgent(message: string, ctx: BotContext) {
       llmState.response = '';
       process.stdout.write(`done. ${pc.green('✓')}\n`);
     },
+    onError: async (error) => {
+      console.error(pc.red(`Error: ${error}`));
+      await ctx.reply(`Error: ${error}`);
+      llmState.working = false;
+      llmState.response = '';
+    },
   });
 }

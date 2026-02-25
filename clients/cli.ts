@@ -47,23 +47,23 @@ async function* streamPrompt(input: string) {
   let thinking = true;
   let done = false;
 
-  chunks.push(pc.gray('Thinking...\n'));
-
   promptAgent(input, {
     onThinking: (chunk) => {
-      chunks.push(pc.gray(chunk).replace(/\n/g, ''));
       resolver?.();
     },
     onContent: (chunk) => {
       if (thinking) {
         thinking = false;
-        chunks.push('\n\n');
       }
-
       chunks.push(chunk);
       resolver?.();
     },
     onDone: () => {
+      done = true;
+      resolver?.();
+    },
+    onError: (error) => {
+      chunks.push(pc.red('\nError: ' + error + '\n'));
       done = true;
       resolver?.();
     },

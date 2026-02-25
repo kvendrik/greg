@@ -1,8 +1,12 @@
 import { execSync } from 'child_process';
 import fs from 'node:fs';
-import { join } from 'path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
-import { formatDate, getWorkspacePath } from '../utilities';
+import { formatDate, getWorkspacePath } from '../../utilities';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DEFAULT_IDENTITY_PATH = join(__dirname, 'defaults', 'IDENTITY.md');
 
 const COLLECTION_NAME = 'agent-chats';
 
@@ -10,16 +14,28 @@ function getChatsPath(): string {
   return join(getWorkspacePath(), 'chats');
 }
 
-function getMemoryPath(): string {
-  return join(getWorkspacePath(), 'MEMORY.md');
+function getUserPath(): string {
+  return join(getWorkspacePath(), 'USER.md');
+}
+
+function getIdentityPath(): string {
+  return join(getWorkspacePath(), 'IDENTITY.md');
+}
+
+if (!fs.existsSync(getWorkspacePath())) {
+  fs.mkdirSync(getWorkspacePath(), { recursive: true });
+}
+
+if (!fs.existsSync(getUserPath())) {
+  fs.writeFileSync(getUserPath(), '');
+}
+
+if (!fs.existsSync(getIdentityPath())) {
+  fs.copyFileSync(DEFAULT_IDENTITY_PATH, getIdentityPath());
 }
 
 function ensureWorkspaceExists() {
-  const workspacePath = getWorkspacePath();
   const chatsPath = getChatsPath();
-
-  if (!fs.existsSync(workspacePath))
-    fs.mkdirSync(workspacePath, { recursive: true });
 
   if (!fs.existsSync(chatsPath)) {
     fs.mkdirSync(chatsPath, { recursive: true });
@@ -144,7 +160,7 @@ const getConversationNoteRunnable: BetaRunnableTool = {
 
 const updateUserMemoryRunnable: BetaRunnableTool = {
   name: 'save_user_memory',
-  description: `Update ${getMemoryPath()} with persistent facts about the user. Call whenever the user shares something about themselves (name, preferences, context). Pass the complete updated content (merge with existing so information stays accurate).`,
+  description: `Update ${getUserPath()} with persistent facts about the user. Call whenever the user shares something about themselves (name, preferences, context). Pass the complete updated content (merge with existing so information stays accurate).`,
   input_schema: {
     type: 'object',
     required: ['content'],
@@ -152,15 +168,37 @@ const updateUserMemoryRunnable: BetaRunnableTool = {
       content: {
         type: 'string',
         description:
-          'The full content for MEMORY.md (include all existing facts plus updates)',
+          'The full content for USER.md (include all existing facts plus updates)',
       },
     },
   },
   parse: (c) => c as { content: string },
   run: async ({ content }) => {
     ensureWorkspaceExists();
-    fs.writeFileSync(getMemoryPath(), content, 'utf8');
-    return `${getMemoryPath()} updated.`;
+    fs.writeFileSync(getUserPath(), content, 'utf8');
+    return `${getUserPath()} updated.`;
+  },
+};
+
+const updateIdentityRunnable: BetaRunnableTool = {
+  name: 'save_identity',
+  description: `Update ${getIdentityPath()} with who you (Greg) are. Call when the user defines or changes your identity, persona, or how you should behave. Pass the complete updated content (merge with existing).`,
+  input_schema: {
+    type: 'object',
+    required: ['content'],
+    properties: {
+      content: {
+        type: 'string',
+        description:
+          'The full content for IDENTITY.md (include all existing identity info plus updates)',
+      },
+    },
+  },
+  parse: (c) => c as { content: string },
+  run: async ({ content }) => {
+    ensureWorkspaceExists();
+    fs.writeFileSync(getIdentityPath(), content, 'utf8');
+    return `${getIdentityPath()} updated.`;
   },
 };
 
@@ -263,6 +301,7 @@ const saveConversationNoteRunnable: BetaRunnableTool = {
 
 export const tools: BetaRunnableTool[] = [
   updateUserMemoryRunnable,
+  updateIdentityRunnable,
   searchConversationNotesRunnable,
   getConversationNoteRunnable,
   saveConversationNoteRunnable,
@@ -280,14 +319,18 @@ When you use that context (or "Information about the user" below), weave it in n
 ## Saving to memory (do this often)
 At the end of each substantive reply, call the appropriate memory tool. Prefer saving too often rather than too rarely.
 
-1. **Persistent user facts** (name, preferences, context) → \`update_user_memory\` with the full updated content for the workspace MEMORY.md. Merge with "Information about the user" below so it stays accurate. Before saving something, ask yourself: "will this be true in 2 weeks?". Call whenever the user shares something about themselves.
-2. **Conversation/task info** → \`save_conversation_note\` for almost every non-trivial exchange: what was discussed, decisions made, tasks or topics, things you did for them. Append to the workspace YYYY-MM-DD.md. Always use the \`conversation_start_iso\` value from below (it is provided in this message).
+1. **Persistent user facts** (name, preferences, context) → \`save_user_memory\` with the full updated content for the workspace USER.md. Merge with "Information about the user" below so it stays accurate. Before saving something, ask yourself: "will this be true in 2 weeks?". Call whenever the user shares something about themselves.
+2. **Your identity** (who you are, persona, how you should behave) → \`save_identity\` with the full updated content for the workspace IDENTITY.md. Merge with "Your identity" below. Call when the user defines or changes who you are.
+3. **Conversation/task info** → \`save_conversation_note\` for almost every non-trivial exchange: what was discussed, decisions made, tasks or topics, things you did for them. Append to the workspace YYYY-MM-DD.md. Always use the \`conversation_start_iso\` value from below (it is provided in this message).
 
 Call \`save_conversation_note\` when: the user shared a task or decision, you completed an action, you discussed a topic they might refer back to, or the exchange was more than a quick greeting. When in doubt, save a short note.
-Before ending your response: consider calling save_conversation_note (for what was discussed), update_user_memory (if they shared something about themselves), and/or save_skill (if something reusable was learned or established).
+Before ending your response: consider calling save_conversation_note (for what was discussed), save_user_memory (if they shared something about themselves), save_identity (if they defined or changed who you are), and/or save_skill (if something reusable was learned or established).
+
+### Your identity
+${fs.readFileSync(getIdentityPath(), 'utf8')}
 
 ### Information about the user
-${fs.existsSync(getMemoryPath()) ? fs.readFileSync(getMemoryPath(), 'utf8') : 'Nothing known yet'}
+${fs.readFileSync(getUserPath(), 'utf8')}
 
 ### Files location
 Your workspace with all memory files etc is at: ${getWorkspacePath()}.

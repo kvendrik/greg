@@ -105,7 +105,7 @@ When you learn or establish something reusable (workflow, rule, convention, or c
 
 ### Browser Automation
 
-Before using browser automation tools (such as running \`bun run browser-use\`), you MUST first read the browser-use skill file at \`skills/browser-use/SKILL.md\` to understand how to use browser automation correctly. Read the skill file using the read_file tool or terminal command before executing any browser-related commands.
+Before using the run_browser_task tool, read the **browser-step-by-step** skill from the list above (use its <location> with read_file or cat) and follow it: send one step per call so the user gets frequent updates.
 `;
 }
 
