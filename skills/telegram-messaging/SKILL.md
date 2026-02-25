@@ -1,11 +1,12 @@
 ---
 name: telegram-messaging
-description: "How to send messages to the user via Telegram using the built-in script"
+description: 'How to send messages to the user via Telegram using the built-in script'
 ---
 
 # Telegram Messaging
 
 ## Overview
+
 This workspace has a built-in Telegram messaging capability that allows sending messages directly to the user via Telegram.
 
 ## How to Send Messages
@@ -34,7 +35,7 @@ cd /path/from/system/prompt && bun run clients:telegram:send-message "Test messa
 
 ## Technical Details
 
-- The script is defined in package.json as `"clients:telegram:send-message": "bun run clients/scripts/send-telegram-message.ts"`
+- The script is defined in package.json as `"clients:telegram:send-message": "bun run clients/telegram/send-message.ts"`
 - It accepts a message string as an argument
 - Returns "Sent [message]" on success
 - The Telegram client is already configured and ready to use

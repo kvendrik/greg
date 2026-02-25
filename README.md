@@ -1,3 +1,9 @@
+- [ ] When using tools with Claude the second message leads to a `400` error
+- [ ] It should send periodic updates during long tasks like the browser. Every paragraph should be send to the telegram bot so that if you use it there the updates work
+- [ ] Using Haiku for the greetings is fast but its also way less fun. What to do about that?
+
+---
+
 # Greg
 
 An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ less lines of code and therefor easier to understand, customize, and be used with confidence.
@@ -9,8 +15,8 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ less 
 - 👨‍💻 **Command-line Access**. Greg has access to your command line and can therefor do most of the things you do on your computer.
 - 🔨 **Skills**. Greg learns on his own. If he has trouble figuring something out, help him, and then simply say "What have you learned? Write a skill for yourself so you know this next time". He'll create a skill for himself so that in the future he won't struggle.
 - 🚏 **Routing**. When you send Greg a prompt he first takes a second to decide what model he's going to use. Greg currently only works with [Claude models](https://platform.claude.com/docs/en/about-claude/models/overview).
+- 🗣️ **Threads**. Talk to Greg in multiple threads at the same time.
 - **Soon:**
-  - 🗣️ **Threads**. Talk to Greg in multiple threads at the same time.
   - 📆 **Scheduled Tasks**. Schedule reocurring tasks by saying things like "Every morning at 6am send me a list of my unread emails".
   - 💗 **Heartbeat**. Every 30 minutes Greg will check his `HEARTBEAT.md` file for things to do.
 

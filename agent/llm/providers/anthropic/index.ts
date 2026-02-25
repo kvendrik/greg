@@ -1,6 +1,14 @@
-export { run } from './llm';
-export { models } from './models';
-export { countTokens } from './count-tokens';
-export { neutralToAnthropic as convertMessages } from './convert';
-export { summarize } from './summarize';
-export { getErrorMessage, getErrorMessageForType } from './errors';
+import type { ProviderEntry } from '../types';
+import { run } from './llm';
+import { models } from './models';
+import { countTokens } from './count-tokens';
+import { neutralToAnthropic as convertMessages } from './convert';
+import { summarize } from './summarize';
+
+export const provider: ProviderEntry = {
+  run,
+  models,
+  countTokens,
+  convertMessages,
+  summarize,
+};

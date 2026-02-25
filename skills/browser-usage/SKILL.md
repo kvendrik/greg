@@ -7,12 +7,14 @@ description: 'Instructions for using the `run_browser_task` tool'
 
 - `run_browser_task` allows you to send a task to a browser agent.
 - One clear action per `run_browser_task` call.
-- Give the user a short update after each step when it makes sense.
+- Give the user a short update after each step when it makes sense. Always put a newline after every update so updates are clearly separated.
 - Use the next call to continue from where the previous one left off; the session is kept alive.
 
 ## Example: booking a flight
 
 User prompt: "Book me a flight from AMS to NYC for tomorrow"
+
+(Each update below is followed by a newline before the next step.)
 
 1. Update user: "Plan: I'm going to open klm.nl and will look for flights"
 2. Run: `run_browser_task({task: 'Open klm.nl'})`

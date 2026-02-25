@@ -11,8 +11,8 @@
     "agent:tools": "bun run scripts/tools-cli.ts",
     "agent:memory:index": "bun run qmd update --collection agent-chats && bun run qmd embed --collection agent-chats",
     "clients:cli": "bun run clients/cli.ts",
-    "clients:telegram": "bun run clients/telegram.ts",
-    "clients:telegram:send-message": "bun run clients/scripts/send-telegram-message.ts",
+    "clients:telegram": "bun run clients/telegram/cli.ts",
+    "clients:telegram:send-message": "bun run clients/telegram/send-message.ts",
     "greg": "bun run bin/greg.ts"
   },
   "dependencies": {
