@@ -1,4 +1,4 @@
-import { prompt as promptAgent, ping, abort } from './agent-sdk';
+import { ping, createThread, type Thread } from './agent-sdk';
 import { text, isCancel, stream } from '@clack/prompts';
 import pc from 'picocolors';
 
@@ -7,21 +7,31 @@ if (!(await ping())) {
   process.exit(1);
 }
 
+const thread = await createThread();
+
 process.on('SIGINT', async () => {
-  const success = await abort();
-  if (!success) {
-    console.error('Failed to abort agent');
-    process.exit(1);
-  }
+  await thread.abort();
+  await thread.destroy();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  await thread.abort();
+  await thread.destroy();
   process.exit(0);
 });
 
 await promptForInput(
+  thread,
   'How can I help you today?',
   process.argv.slice(2).join(' ').trim()
 );
 
-async function promptForInput(placeholder: string, initialValue?: string) {
+async function promptForInput(
+  thread: Thread,
+  placeholder: string,
+  initialValue?: string
+) {
   const input = await text({
     message: '',
     placeholder,
@@ -32,22 +42,29 @@ async function promptForInput(placeholder: string, initialValue?: string) {
   });
 
   if (isCancel(input)) {
+    await thread.destroy();
     process.exit(0);
   }
 
-  await stream.step(streamPrompt(input.toString()));
+  try {
+    await stream.step(streamPrompt(thread, input.toString()));
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : err);
+    await thread.destroy();
+    process.exit(1);
+  }
 
-  promptForInput('Reply');
+  promptForInput(thread, 'Reply');
 }
 
-async function* streamPrompt(input: string) {
+async function* streamPrompt(thread: Thread, input: string) {
   const chunks: string[] = [];
-
   let resolver: (() => void) | null = null;
   let thinking = true;
   let done = false;
+  let streamError: Error | null = null;
 
-  promptAgent(input, {
+  const promptPromise = thread.prompt(input, {
     onThinking: (chunk) => {
       resolver?.();
     },
@@ -69,7 +86,14 @@ async function* streamPrompt(input: string) {
     },
   });
 
+  promptPromise.catch((err: unknown) => {
+    streamError = err instanceof Error ? err : new Error(String(err));
+    done = true;
+    resolver?.();
+  });
+
   while (!done || chunks.length > 0) {
+    if (streamError) throw streamError;
     if (chunks.length > 0) {
       yield chunks.shift()!;
     } else if (!done) {
@@ -78,4 +102,6 @@ async function* streamPrompt(input: string) {
       });
     }
   }
+
+  await promptPromise;
 }

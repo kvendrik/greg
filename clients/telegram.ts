@@ -1,6 +1,6 @@
 import { Bot, type Context } from 'grammy';
 import { FileFlavor, hydrateFiles } from '@grammyjs/files';
-import { prompt, abort, ping } from './agent-sdk';
+import { ping, createThread, type Thread } from './agent-sdk';
 import { pipeline } from '@xenova/transformers';
 import ffmpeg from 'fluent-ffmpeg';
 import pc from 'picocolors';
@@ -14,7 +14,13 @@ if (!(await ping())) {
 type BotContext = FileFlavor<Context>;
 
 const llmState = { working: false, response: '' };
+let thread: Thread | null = null;
 const bot = new Bot<BotContext>(process.env.TELEGRAM_BOT_TOKEN!);
+
+async function getOrCreateThread(): Promise<Thread> {
+  if (!thread) thread = await createThread();
+  return thread;
+}
 
 bot.api.config.use(hydrateFiles(bot.token));
 
@@ -39,7 +45,7 @@ bot.on('message:text', async (ctx) => {
   const message = ctx.message;
 
   if (message.text === '/stop') {
-    const success = await abort();
+    const success = thread ? await thread.abort() : true;
     await ctx.reply(success ? 'Okay. Stopping.' : 'Failed to stop.');
     return;
   }
@@ -114,13 +120,6 @@ async function readAudioAsFloat32(pcmPath: string): Promise<Float32Array> {
   return float32Array;
 }
 
-function sendMessage(message: string, ctx?: BotContext) {
-  if (ctx) {
-    return ctx.reply(message);
-  }
-  return bot.api.sendMessage(process.env.TELEGRAM_SENDER_ID, message);
-}
-
 async function handoffToAgent(message: string, ctx: BotContext) {
   console.log(`\n\nPrompting: "${message}"`);
 
@@ -130,12 +129,11 @@ async function handoffToAgent(message: string, ctx: BotContext) {
   }
 
   llmState.working = true;
+  const t = await getOrCreateThread();
 
-  prompt(message, {
-    onThinking: (chunk) => {
-      process.stdout.write(pc.gray(chunk));
-    },
-    onContent: (chunk) => {
+  await t.prompt(message, {
+    onThinking: (chunk: string) => process.stdout.write(pc.gray(chunk)),
+    onContent: (chunk: string) => {
       process.stdout.write(pc.green(chunk));
       llmState.response += chunk;
     },
@@ -146,7 +144,7 @@ async function handoffToAgent(message: string, ctx: BotContext) {
       llmState.response = '';
       process.stdout.write(`done. ${pc.green('✓')}\n`);
     },
-    onError: async (error) => {
+    onError: async (error: string) => {
       console.error(pc.red(`Error: ${error}`));
       await ctx.reply(`Error: ${error}`);
       llmState.working = false;
