@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { APIUserAbortError } from '@anthropic-ai/sdk';
-import { thread, type PromptOptions } from './llm/llm';
+import { thread, type PromptOptions } from './llm';
 import pc from 'picocolors';
 
 const IDLE_MS = 10 * 60 * 1000; // 10 minutes

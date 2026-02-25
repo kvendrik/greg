@@ -72,7 +72,7 @@ export function create(signal: AbortSignal): BetaRunnableTool {
   return {
     name: 'run_browser_task',
     description:
-      'Runs a task in a persistent browser session. The browser stays alive between calls so you can chain tasks that build on each other.',
+      'Runs one task in a persistent browser session. Send one clear action per call (e.g. "Open klm.nl" or "Search for flights"); do not send multi-step instructions in a single task. The browser stays alive between calls so you can chain steps.',
     input_schema: {
       type: 'object',
       properties: {

@@ -1,23 +1,34 @@
 import { Anthropic } from '@anthropic-ai/sdk';
+import type { TaskComplexity, ProviderId } from '../providers/types';
+import { providers } from '../providers';
 
-export type TaskComplexity = 'trivial' | 'normal' | 'complex';
+export type ResolvedModel = {
+  modelId: string;
+  label: string;
+};
 
 /**
- * Resolves which Claude model should handle the user prompt.
- * Asks the LLM only for task complexity; the resolver maps complexity → model.
+ * Resolves which model should handle the user prompt from the given provider's model set.
+ * Uses complexity classification then picks the corresponding model (trivial / normal / complex).
  */
 export async function resolveModel(
   content: string,
-  signal: AbortSignal
-): Promise<(typeof ROUTER_MODELS)[number]> {
+  signal: AbortSignal,
+  providerId: ProviderId
+): Promise<ResolvedModel> {
+  const modelSet = providers[providerId].models;
   const complexity = await classifyComplexity(content, signal);
-  return COMPLEXITY_TO_MODEL[complexity];
+  const model = modelSet[complexity];
+  return {
+    modelId: model.modelId,
+    label: model.label,
+  };
 }
 
 /**
  * Classifies task complexity via one Haiku call. Output is mapped to model in resolveModel.
  */
-export async function classifyComplexity(
+async function classifyComplexity(
   content: string,
   signal: AbortSignal
 ): Promise<TaskComplexity> {
@@ -74,25 +85,6 @@ export async function classifyComplexity(
   }
 }
 
-const ROUTER_MODELS = [
-  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', default: false },
-  {
-    id: 'claude-haiku-4-5-20251001',
-    label: 'Claude Haiku 4.5',
-    default: false,
-  },
-  { id: 'claude-opus-4-6', label: 'Claude Opus 4.6', default: true },
-] as const;
-
-const COMPLEXITY_TO_MODEL: Record<
-  TaskComplexity,
-  (typeof ROUTER_MODELS)[number]
-> = {
-  trivial: ROUTER_MODELS[1],
-  normal: ROUTER_MODELS[0],
-  complex: ROUTER_MODELS[2],
-};
-
 const COMPLEXITY_VALUES: TaskComplexity[] = ['trivial', 'normal', 'complex'];
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -111,8 +103,8 @@ function parseComplexityResponse(text: string): TaskComplexity | null {
   ) {
     return null;
   }
-  const c = String((parsed as { complexity: unknown }).complexity).trim();
-  return COMPLEXITY_VALUES.includes(c as TaskComplexity)
-    ? (c as TaskComplexity)
+  const complexityStr = String((parsed as { complexity: unknown }).complexity).trim();
+  return COMPLEXITY_VALUES.includes(complexityStr as TaskComplexity)
+    ? (complexityStr as TaskComplexity)
     : null;
 }

@@ -2,6 +2,12 @@
 alwaysApply: true
 ---
 
+## When to export a method or variable
+
+Only export a method or variable when it is actually used in other places. Otherwise do not export it.
+
+## Method and variable order
+
 Always put exported methods and variables at the top of the file. The order is:
 
 1. TypeScript types right below the `import`s
