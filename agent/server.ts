@@ -1,16 +1,11 @@
 import http from 'node:http';
 import { APIUserAbortError } from '@anthropic-ai/sdk';
-import { start } from './llm';
+import { thread, type PromptOptions } from './llm/llm';
 import pc from 'picocolors';
 import { spawn } from 'node:child_process';
 
-const llm = await start();
+const llm = await thread();
 let currentAbortController: AbortController | null = null;
-
-process.on('SIGINT', () => {
-  llm.kill();
-  process.exit(0);
-});
 
 const server = http.createServer(async (req, res) => {
   console.log(pc.gray(`[${req.method}] ${req.url}`));
@@ -88,29 +83,40 @@ const server = http.createServer(async (req, res) => {
     const abortController = new AbortController();
     currentAbortController = abortController;
 
-    try {
-      await llm.thread.prompt(userPrompt.trim(), {
-        signal: abortController.signal,
-        onContent(chunk) {
-          res.write(JSON.stringify({ type: 'content', chunk }) + '\n');
-        },
-        onThinking(chunk) {
-          res.write(JSON.stringify({ type: 'thinking', chunk }) + '\n');
-        },
-        onDone() {
+    const promptOptions: PromptOptions = {
+      signal: abortController.signal,
+      onContent(chunk) {
+        res.write(JSON.stringify({ type: 'content', chunk }) + '\n');
+      },
+      onThinking(chunk) {
+        res.write(JSON.stringify({ type: 'thinking', chunk }) + '\n');
+      },
+      onDone() {
+        res.end();
+      },
+      onError(err) {
+        if (!res.writableEnded) {
+          res.write(JSON.stringify({ type: 'error', error: err }) + '\n');
           res.end();
-        },
-      });
+        }
+      },
+    };
+    try {
+      await llm.prompt(userPrompt.trim(), promptOptions);
     } catch (err) {
       if (
         err instanceof APIUserAbortError ||
         (err instanceof Error && err.name === 'AbortError')
       ) {
-        res.end();
+        if (!res.writableEnded) res.end();
       } else {
         console.error(err);
-        res.write(JSON.stringify({ type: 'error', error: String(err) }) + '\n');
-        res.end();
+        if (!res.writableEnded) {
+          res.write(
+            JSON.stringify({ type: 'error', error: String(err) }) + '\n'
+          );
+          res.end();
+        }
       }
     } finally {
       currentAbortController = null;
