@@ -1,48 +1,90 @@
+const port = process.env.AGENT_PORT;
+if (port === undefined || port === '') {
+  throw new Error('AGENT_PORT is required');
+}
+const BASE = `http://localhost:${port}`;
+
+type PromptCallbacks = {
+  onThinking: (chunk: string) => void;
+  onContent: (chunk: string) => void;
+  onDone: () => void;
+  onError: (error: string) => void;
+};
+
+export type Thread = {
+  id: string;
+  abort(): Promise<boolean>;
+  destroy(): Promise<boolean>;
+  prompt(promptText: string, callbacks: PromptCallbacks): Promise<void>;
+};
+
 export async function ping() {
   try {
-    const res = await fetch('http://localhost:3000/ping');
+    const res = await fetch(`${BASE}/ping`);
     return res.ok;
-  } catch (error) {
+  } catch {
     return false;
   }
 }
 
-export async function abort() {
-  const res = await fetch('http://localhost:3000/abort', {
+export async function createThread(): Promise<Thread> {
+  const res = await fetch(`${BASE}/threads/new`, { method: 'POST' });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to create thread: ${res.status} ${text}`);
+  }
+
+  const { id } = (await res.json()) as { id: string };
+  let destroyed = false;
+
+  return {
+    id,
+    abort() {
+      return abort(id);
+    },
+    async destroy() {
+      if (destroyed) return true;
+      destroyed = true;
+      return destroyThread(id);
+    },
+    prompt(promptText, callbacks) {
+      return prompt(id, promptText, callbacks);
+    },
+  };
+}
+
+async function abort(threadId: string) {
+  const res = await fetch(`${BASE}/threads/${threadId}/abort`, {
     method: 'POST',
   });
   return res.ok;
 }
 
-export async function prompt(
-  prompt: string,
-  {
-    onThinking,
-    onContent,
-    onDone,
-    onError,
-  }: {
-    onThinking: (chunk: string) => void;
-    onContent: (chunk: string) => void;
-    onDone: () => void;
-    onError: (error: string) => void;
-  }
+async function destroyThread(threadId: string) {
+  const res = await fetch(`${BASE}/threads/${threadId}`, {
+    method: 'DELETE',
+  });
+  return res.ok;
+}
+
+async function prompt(
+  threadId: string,
+  promptText: string,
+  { onThinking, onContent, onDone, onError }: PromptCallbacks
 ) {
-  const res = await fetch('http://localhost:3000/prompt', {
+  const res = await fetch(`${BASE}/threads/${threadId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ prompt: promptText }),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    console.error(`Error ${res.status}: ${text}`);
-    process.exit(1);
+    throw new Error(`Prompt failed: ${res.status} ${text}`);
   }
 
   if (!res.body) {
-    console.error('No response body');
-    process.exit(1);
+    throw new Error('No response body');
   }
 
   const reader = res.body.getReader();
@@ -90,6 +132,5 @@ export async function prompt(
       break;
     }
   }
-
   onDone();
 }

@@ -27,14 +27,15 @@ Oh and you don't have to call him Greg. Just say "From now on your name is John"
 2. Set up the `.env` file with access to the services Greg needs:
 
 ```
-WORKSPACE_PATH=~/.greg
-
 ANTHROPIC_API_KEY=XXX
 BROWSER_USE_API_KEY=XXX
 
 # ID of the only sender allowed to send messages to the bot
 TELEGRAM_SENDER_ID=XXX
 TELEGRAM_BOT_TOKEN=XXXX
+
+WORKSPACE_PATH=~/.greg
+AGENT_PORT=3000
 ```
 
 3. Then run the setup commands:
