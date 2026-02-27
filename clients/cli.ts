@@ -75,6 +75,7 @@ async function* streamPrompt(thread: Thread, input: string) {
       chunks.push(chunk);
       resolver?.();
     },
+    onToolcall: (name, args) => {},
     onDone: () => {
       done = true;
       resolver?.();

@@ -5,6 +5,11 @@ import * as readline from 'readline';
 let proc: ChildProcess | null = null;
 let rl: readline.Interface | null = null;
 
+/** Ensure space after sentence-ending punctuation so concatenated fragments read correctly. */
+function normalizeSpacing(text: string): string {
+  return text.replace(/\.([A-Za-z])/g, '. $1').replace(/!([A-Za-z])/g, '! $1').replace(/\?([A-Za-z])/g, '? $1');
+}
+
 function getProc(): { proc: ChildProcess; rl: readline.Interface } {
   if (!proc || proc.exitCode !== null) {
     proc = spawn('uv', ['run', '--env-file=.env', 'scripts/browser-use.py'], {
@@ -34,7 +39,7 @@ function runBrowserTask(task: string, signal: AbortSignal): Promise<string> {
         if (msg.status === 'error') reject(new Error(msg.result));
         else if (msg.status === 'aborted' || msg.status === 'nothing_to_abort')
           reject(new DOMException('Aborted', 'AbortError'));
-        else resolve(msg.result);
+        else resolve(' ' + (typeof msg.result === 'string' ? normalizeSpacing(msg.result) : String(msg.result ?? '')));
       } catch (e) {
         reject(new Error(`Failed to parse response: ${line}`));
       }

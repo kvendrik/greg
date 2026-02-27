@@ -5,57 +5,74 @@ export function neutralToAnthropic(
   messages: NeutralMessage[]
 ): BetaMessageParam[] {
   const result: BetaMessageParam[] = [];
-  let toolResultBlocks: Array<{
-    type: 'tool_result';
-    tool_use_id: string;
-    content: string;
-  }> = [];
-
-  function flushToolResults() {
-    if (toolResultBlocks.length > 0) {
-      result.push({ role: 'assistant', content: toolResultBlocks });
-      toolResultBlocks = [];
-    }
-  }
 
   for (const msg of messages) {
     if (msg.role === 'user') {
-      flushToolResults();
-      result.push({ role: 'user', content: msg.content });
-    } else if (msg.role === 'assistant') {
-      flushToolResults();
-      const blocks: Array<
-        | { type: 'text'; text: string }
-        | {
-            type: 'tool_use';
-            id: string;
-            name: string;
-            input: Record<string, unknown>;
+      const contentBlocks: BetaMessageParam['content'] = [];
+
+      for (const part of msg.content) {
+        if (Array.isArray(part)) {
+          for (const tr of part) {
+            contentBlocks.push({
+              type: 'tool_result',
+              tool_use_id: tr.toolCallId,
+              content: tr.content,
+            });
           }
-      > = [];
-      if (msg.content) blocks.push({ type: 'text', text: msg.content });
-      if (msg.toolCalls?.length) {
-        for (const tc of msg.toolCalls) {
-          blocks.push({
-            type: 'tool_use',
-            id: tc.id,
-            name: tc.name,
-            input: tc.args ?? {},
-          });
+        } else if (part.type === 'text') {
+          contentBlocks.push({ type: 'text', text: part.content });
+        } else if (part.type === 'image') {
+          const src = part.source;
+          if (src.type === 'base64') {
+            contentBlocks.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                data: src.data,
+                media_type: src.mediaType,
+              },
+            });
+          } else if (src.type === 'url') {
+            contentBlocks.push({
+              type: 'image',
+              source: { type: 'url', url: src.url },
+            });
+          } else {
+            contentBlocks.push({
+              type: 'image',
+              source: { type: 'file', file_id: src.fileId },
+            });
+          }
         }
       }
-      const content: BetaMessageParam['content'] =
-        blocks.length > 0 ? blocks : msg.content || '';
-      result.push({ role: 'assistant', content });
+
+      if (contentBlocks.length > 0) {
+        result.push({ role: 'user', content: contentBlocks });
+      }
     } else {
-      toolResultBlocks.push({
-        type: 'tool_result',
-        tool_use_id: msg.toolCallId,
-        content: msg.content,
-      });
+      const contentBlocks: BetaMessageParam['content'] = [];
+
+      for (const part of msg.content) {
+        if (Array.isArray(part)) {
+          for (const tu of part) {
+            contentBlocks.push({
+              type: 'tool_use',
+              id: tu.id,
+              name: tu.name,
+              input: tu.input,
+            });
+          }
+        } else if (part.type === 'text') {
+          contentBlocks.push({ type: 'text', text: part.content });
+        }
+      }
+
+      if (contentBlocks.length > 0) {
+        result.push({ role: 'assistant', content: contentBlocks });
+      }
     }
   }
-  flushToolResults();
+
   return result;
 }
 
@@ -66,59 +83,87 @@ export function anthropicToNeutral(
 
   for (const msg of messages) {
     if (msg.role === 'user') {
-      const content = typeof msg.content === 'string' ? msg.content : '';
-      result.push({ role: 'user', content });
-    } else {
-      const blocks = Array.isArray(msg.content) ? msg.content : [];
-      let text = '';
-      const toolCalls: Array<{
-        id: string;
-        name: string;
-        args: Record<string, unknown>;
-      }> = [];
-      const toolResults: Array<{ toolCallId: string; content: string }> = [];
+      const parts: Extract<NeutralMessage, { role: 'user' }>['content'] = [];
 
-      for (const block of blocks) {
-        if (block.type === 'text' && 'text' in block) text += block.text;
-        if (block.type === 'tool_use' && 'id' in block)
-          toolCalls.push({
-            id: block.id,
-            name: block.name ?? '',
-            args: (block.input as Record<string, unknown>) ?? {},
-          });
-        if (block.type === 'tool_result' && 'tool_use_id' in block)
-          toolResults.push({
-            toolCallId: block.tool_use_id,
-            content:
-              typeof block.content === 'string'
-                ? block.content
-                : JSON.stringify(block.content),
-          });
+      if (typeof msg.content === 'string') {
+        if (msg.content) {
+          parts.push({ type: 'text', content: msg.content });
+        }
+      } else if (Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (block.type === 'text' && 'text' in block) {
+            parts.push({ type: 'text', content: String(block.text) });
+          } else if (block.type === 'tool_result' && 'tool_use_id' in block) {
+            parts.push([
+              {
+                type: 'tool_result',
+                toolCallId: block.tool_use_id,
+                content:
+                  typeof block.content === 'string'
+                    ? block.content
+                    : JSON.stringify(block.content),
+              },
+            ]);
+          } else if (block.type === 'image' && 'source' in block) {
+            const src = block.source;
+            if (src.type === 'base64') {
+              parts.push({
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  data: src.data,
+                  mediaType: src.media_type,
+                },
+              });
+            } else if (src.type === 'url') {
+              parts.push({ type: 'image', source: { type: 'url', url: src.url } });
+            } else {
+              parts.push({
+                type: 'image',
+                source: { type: 'file', fileId: src.file_id },
+              });
+            }
+          }
+        }
       }
 
-      if (text || toolCalls.length > 0) {
-        result.push({
-          role: 'assistant',
-          content: text,
-          ...(toolCalls.length
-            ? {
-                toolCalls: toolCalls.map((tc) => ({
-                  id: tc.id,
-                  name: tc.name,
-                  args: tc.args,
-                })),
-              }
-            : {}),
-        });
+      if (parts.length) {
+        result.push({ role: 'user', content: parts });
       }
-      for (const tr of toolResults) {
-        result.push({
-          role: 'tool',
-          toolCallId: tr.toolCallId,
-          content: tr.content,
-        });
+    } else if (msg.role === 'assistant') {
+      const parts: Extract<NeutralMessage, { role: 'assistant' }>['content'] = [];
+
+      if (typeof msg.content === 'string') {
+        if (msg.content) {
+          parts.push({ type: 'text', content: msg.content });
+        }
+      } else if (Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (block.type === 'thinking' && 'thinking' in block) {
+            parts.push({
+              type: 'thinking',
+              content: String(block.thinking),
+            });
+          } else if (block.type === 'text' && 'text' in block) {
+            parts.push({ type: 'text', content: String(block.text) });
+          } else if (block.type === 'tool_use' && 'id' in block) {
+            parts.push([
+              {
+                type: 'tool_use',
+                id: block.id,
+                name: block.name ?? '',
+                input: (block.input as Record<string, unknown>) ?? {},
+              },
+            ]);
+          }
+        }
+      }
+
+      if (parts.length) {
+        result.push({ role: 'assistant', content: parts });
       }
     }
   }
+
   return result;
 }
