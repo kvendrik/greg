@@ -13,7 +13,7 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ less 
 - 🌍 **Browser Automation**. Greg is capable of controlling your Chrome browser autonomously and can therefor do anything online you can do.
 - 👨‍💻 **Command-line Access**. Greg has access to your command line and can therefor do most of the things you do on your computer.
 - 🔨 **Skills**. Greg learns on his own. If he has trouble figuring something out, help him, and then simply say "What have you learned? Write a skill for yourself so you know this next time". He'll create a skill for himself so that in the future he won't struggle.
-- 🚏 **Routing**. When you send Greg a prompt he first takes a second to decide what model he's going to use. Greg currently only works with [Claude models](https://platform.claude.com/docs/en/about-claude/models/overview).
+- 🚏 **Supports Multiple Providers**. By default Greg uses [Claude Sonnet 4.6](https://platform.claude.com/docs/en/about-claude/models/overview) but when the Anthropic API is overloaded he switches to using [GPT 5.2](https://developers.openai.com/api/docs/models). You can also manually ask Greg to use GPT 5.2 by prefixing your message with `/openai`.
 - 🗣️ **Threads**. Talk to Greg in multiple threads at the same time.
 - **Soon:**
   - 📆 **Scheduled Tasks**. Schedule reocurring tasks by saying things like "Every morning at 6am send me a list of my unread emails".
