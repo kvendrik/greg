@@ -138,6 +138,13 @@ async function handoffToAgent(message: string, ctx: BotContext) {
       process.stdout.write(pc.green(chunk));
       llmState.response += chunk;
     },
+    onToolcall: async () => {
+      process.stdout.write(
+        `\n\nSending partial response to ${ctx.from?.username}...`
+      );
+      await ctx.reply(llmState.response);
+      llmState.response = '';
+    },
     onDone: async () => {
       process.stdout.write(`\n\nSending response to ${ctx.from?.username}...`);
       await ctx.reply(llmState.response);

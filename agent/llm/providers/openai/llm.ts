@@ -8,7 +8,8 @@ import { getErrorType } from './errors';
 import { neutralToOpenAI, openaiToNeutral } from './convert';
 
 const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey) throw new Error('OPENAI_API_KEY is required when using the OpenAI provider.');
+if (!apiKey)
+  throw new Error('OPENAI_API_KEY is required when using the OpenAI provider.');
 const openai = new OpenAI({ apiKey });
 
 type ToolShape = {
@@ -23,21 +24,23 @@ function betaToolsToOpenAI(
   tools: BetaRunnableTool[]
 ): RunnableToolFunctionWithParse<object>[] {
   return tools.map((tool) => {
-    const t = tool as unknown as ToolShape;
+    const toolShape = tool as unknown as ToolShape;
     return {
       type: 'function' as const,
       function: {
-        name: t.name,
-        description: t.description ?? '',
-        parameters: (t.input_schema ?? { type: 'object' }) as {
+        name: toolShape.name,
+        description: toolShape.description ?? '',
+        parameters: (toolShape.input_schema ?? { type: 'object' }) as {
           type: 'object';
           properties?: Record<string, unknown>;
           required?: string[];
         },
         parse: (input: string) =>
-          t.parse ? t.parse(JSON.parse(input)) : (JSON.parse(input) as object),
+          toolShape.parse
+            ? toolShape.parse(JSON.parse(input))
+            : (JSON.parse(input) as object),
         function: async (args: object) => {
-          const result = await t.run(args);
+          const result = await toolShape.run(args);
           return typeof result === 'string' ? result : JSON.stringify(result);
         },
       },
@@ -45,7 +48,10 @@ function betaToolsToOpenAI(
   });
 }
 
-export async function run(params: RunParams, callbacks: RunCallbacks): Promise<void> {
+export async function run(
+  params: RunParams,
+  callbacks: RunCallbacks
+): Promise<void> {
   const { system, messages, model, tools, signal } = params;
 
   const nativeMessages = neutralToOpenAI(messages);
@@ -65,7 +71,8 @@ export async function run(params: RunParams, callbacks: RunCallbacks): Promise<v
         messages: apiMessages,
         tools: openaiTools,
         stream: true,
-        max_tokens: 8192,
+        max_completion_tokens: 8192,
+        reasoning_effort: 'medium',
       },
       { signal, maxChatCompletions: 25 }
     );

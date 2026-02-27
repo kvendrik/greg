@@ -1,4 +1,3 @@
-- [ ] When using tools with Claude the second message leads to a `400` error
 - [ ] It should send periodic updates during long tasks like the browser. Every paragraph should be send to the telegram bot so that if you use it there the updates work
 - [ ] Using Haiku for the greetings is fast but its also way less fun. What to do about that?
 
@@ -34,6 +33,7 @@ Oh and you don't have to call him Greg. Just say "From now on your name is John"
 
 ```
 ANTHROPIC_API_KEY=XXX
+OPENAI_API_KEY=XXX
 BROWSER_USE_API_KEY=XXX
 
 WORKSPACE_PATH=~/.greg

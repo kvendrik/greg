@@ -7,6 +7,7 @@ const BASE = `http://localhost:${port}`;
 type PromptCallbacks = {
   onThinking: (chunk: string) => void;
   onContent: (chunk: string) => void;
+  onToolcall: (name: string, args: Record<string, unknown>) => void;
   onDone: () => void;
   onError: (error: string) => void;
 };
@@ -70,7 +71,7 @@ async function destroyThread(threadId: string) {
 async function prompt(
   threadId: string,
   promptText: string,
-  { onThinking, onContent, onDone, onError }: PromptCallbacks
+  { onThinking, onContent, onToolcall, onDone, onError }: PromptCallbacks
 ) {
   const res = await fetch(`${BASE}/threads/${threadId}`, {
     method: 'POST',
@@ -109,6 +110,8 @@ async function prompt(
           onContent(data.chunk ?? '');
         } else if (data.type === 'thinking') {
           onThinking(data.chunk ?? '');
+        } else if (data.type === 'toolcall') {
+          onToolcall(data.name ?? '', JSON.parse(data.args ?? '{}'));
         } else if (data.type === 'error') {
           onError?.(data.error ?? String(data));
         }
@@ -124,6 +127,8 @@ async function prompt(
           const data = JSON.parse(buffer);
           if (data.type === 'content') onContent(data.chunk ?? '');
           else if (data.type === 'thinking') onThinking(data.chunk ?? '');
+          else if (data.type === 'toolcall')
+            onToolcall(data.name ?? '', JSON.parse(data.args ?? '{}'));
           else if (data.type === 'error') onError?.(data.error ?? String(data));
         } catch {
           // ignore

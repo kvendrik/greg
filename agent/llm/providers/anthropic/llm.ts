@@ -6,10 +6,20 @@ import { neutralToAnthropic, anthropicToNeutral } from './convert';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-export async function run(params: RunParams, callbacks: RunCallbacks): Promise<void> {
+export async function run(
+  params: RunParams,
+  callbacks: RunCallbacks
+): Promise<void> {
   const { system, messages, model, tools, signal } = params;
 
   const nativeMessages = neutralToAnthropic(messages);
+  const thinkingParams =
+    model === 'claude-haiku-4-5-20251001'
+      ? { thinking: { type: 'enabled' as const, budget_tokens: 1024 } }
+      : {
+          thinking: { type: 'adaptive' as const },
+          output_config: { effort: 'medium' as const },
+        };
 
   const runner = anthropic.beta.messages.toolRunner(
     {
@@ -20,8 +30,8 @@ export async function run(params: RunParams, callbacks: RunCallbacks): Promise<v
       tools,
       tool_choice: { type: 'auto' },
       stream: true,
-      thinking: { type: 'enabled', budget_tokens: 1024 },
       max_iterations: 25,
+      ...thinkingParams,
     },
     { signal: signal } as { headers?: Record<string, string> }
   );

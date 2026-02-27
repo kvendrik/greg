@@ -1,7 +1,12 @@
 import type { NeutralMessage, ProviderId } from './providers/types';
+import { PROVIDERS } from './providers/types';
 import { get as getTools, getInstructions } from '../tools';
 import { formatDate } from '../utilities';
-import { resolveModel, prepareMessages, getErrorMessage } from './utilities';
+import {
+  classifyComplexity,
+  prepareMessages,
+  getErrorMessage,
+} from './utilities';
 import { providers } from './providers';
 import pc from 'picocolors';
 
@@ -10,6 +15,7 @@ export type PromptOptions = {
   onContent: (chunk: string) => void;
   onThinking: (chunk: string) => void;
   onDone: () => void;
+  onToolcall: (name: string, args: Record<string, unknown>) => void;
   onError: (err: string) => void;
 };
 
@@ -32,21 +38,48 @@ The code you're running on is at: ${process.cwd()}.
   return {
     prompt: async (
       content: string,
-      { signal, onContent, onThinking, onDone, onError }: PromptOptions
-    ) => {
-      await runPrompt('anthropic', content, {
+      {
         signal,
-        system,
-        messages,
-        conversationStartIso,
         onContent,
         onThinking,
-        onDone(newMessages) {
-          messages = newMessages;
-          onDone();
-        },
+        onToolcall,
+        onDone,
         onError,
-      });
+      }: PromptOptions
+    ) => {
+      const command = content.match(/^\/([^\s]+)/);
+      let defaultProviderId: ProviderId = 'anthropic';
+
+      if (command) {
+        switch (command[1]) {
+          case 'openai':
+            defaultProviderId = 'openai';
+            break;
+          default:
+            onError(
+              `Unknown command: "${command[1]}". Available commands: /m:provider`
+            );
+        }
+      }
+
+      await runPrompt(
+        defaultProviderId,
+        content.replace(command?.[0] ?? '', ''),
+        {
+          signal,
+          system,
+          messages,
+          conversationStartIso,
+          onContent,
+          onThinking,
+          onToolcall,
+          onDone(newMessages) {
+            messages = newMessages;
+            onDone();
+          },
+          onError,
+        }
+      );
     },
   };
 }
@@ -61,6 +94,7 @@ async function runPrompt(
     conversationStartIso: string;
     onContent: (chunk: string) => void;
     onThinking: (chunk: string) => void;
+    onToolcall: (name: string, args: Record<string, unknown>) => void;
     onDone: (messages: NeutralMessage[]) => void;
     onError: (err: string) => void;
   }
@@ -70,10 +104,12 @@ async function runPrompt(
 
   console.info(pc.gray(`\n"${userContent}"`));
 
-  const resolved = await resolveModel(userContent, opts.signal, providerId);
+  //const resolved = await resolveModel(providerId, userContent, opts.signal);
   const provider = providers[providerId];
+  const resolved = provider.models.normal;
 
   const tools = await getTools(opts.signal);
+
   const prepared = await prepareMessages({
     providerEntry: provider,
     system: opts.system,
@@ -85,6 +121,7 @@ async function runPrompt(
   });
 
   console.info(pc.gray(`Using ${resolved.label}.`));
+  opts.onContent(`Using ${resolved.label}.\n\n`);
 
   await provider.run(
     {
@@ -100,6 +137,7 @@ async function runPrompt(
       onThinking: opts.onThinking,
       onToolCall(name, args) {
         console.info(pc.cyan(`[${name}(${args})]`));
+        opts.onToolcall(name, args);
       },
       onDone(messages) {
         opts.onDone(messages);

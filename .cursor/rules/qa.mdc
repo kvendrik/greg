@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+When asked to QA your work don't create any new files. Go through all the changes you made and make sure the code is easy to understand, follows the other rules, and is robust.

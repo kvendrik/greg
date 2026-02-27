@@ -1,12 +1,12 @@
 import type { NeutralMessage } from '../providers/types';
 import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
-import type { ProviderEntry } from '../providers';
+import type { ProviderEntry, ProviderId } from '../providers';
 import { saveConversationNote } from '../../tools/memory';
 
 const TOKEN_COMPACTION_THRESHOLD = 150_000;
 
 export type PrepareMessagesOpts = {
-  providerEntry: ProviderEntry;
+  providerEntry: ProviderEntry<ProviderId>;
   system: string;
   messages: NeutralMessage[];
   newUserContent: string;
@@ -20,7 +20,10 @@ export async function prepareMessages(
 ): Promise<NeutralMessage[]> {
   const messagesWithNew: NeutralMessage[] = [
     ...opts.messages,
-    { role: 'user', content: opts.newUserContent },
+    {
+      role: 'user',
+      content: [{ type: 'text', content: opts.newUserContent }],
+    },
   ];
 
   if (messagesWithNew.length <= 1) {
@@ -56,5 +59,10 @@ export async function prepareMessages(
   }
 
   const condensedContent = `${summarized.condensed_summary}\n\n---\nUser's latest message:\n\n${opts.newUserContent}`;
-  return [{ role: 'user', content: condensedContent }];
+  return [
+    {
+      role: 'user',
+      content: [{ type: 'text', content: condensedContent }],
+    },
+  ];
 }

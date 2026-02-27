@@ -86,6 +86,10 @@ const server = http.createServer(async (req, res) => {
     const state = threads.get(id);
     if (state) {
       clearTimeout(state.idleTimeout);
+      if (state.abortController) {
+        state.abortController.abort();
+        state.abortController = null;
+      }
       threads.delete(id);
     }
     res.writeHead(204);
@@ -153,6 +157,15 @@ const server = http.createServer(async (req, res) => {
       },
       onThinking(chunk) {
         res.write(JSON.stringify({ type: 'thinking', chunk }) + '\n');
+      },
+      onToolcall(name, args) {
+        res.write(
+          JSON.stringify({
+            type: 'toolcall',
+            name,
+            args: JSON.stringify(args),
+          }) + '\n'
+        );
       },
       onDone() {
         res.end();
