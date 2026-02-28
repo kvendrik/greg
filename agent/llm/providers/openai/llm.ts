@@ -52,9 +52,15 @@ export async function run(
   params: RunParams,
   callbacks: RunCallbacks
 ): Promise<void> {
-  const { system, messages, model, tools, signal } = params;
+  const { system, messages, model, thinking, tools, signal } = params;
 
   const nativeMessages = neutralToOpenAI(messages);
+  const reasoningEffort =
+    thinking === null
+      ? undefined
+      : thinking === 'max'
+        ? ('xhigh' as const)
+        : thinking;
 
   const apiMessages: ChatCompletionMessageParam[] = [
     { role: 'system', content: system },
@@ -72,18 +78,22 @@ export async function run(
         tools: openaiTools,
         stream: true,
         max_completion_tokens: 8192,
-        reasoning_effort: 'medium',
+        ...(reasoningEffort != null && { reasoning_effort: reasoningEffort }),
       },
       { signal, maxChatCompletions: 25 }
     );
 
     runner.on('content', (delta: string) => callbacks.onContent(delta));
     runner.on('functionToolCall', (call) => {
-      const argsStr =
-        typeof call.arguments === 'string'
-          ? call.arguments
-          : JSON.stringify(call.arguments ?? {});
-      callbacks.onToolCall(call.name, argsStr);
+      const args =
+        typeof call.arguments === 'object' && call.arguments != null
+          ? (call.arguments as Record<string, unknown>)
+          : (JSON.parse(
+              typeof call.arguments === 'string'
+                ? call.arguments
+                : JSON.stringify(call.arguments ?? {})
+            ) as Record<string, unknown>);
+      callbacks.onToolCall(call.name, args);
     });
 
     for await (const _chunk of runner) {

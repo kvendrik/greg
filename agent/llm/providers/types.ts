@@ -16,6 +16,8 @@ export type ProviderModelSet<P extends ProviderId> = {
   [K in TaskComplexity]: ProviderModel<P>;
 };
 
+export type NeutralThinking = 'low' | 'medium' | 'high' | 'max' | null;
+
 /** Provider-agnostic image source for user message content. */
 export type NeutralImageSource =
   | {
@@ -55,6 +57,7 @@ export type RunParams = {
   /** Prepared messages (new user content already appended / summarized by context). */
   messages: NeutralMessage[];
   model: ProviderModel<ProviderId>['modelId'];
+  thinking: NeutralThinking;
   tools: BetaRunnableTool[];
   conversationStartIso: string;
   signal: AbortSignal;
@@ -62,7 +65,7 @@ export type RunParams = {
 
 export type RunCallbacks = {
   onContent: (chunk: string) => void;
-  onToolCall: (name: string, args: string) => void;
+  onToolCall: (name: string, args: Record<string, unknown>) => void;
   onThinking: (chunk: string) => void;
   onDone: (messages: NeutralMessage[]) => void;
   /** Return true (or resolve to true) if the error was handled (e.g. retried); then the provider will not rethrow. */

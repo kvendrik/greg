@@ -1,5 +1,8 @@
 import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
-import { create as createBrowserTool } from './browser';
+import {
+  create as createBrowserTool,
+  instructions as browserInstructions,
+} from './browser';
 import {
   tools as memoryTools,
   getInstructions as getMemoryInstructions,
@@ -24,5 +27,7 @@ export function getInstructions(conversationStartIso: string): string {
 ${getMemoryInstructions(conversationStartIso)}
 
 ${getSkillsInstructions()}
+
+${browserInstructions}
 `;
 }
