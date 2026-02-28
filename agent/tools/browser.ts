@@ -7,7 +7,10 @@ let rl: readline.Interface | null = null;
 
 /** Ensure space after sentence-ending punctuation so concatenated fragments read correctly. */
 function normalizeSpacing(text: string): string {
-  return text.replace(/\.([A-Za-z])/g, '. $1').replace(/!([A-Za-z])/g, '! $1').replace(/\?([A-Za-z])/g, '? $1');
+  return text
+    .replace(/\.([A-Za-z])/g, '. $1')
+    .replace(/!([A-Za-z])/g, '! $1')
+    .replace(/\?([A-Za-z])/g, '? $1');
 }
 
 function getProc(): { proc: ChildProcess; rl: readline.Interface } {
@@ -39,7 +42,13 @@ function runBrowserTask(task: string, signal: AbortSignal): Promise<string> {
         if (msg.status === 'error') reject(new Error(msg.result));
         else if (msg.status === 'aborted' || msg.status === 'nothing_to_abort')
           reject(new DOMException('Aborted', 'AbortError'));
-        else resolve(' ' + (typeof msg.result === 'string' ? normalizeSpacing(msg.result) : String(msg.result ?? '')));
+        else
+          resolve(
+            ' ' +
+              (typeof msg.result === 'string'
+                ? normalizeSpacing(msg.result)
+                : String(msg.result ?? ''))
+          );
       } catch (e) {
         reject(new Error(`Failed to parse response: ${line}`));
       }
@@ -98,3 +107,9 @@ export function cleanup() {
   proc = null;
   rl = null;
 }
+
+export const instructions = `
+## Browser Automation
+
+When using the \`run_browser_task\` tool, you MUST first read the browser-usage skill.
+`;

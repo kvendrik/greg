@@ -10,15 +10,15 @@ export async function run(
   params: RunParams,
   callbacks: RunCallbacks
 ): Promise<void> {
-  const { system, messages, model, tools, signal } = params;
+  const { system, messages, model, thinking, tools, signal } = params;
 
   const nativeMessages = neutralToAnthropic(messages);
   const thinkingParams =
-    model === 'claude-haiku-4-5-20251001'
-      ? { thinking: { type: 'enabled' as const, budget_tokens: 1024 } }
+    thinking === null
+      ? { thinking: { type: 'disabled' as const } }
       : {
           thinking: { type: 'adaptive' as const },
-          output_config: { effort: 'medium' as const },
+          output_config: { effort: thinking },
         };
 
   const runner = anthropic.beta.messages.toolRunner(
@@ -56,11 +56,15 @@ export async function run(
           'contentBlock',
           (block: { type: string; name?: string; input?: unknown }) => {
             if (block.type === 'tool_use' && block.name != null) {
-              const argsStr =
-                typeof block.input === 'string'
-                  ? block.input
-                  : JSON.stringify(block.input ?? {});
-              callbacks.onToolCall(block.name, argsStr);
+              const args =
+                typeof block.input === 'object' && block.input != null
+                  ? (block.input as Record<string, unknown>)
+                  : (JSON.parse(
+                      typeof block.input === 'string'
+                        ? block.input
+                        : JSON.stringify(block.input ?? {})
+                    ) as Record<string, unknown>);
+              callbacks.onToolCall(block.name, args);
             }
           }
         );

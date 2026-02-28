@@ -206,7 +206,7 @@ const updateIdentityRunnable: BetaRunnableTool = {
  * Append a conversation note to the workspace YYYY-MM-DD.md.
  * Exported for use by context condense (agent/context.ts).
  */
-export async function saveConversationNote(
+export function saveConversationNote(
   note: string,
   conversationStartIso: string
 ): Promise<void> {
@@ -294,8 +294,11 @@ const saveConversationNoteRunnable: BetaRunnableTool = {
       minute: '2-digit',
     });
 
-    await saveConversationNote(note, conversation_start_iso);
-    return `Saved to ${date}.md under ${time}.`;
+    setImmediate(() => {
+      saveConversationNote(note, conversation_start_iso);
+    });
+
+    return `Saving to ${date}.md under ${time}.`;
   },
 };
 

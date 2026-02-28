@@ -1,5 +1,5 @@
 import type { NeutralMessage, ProviderId } from './providers/types';
-import { PROVIDERS } from './providers/types';
+import type { NeutralThinking } from './providers/types';
 import { get as getTools, getInstructions } from '../tools';
 import { formatDate } from '../utilities';
 import {
@@ -47,13 +47,32 @@ The code you're running on is at: ${process.cwd()}.
         onError,
       }: PromptOptions
     ) => {
-      const command = content.match(/^\/([^\s]+)/);
+      const command = content.match(/^\/([^\s]+) ([^\s]+)/);
+
       let defaultProviderId: ProviderId = 'anthropic';
+      let thinkingEffort: NeutralThinking = 'medium';
 
       if (command) {
         switch (command[1]) {
           case 'openai':
             defaultProviderId = 'openai';
+            break;
+          case 'thinking':
+            const thinking = command[2] as NeutralThinking | 'none';
+            if (
+              thinking !== 'low' &&
+              thinking !== 'medium' &&
+              thinking !== 'high' &&
+              thinking !== 'max' &&
+              thinking !== 'none'
+            ) {
+              onError(
+                `Invalid thinking level: "${thinking}". Available levels: low, medium, high, max, none`
+              );
+              return;
+            }
+            thinkingEffort =
+              thinking === 'none' ? null : (thinking as NeutralThinking);
             break;
           default:
             onError(
@@ -70,6 +89,7 @@ The code you're running on is at: ${process.cwd()}.
           system,
           messages,
           conversationStartIso,
+          thinking: thinkingEffort,
           onContent,
           onThinking,
           onToolcall,
@@ -92,6 +112,7 @@ async function runPrompt(
     system: string;
     messages: NeutralMessage[];
     conversationStartIso: string;
+    thinking: NeutralThinking;
     onContent: (chunk: string) => void;
     onThinking: (chunk: string) => void;
     onToolcall: (name: string, args: Record<string, unknown>) => void;
@@ -128,6 +149,7 @@ async function runPrompt(
       system: opts.system,
       messages: prepared,
       model: resolved.modelId,
+      thinking: 'medium',
       conversationStartIso: opts.conversationStartIso,
       signal: opts.signal,
       tools,
