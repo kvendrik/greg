@@ -30,15 +30,31 @@ type TokenResponse = {
   athlete?: unknown;
 };
 
-function getAccessToken(): string {
-  const token = process.env.STRAVA_ACCESS_TOKEN;
-  if (!token?.trim()) {
-    console.error(
-      'STRAVA_ACCESS_TOKEN is required. Set it in your environment or .env (e.g. run `strava auth` first).'
+function getTokens(): TokenResponse {
+  if (!fs.existsSync(process.env.STRAVA_STORAGE_PATH)) {
+    throw new Error(
+      `Strava storage path (${process.env.STRAVA_STORAGE_PATH}) does not exist. Run \`strava auth\` first.`
     );
-    process.exit(1);
   }
-  return token.trim();
+  const tokens = JSON.parse(
+    fs.readFileSync(process.env.STRAVA_STORAGE_PATH, 'utf8')
+  ) as TokenResponse;
+  if (!tokens.access_token) {
+    throw new Error(
+      'Strava access token not found in storage. Run `strava auth` first.'
+    );
+  }
+  if (!tokens.refresh_token) {
+    throw new Error(
+      'Strava refresh token not found in storage. Run `strava auth` first.'
+    );
+  }
+  if (tokens.expires_at < Date.now() / 1000) {
+    throw new Error(
+      'Strava access token has expired. Run `strava refresh` first.'
+    );
+  }
+  return tokens;
 }
 
 function getClientCredentials(): { clientId: string; clientSecret: string } {
@@ -167,7 +183,7 @@ async function fetchActivities(opts: {
   before?: number;
   after?: number;
 }): Promise<SummaryActivity[]> {
-  const token = getAccessToken();
+  const tokens = getTokens();
   const params = new URLSearchParams();
   if (opts.perPage != null && Number.isFinite(opts.perPage)) {
     params.set('per_page', String(Math.min(200, Math.max(1, opts.perPage))));
@@ -184,7 +200,7 @@ async function fetchActivities(opts: {
 
   const url = `${STRAVA_API_BASE}/athlete/activities?${params.toString()}`;
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
 
   if (!res.ok) {
@@ -203,9 +219,9 @@ async function fetchActivities(opts: {
 }
 
 async function fetchActivity(id: number): Promise<Record<string, unknown>> {
-  const token = getAccessToken();
+  const tokens = getTokens();
   const res = await fetch(`${STRAVA_API_BASE}/activities/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
 
   if (!res.ok) {
@@ -287,7 +303,7 @@ function printTokenOutput(tokens: TokenResponse, json: boolean): void {
   console.log(tokens.refresh_token);
   console.log('\nNext, run this to store the tokens:');
   console.log(
-    `greg services strava auth store --access-token "${tokens.access_token}" --refresh-token "${tokens.refresh_token}"`
+    `greg hub strava auth store --access-token "${tokens.access_token}" --refresh-token "${tokens.refresh_token}"`
   );
   console.log(`\nExpires in ${Math.round(tokens.expires_in / 3600)} hours`);
 }

@@ -46,19 +46,18 @@ export interface SkillMeta {
   location: string;
 }
 
-export function getSkillsDir(): string {
-  return path.resolve(SKILLS_DIR);
-}
-
 export function discoverSkills(): SkillMeta[] {
-  const dir = getSkillsDir();
+  const globalSkillsDir = path.resolve(SKILLS_DIR);
   const workspaceSkillsDir = path.resolve(WORKSPACE_SKILLS_DIR);
 
   let globalSkills: fs.Dirent[] = [];
   let workspaceSkills: fs.Dirent[] = [];
 
-  if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
-    globalSkills = fs.readdirSync(dir, { withFileTypes: true });
+  if (
+    fs.existsSync(globalSkillsDir) &&
+    fs.statSync(globalSkillsDir).isDirectory()
+  ) {
+    globalSkills = fs.readdirSync(globalSkillsDir, { withFileTypes: true });
   }
 
   if (
@@ -75,7 +74,7 @@ export function discoverSkills(): SkillMeta[] {
 
   for (const ent of entries) {
     if (!ent.isDirectory()) continue;
-    const skillPath = path.join(dir, ent.name);
+    const skillPath = path.join(ent.parentPath, ent.name);
     const skillMdPath = path.join(skillPath, SKILL_FILENAME);
     if (!fs.existsSync(skillMdPath) || !fs.statSync(skillMdPath).isFile())
       continue;
@@ -191,11 +190,9 @@ export function saveSkill(
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"');
 
-  const skillsDir = getSkillsDir();
   const workspaceSkillsDir = path.resolve(WORKSPACE_SKILLS_DIR);
-  fs.mkdirSync(skillsDir, { recursive: true });
   fs.mkdirSync(workspaceSkillsDir, { recursive: true });
-  const skillDir = path.join(skillsDir, skillName);
+  const skillDir = path.join(workspaceSkillsDir, skillName);
   fs.mkdirSync(skillDir, { recursive: true });
   const skillMdPath = path.join(skillDir, SKILL_FILENAME);
 
