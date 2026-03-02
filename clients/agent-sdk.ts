@@ -1,8 +1,6 @@
-const port = process.env.AGENT_PORT;
-if (port === undefined || port === '') {
-  throw new Error('AGENT_PORT is required');
-}
-const BASE = `http://localhost:${port}`;
+import config from '../.config';
+
+const BASE = `http://localhost:${config.port}`;
 
 type PromptCallbacks = {
   onThinking: (chunk: string) => void;

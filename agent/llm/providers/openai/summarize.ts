@@ -1,10 +1,9 @@
 import type { SummarizeResult } from '../types';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import OpenAI from 'openai';
+import config from '../../../../.config';
 
-const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey) throw new Error('OPENAI_API_KEY is required when using the OpenAI provider.');
-const openai = new OpenAI({ apiKey });
+const openai = new OpenAI({ apiKey: config.providers.openai.key });
 
 const SUMMARIZE_SYSTEM = `You are summarizing a long conversation so the assistant can continue in a new context.
 

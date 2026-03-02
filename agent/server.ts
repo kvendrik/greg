@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { APIUserAbortError } from '@anthropic-ai/sdk';
 import { thread, type PromptOptions } from './llm';
 import pc from 'picocolors';
+import config from '../.config';
 
 const IDLE_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -203,13 +204,7 @@ const server = http.createServer(async (req, res) => {
 
 server.timeout = 0;
 
-const port = process.env.AGENT_PORT;
-
-if (port === undefined || port === '') {
-  throw new Error('AGENT_PORT is required');
-}
-
-server.listen(Number(port), () => {
+server.listen(Number(config.port), () => {
   console.log('Running...');
   console.log(
     'Endpoints: GET /ping, POST /threads/new, POST /threads/:id, POST /threads/:id/abort, DELETE /threads/:id'

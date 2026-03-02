@@ -2,8 +2,9 @@ import type { CountTokensParams } from '../types';
 import type { MessageParam, MessageCountTokensParams } from '@anthropic-ai/sdk/resources/messages';
 import { Anthropic } from '@anthropic-ai/sdk';
 import { neutralToAnthropic } from './convert';
+import config from '../../../../.config';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const anthropic = new Anthropic({ apiKey: config.providers.anthropic.key });
 
 export async function countTokens(params: CountTokensParams): Promise<number> {
   const nativeMessages = neutralToAnthropic(params.messages);
