@@ -5,7 +5,7 @@ import { Command } from 'commander';
 import { name, description, version, scripts } from '../package.json';
 import { getWorkspacePath } from '../agent/utilities';
 import fs from 'node:fs';
-import config from '../.config';
+import config from '../.greg';
 import { validate } from '../config';
 
 if (!scripts.agent) {
@@ -98,6 +98,19 @@ program.command('config').addCommand(
     process.exit(0);
   })
 );
+
+program
+  .command('tools')
+  .description('Use Greg’s tools directly from the command line')
+  .allowUnknownOption()
+  .action(() => {
+    const args = program.args.slice(2);
+    const proc = spawn('bun', ['run', 'agent:tools', ...args], {
+      stdio: 'inherit',
+      cwd: projectRoot,
+    });
+    proc.on('exit', (code) => process.exit(code ?? 0));
+  });
 
 program
   .command('services')

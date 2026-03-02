@@ -4,7 +4,8 @@ import { getInstructions as getToolsInstructions, tools } from '../tools';
 import { formatDate } from '../utilities';
 import { compactContext, deriveContextTokens } from './compaction';
 import { parseCommands } from './commands';
-import config from '../../.config';
+import { getWorkspacePath } from '../utilities';
+import config from '../../.greg';
 import pc from 'picocolors';
 
 export type PromptOptions = {
@@ -27,7 +28,9 @@ You have control over my computer through several tools and skills.
 
 ${getToolsInstructions(conversationStartIso)}
 
-The code you're running on is at: ${process.cwd()}.
+## Environment
+- The code you're running on is at: ${process.cwd()}.
+- Your workspace is at: ${getWorkspacePath()}. This is where you store your memory and notes.
 `;
 
   const agent = new Agent({

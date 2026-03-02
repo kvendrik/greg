@@ -24,10 +24,10 @@ Oh and you don't have to call him Greg. Just say "From now on your name is John"
 git clone git@github.com:kvendrik/greg.git
 ```
 
-2. Set up the config file (`.config.ts` in the cloned folder) with access to the services Greg needs:
+2. Set up the config file (`.greg.ts` in the cloned folder) with access to the services Greg needs:
 
 ```ts
-// .config.ts
+// .greg.ts
 
 import { Config, validate } from './config';
 import { getModel } from '@mariozechner/pi-ai';

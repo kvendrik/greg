@@ -37,8 +37,15 @@ async function withNotionClient(
 function pageTitle(page: PageObjectResponse): string {
   if (!page.properties) return '(untitled)';
   for (const prop of Object.values(page.properties)) {
-    const value = prop as { type?: string; title?: Array<{ plain_text?: string }> };
-    if (value?.type === 'title' && Array.isArray(value.title) && value.title.length > 0) {
+    const value = prop as {
+      type?: string;
+      title?: Array<{ plain_text?: string }>;
+    };
+    if (
+      value?.type === 'title' &&
+      Array.isArray(value.title) &&
+      value.title.length > 0
+    ) {
       return value.title[0].plain_text ?? '(untitled)';
     }
   }
@@ -67,7 +74,9 @@ async function searchPages(
   }
 
   if (data.has_more && data.next_cursor) {
-    console.error('(More results available; pagination not yet implemented in this CLI)');
+    console.error(
+      '(More results available; pagination not yet implemented in this CLI)'
+    );
   }
 }
 
@@ -79,6 +88,45 @@ async function getPage(
   const page = await notion.pages.retrieve({ page_id: normalizedId });
   console.log(JSON.stringify(page, null, 2));
 }
+
+/** All block types returned by the Notion API (see developers.notion.com/reference/block). */
+const NOTION_BLOCK_TYPES = [
+  'paragraph',
+  'heading_1',
+  'heading_2',
+  'heading_3',
+  'bulleted_list_item',
+  'numbered_list_item',
+  'to_do',
+  'quote',
+  'callout',
+  'toggle',
+  'code',
+  'template',
+  'table_row',
+  'table_of_contents',
+  'table',
+  'synced_block',
+  'divider',
+  'child_page',
+  'child_database',
+  'image',
+  'video',
+  'file',
+  'pdf',
+  'bookmark',
+  'embed',
+  'link_preview',
+  'equation',
+  'column_list',
+  'column',
+  'breadcrumb',
+  'transcription',
+  'audio',
+  'unsupported',
+] as const;
+
+type NotionBlockType = (typeof NOTION_BLOCK_TYPES)[number];
 
 type BlockWithRichText = {
   type: string;
@@ -94,13 +142,22 @@ function richTextToPlain(
   return richText.map((t) => t.plain_text ?? '').join('');
 }
 
-function blockToPlain(block: BlockWithRichText): string {
+function getBlockContent(block: BlockWithRichText): string {
   const content = block[block.type];
   if (!content || typeof content !== 'object') return '';
-  const richText = (content as {
-    rich_text?: Array<{ plain_text?: string }>;
-  }).rich_text;
-  return richTextToPlain(richText);
+  const obj = content as Record<string, unknown>;
+  const richText = obj.rich_text as Array<{ plain_text?: string }> | undefined;
+  if (Array.isArray(richText)) return richTextToPlain(richText);
+  if (typeof obj.title === 'string') return obj.title;
+  const titleArr = obj.title as Array<{ plain_text?: string }> | undefined;
+  if (Array.isArray(titleArr)) return richTextToPlain(titleArr);
+  if (typeof obj.expression === 'string') return obj.expression;
+  if (Array.isArray(obj.cells)) {
+    return (obj.cells as Array<Array<{ plain_text?: string }>>)
+      .map((cell) => richTextToPlain(cell))
+      .join(' | ');
+  }
+  return '';
 }
 
 function formatBlockAsMarkdown(
@@ -109,9 +166,10 @@ function formatBlockAsMarkdown(
   indent: string
 ): string | null {
   const trimmed = text.trim();
-  if (!trimmed) return null;
+  if (!trimmed && block.type !== 'divider') return null;
 
-  switch (block.type) {
+  const type = block.type as NotionBlockType;
+  switch (type) {
     case 'heading_1':
       return `${indent}# ${trimmed}`;
     case 'heading_2':
@@ -121,7 +179,6 @@ function formatBlockAsMarkdown(
     case 'bulleted_list_item':
       return `${indent}- ${trimmed}`;
     case 'numbered_list_item':
-      // We do not track the exact index here; Markdown renderers will number automatically.
       return `${indent}1. ${trimmed}`;
     case 'to_do': {
       const checked = (block as { to_do?: { checked?: boolean } }).to_do
@@ -130,16 +187,63 @@ function formatBlockAsMarkdown(
     }
     case 'quote':
       return `${indent}> ${trimmed}`;
+    case 'callout':
+      return `${indent}> ${trimmed}`;
+    case 'toggle':
+      return `${indent}- ${trimmed}`;
+    case 'code': {
+      const lang =
+        (block.code as { language?: string } | undefined)?.language ?? '';
+      return `${indent}\`\`\`${lang}\n${trimmed}\n${indent}\`\`\``;
+    }
+    case 'paragraph':
+    case 'template':
+    case 'transcription':
+      return `${indent}${trimmed}`;
+    case 'table_row':
+      return `${indent}| ${trimmed} |`;
+    case 'divider':
+      return `${indent}---`;
+    case 'child_page':
+    case 'child_database':
+      return `${indent}**${trimmed}**`;
+    case 'equation':
+      return `${indent}$$${trimmed}$$`;
+    case 'table_of_contents':
+    case 'breadcrumb':
+      return null;
+    case 'unsupported':
+      return null;
     default:
       return `${indent}${trimmed}`;
   }
 }
 
-type ImageBlockContent = {
+type MediaBlockContent = {
   file?: { url: string };
   external?: { url: string };
   caption?: Array<{ plain_text?: string }>;
+  url?: string;
+  name?: string;
 };
+
+function getMediaUrlAndCaption(block: BlockWithRichText): {
+  url: string | null;
+  caption: string;
+} {
+  const content = block[block.type] as MediaBlockContent | undefined;
+  if (!content || typeof content !== 'object')
+    return { url: null, caption: '' };
+  const url =
+    content.url ??
+    content.file?.url ??
+    (content as { external?: { url?: string } }).external?.url ??
+    null;
+  const caption = content.caption
+    ? richTextToPlain(content.caption as Array<{ plain_text?: string }>)
+    : (content.name ?? '');
+  return { url, caption: String(caption).trim() };
+}
 
 function mimeFromUrl(url: string): string {
   const match = url.match(/\.(png|jpe?g|gif|webp|svg|bmp|tiff?)(\?|$)/i);
@@ -163,8 +267,7 @@ async function fetchImageAsBase64(
     const buf = await res.arrayBuffer();
     const base64 = Buffer.from(buf).toString('base64');
     const contentType = res.headers.get('content-type');
-    const mime =
-      contentType?.split(';')[0]?.trim() || mimeFromUrl(url);
+    const mime = contentType?.split(';')[0]?.trim() || mimeFromUrl(url);
     return { base64, mime };
   } catch {
     return null;
@@ -223,6 +326,32 @@ function shouldStop(lines: string[], opts: CollectOptions): boolean {
   );
 }
 
+const STRUCTURAL_BLOCK_TYPES: readonly NotionBlockType[] = [
+  'column_list',
+  'column',
+  'table',
+  'synced_block',
+];
+
+function isStructuralBlock(type: string): type is NotionBlockType {
+  return STRUCTURAL_BLOCK_TYPES.includes(type as NotionBlockType);
+}
+
+/** Media blocks that are rendered as markdown links (image is handled separately with base64). */
+const MEDIA_LINK_BLOCK_TYPES: readonly NotionBlockType[] = [
+  'video',
+  'file',
+  'pdf',
+  'bookmark',
+  'embed',
+  'link_preview',
+  'audio',
+];
+
+function isMediaLinkBlock(type: string): type is NotionBlockType {
+  return MEDIA_LINK_BLOCK_TYPES.includes(type as NotionBlockType);
+}
+
 async function collectBlocksMarkdown(
   notion: InstanceType<typeof Client>,
   blockId: string,
@@ -236,8 +365,10 @@ async function collectBlocksMarkdown(
   do {
     const page = await fetchBlockChildrenPage(notion, normalizedId, cursor);
     for (const block of page.blocks) {
-      if (block.type === 'image') {
-        const image = block.image as ImageBlockContent | undefined;
+      const blockType = block.type as NotionBlockType;
+
+      if (blockType === 'image') {
+        const image = block.image as MediaBlockContent | undefined;
         const url = image?.file?.url ?? image?.external?.url;
         const caption = image?.caption
           ? richTextToPlain(image.caption as Array<{ plain_text?: string }>)
@@ -265,7 +396,42 @@ async function collectBlocksMarkdown(
         }
         continue;
       }
-      const text = blockToPlain(block);
+
+      if (isMediaLinkBlock(blockType)) {
+        const { url, caption } = getMediaUrlAndCaption(block);
+        if (url) {
+          const label = caption || url;
+          lines.push(`${indent}[${label}](${url})`);
+        }
+        if (shouldStop(lines, opts)) return true;
+        if (block.has_children) {
+          const stopped = await collectBlocksMarkdown(
+            notion,
+            block.id,
+            indent + '  ',
+            lines,
+            apiKey,
+            opts
+          );
+          if (stopped) return true;
+        }
+        continue;
+      }
+
+      if (isStructuralBlock(blockType)) {
+        const stopped = await collectBlocksMarkdown(
+          notion,
+          block.id,
+          indent,
+          lines,
+          apiKey,
+          opts
+        );
+        if (stopped) return true;
+        continue;
+      }
+
+      const text = getBlockContent(block);
       const line = formatBlockAsMarkdown(block, text, indent);
       if (line) lines.push(line);
       if (shouldStop(lines, opts)) return true;
@@ -279,6 +445,10 @@ async function collectBlocksMarkdown(
           opts
         );
         if (stopped) return true;
+      }
+
+      if (!NOTION_BLOCK_TYPES.includes(blockType)) {
+        console.error(`Unknown Notion block type: ${block.type}`);
       }
     }
     if (!page.hasMore) return false;
@@ -313,14 +483,20 @@ async function getPageContents(
     typeof linesOpt === 'number' && Number.isFinite(linesOpt)
       ? Math.max(0, Math.floor(linesOpt))
       : undefined;
-  const requiredTotal =
-    lineCount != null ? startIndex + lineCount : undefined;
+  const requiredTotal = lineCount != null ? startIndex + lineCount : undefined;
 
   const allLines: string[] = [];
   allLines.push(`# ${pageTitle(page)}`, '');
-  await collectBlocksMarkdown(notion, page.id, '', allLines, getNotionApiKey(), {
-    requiredTotal,
-  });
+  await collectBlocksMarkdown(
+    notion,
+    page.id,
+    '',
+    allLines,
+    getNotionApiKey(),
+    {
+      requiredTotal,
+    }
+  );
 
   let slice = allLines;
   if (lineCount != null) {
@@ -338,14 +514,21 @@ const program = new Command();
 
 program
   .name('notion')
-  .description('CLI to fetch Notion pages using the Notion API (requires NOTION_API_KEY).');
+  .description(
+    'CLI to fetch Notion pages using the Notion API (requires NOTION_API_KEY).'
+  );
 
 program
   .command('search')
   .description('Search pages shared with your integration')
   .option('-q, --query <string>', 'Filter by title')
   .option('--page-only', 'Return only pages (exclude databases)')
-  .option('-n, --page-size <number>', 'Max results (1–100)', (v) => parseInt(v, 10), 100)
+  .option(
+    '-n, --page-size <number>',
+    'Max results (1–100)',
+    (v) => parseInt(v, 10),
+    100
+  )
   .action(async (opts) => {
     await withNotionClient((notion) =>
       searchPages(notion, {

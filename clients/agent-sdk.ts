@@ -1,4 +1,4 @@
-import config from '../.config';
+import config from '../.greg';
 
 const BASE = `http://localhost:${config.port}`;
 

@@ -202,6 +202,27 @@ async function fetchActivities(opts: {
   return res.json() as Promise<SummaryActivity[]>;
 }
 
+async function fetchActivity(id: number): Promise<Record<string, unknown>> {
+  const token = getAccessToken();
+  const res = await fetch(`${STRAVA_API_BASE}/activities/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    let message = `Strava API error: ${res.status} ${res.statusText}`;
+    try {
+      const json = JSON.parse(body) as { message?: string };
+      if (json.message) message = `Strava API error: ${json.message}`;
+    } catch {
+      if (body) message += `\n${body}`;
+    }
+    throw new Error(message);
+  }
+
+  return res.json() as Promise<Record<string, unknown>>;
+}
+
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
@@ -370,6 +391,24 @@ program
       );
       fs.writeFileSync(storagePath, JSON.stringify(tokens, null, 2), 'utf8');
       console.log(`Tokens saved to ${storagePath}`);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('activity <id>')
+  .description('Fetch a single activity by ID with full details (outputs JSON)')
+  .action(async (idStr: string) => {
+    const id = parseInt(idStr, 10);
+    if (!Number.isFinite(id)) {
+      console.error('Activity ID must be a number');
+      process.exit(1);
+    }
+    try {
+      const activity = await fetchActivity(id);
+      console.log(JSON.stringify(activity, null, 2));
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err));
       process.exit(1);

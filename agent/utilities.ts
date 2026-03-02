@@ -1,6 +1,6 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import config from '../.config';
+import config from '../.greg';
 
 /** Format an ISO date string for display (weekday, date, time) in the current timezone. */
 export function formatDate(iso: string): string {
