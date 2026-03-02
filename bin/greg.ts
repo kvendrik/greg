@@ -114,4 +114,16 @@ program
     proc.on('exit', (code) => process.exit(code ?? 0));
   });
 
+program
+  .command('jobs')
+  .description('Manage scheduled jobs')
+  .action(() => {
+    const args = program.args.slice(2);
+    const proc = spawn('bun', ['run', 'scripts/jobs', ...args], {
+      stdio: 'inherit',
+      cwd: projectRoot,
+    });
+    proc.on('exit', (code) => process.exit(code ?? 0));
+  });
+
 program.parse();
