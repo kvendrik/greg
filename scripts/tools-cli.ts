@@ -1,13 +1,13 @@
+import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Command } from 'commander';
 import { get } from '../agent/tools';
-import type { BetaTool } from '@anthropic-ai/sdk/resources/beta';
-import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
 
 function camelCase(s: string): string {
   return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 }
 
-type SchemaProp = { type: string; description?: string };
+type SchemaProp = { type?: string; description?: string };
+type ParamsSchema = { properties?: Record<string, SchemaProp>; required?: string[] };
 
 const program = new Command();
 
@@ -16,8 +16,8 @@ program
   .description('Run agent tools from the CLI (for debugging and scripting).')
   .option('-l, --list', 'List available tools and exit');
 
-async function main() {
-  const tools = (await get(new AbortController().signal)) as BetaTool[];
+function main() {
+  const tools = get();
 
   if (process.argv.includes('--list') || process.argv.includes('-l')) {
     console.log('Available tools:\n');
@@ -29,22 +29,22 @@ async function main() {
   }
 
   for (const tool of tools) {
-    const schema = tool.input_schema;
-    const props = (schema?.properties ?? {}) as Record<string, SchemaProp>;
-    const required = (schema?.required ?? []) as string[];
+    const schema = (tool as AgentTool).parameters as ParamsSchema;
+    const props = schema?.properties ?? {};
+    const required = schema?.required ?? [];
 
     const cmd = program.command(tool.name).description(tool.description ?? '');
 
     for (const [key, prop] of Object.entries(props)) {
       const opt = `--${key.replace(/_/g, '-')}`;
       const desc = prop?.description ?? '';
-      const type = prop?.type ?? 'string';
+      const propType = prop?.type ?? 'string';
       const isRequired = required.includes(key);
-      if (type === 'number') {
+      if (propType === 'number') {
         if (isRequired)
           cmd.requiredOption(`${opt} <number>`, desc, (v: string) => Number(v));
         else cmd.option(`${opt} <number>`, desc, (v: string) => Number(v));
-      } else if (type === 'boolean') {
+      } else if (propType === 'boolean') {
         if (isRequired) cmd.requiredOption(opt, desc);
         else cmd.option(opt, desc);
       } else {
@@ -59,12 +59,13 @@ async function main() {
         const value = opts[camelCase(key)];
         if (value !== undefined) args[key] = value;
       }
+      const signal = new AbortController().signal;
       try {
-        const parsed = (tool as BetaRunnableTool).parse
-          ? (tool as BetaRunnableTool).parse(args)
-          : args;
-        const result = await (tool as BetaRunnableTool).run(parsed);
-        console.log(result);
+        const result = await tool.execute('cli', args, signal, () => {});
+        const text =
+          result.content?.find((c): c is { type: 'text'; text: string } => c.type === 'text')
+            ?.text ?? JSON.stringify(result);
+        console.log(text);
         process.exit(0);
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
@@ -76,7 +77,9 @@ async function main() {
   program.parse();
 }
 
-main().catch((err) => {
+try {
+  main();
+} catch (err) {
   console.error(err);
   process.exit(1);
-});
+}

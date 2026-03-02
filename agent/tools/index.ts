@@ -1,26 +1,24 @@
-import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
+import type { AgentTool } from '@mariozechner/pi-agent-core';
 import {
-  create as createBrowserTool,
   instructions as browserInstructions,
+  tools as browserTools,
 } from './browser';
 import {
-  tools as memoryTools,
   getInstructions as getMemoryInstructions,
+  tools as memoryTools,
 } from './memory';
 import {
-  tools as skillTools,
   getInstructions as getSkillsInstructions,
+  tools as skillTools,
 } from './skills';
-import { createExecTool } from './terminal';
+import { tools as terminalTools } from './terminal';
 
-export async function get(signal: AbortSignal): Promise<BetaRunnableTool[]> {
-  return [
-    createExecTool(signal),
-    createBrowserTool(signal),
-    ...memoryTools,
-    ...skillTools,
-  ];
-}
+export const tools: AgentTool[] = [
+  ...terminalTools,
+  ...browserTools,
+  ...memoryTools,
+  ...skillTools,
+];
 
 export function getInstructions(conversationStartIso: string): string {
   return `

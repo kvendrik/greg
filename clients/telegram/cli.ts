@@ -125,7 +125,9 @@ async function handoffToAgent(message: string, ctx: BotContext) {
   console.log(`\n\nPrompting: "${message}"`);
 
   if (llmState.working) {
+    process.stdout.write(`\n\nSending response to ${ctx.from?.username}...`);
     await ctx.reply('Working on that request...');
+    process.stdout.write(`done. ${pc.green('✓')}\n`);
     return;
   }
 
@@ -139,11 +141,13 @@ async function handoffToAgent(message: string, ctx: BotContext) {
       llmState.response += chunk;
     },
     onToolcall: async () => {
-      process.stdout.write(
-        `\n\nSending partial response to ${ctx.from?.username}...`
-      );
-      await ctx.reply(llmState.response);
-      llmState.response = '';
+      if (llmState.response.trim() !== '') {
+        process.stdout.write(
+          `\n\nSending partial response to ${ctx.from?.username}...`
+        );
+        await ctx.reply(llmState.response);
+        llmState.response = '';
+      }
     },
     onDone: async () => {
       process.stdout.write(`\n\nSending response to ${ctx.from?.username}...`);

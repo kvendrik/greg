@@ -1,6 +1,9 @@
-import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
+import type { AgentTool } from '@mariozechner/pi-agent-core';
+import { Type } from '@sinclair/typebox';
 import { spawn, type ChildProcess } from 'child_process';
 import * as readline from 'readline';
+
+import config from '../../.config';
 
 let proc: ChildProcess | null = null;
 let rl: readline.Interface | null = null;
@@ -15,8 +18,9 @@ function normalizeSpacing(text: string): string {
 
 function getProc(): { proc: ChildProcess; rl: readline.Interface } {
   if (!proc || proc.exitCode !== null) {
-    proc = spawn('uv', ['run', '--env-file=.env', 'scripts/browser-use.py'], {
+    proc = spawn('uv', ['run', 'scripts/browser-use.py'], {
       stdio: ['pipe', 'pipe', 'inherit'],
+      env: { ...process.env, BROWSER_USE_API_KEY: config.tools.browser.key },
     });
 
     rl = readline.createInterface({ input: proc.stdout! });
@@ -31,7 +35,10 @@ function getProc(): { proc: ChildProcess; rl: readline.Interface } {
   return { proc, rl: rl! };
 }
 
-function runBrowserTask(task: string, signal: AbortSignal): Promise<string> {
+export function runBrowserTask(
+  task: string,
+  signal: AbortSignal
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const { proc, rl } = getProc();
 
@@ -82,25 +89,22 @@ function runBrowserTask(task: string, signal: AbortSignal): Promise<string> {
   });
 }
 
-export function create(signal: AbortSignal): BetaRunnableTool {
-  return {
+export const tools: AgentTool[] = [
+  {
     name: 'run_browser_task',
+    label: 'run browser task',
     description:
       'Runs one task in a persistent browser session. Send one clear action per call (e.g. "Open klm.nl" or "Search for flights"); do not send multi-step instructions in a single task. The browser stays alive between calls so you can chain steps.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        task: {
-          type: 'string',
-          description: 'The task to perform in the browser.',
-        },
-      },
-      required: ['task'],
+    parameters: Type.Object({
+      task: Type.String({ description: 'The task to perform in the browser.' }),
+    }),
+    execute: async (_id, params, signal, _onUpdate) => {
+      const { task } = params as { task: string };
+      const text = await runBrowserTask(task, signal);
+      return { content: [{ type: 'text' as const, text }], details: {} };
     },
-    parse: (c) => c as { task: string },
-    run: async ({ task }) => runBrowserTask(task, signal),
-  };
-}
+  },
+];
 
 export function cleanup() {
   proc?.kill();

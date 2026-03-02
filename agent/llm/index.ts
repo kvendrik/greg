@@ -1,1 +1,1 @@
-export { thread, type PromptOptions } from './llm';
+export { thread, type PromptOptions } from './thread';

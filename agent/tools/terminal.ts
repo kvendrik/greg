@@ -1,24 +1,14 @@
-import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
+import type { AgentTool } from '@mariozechner/pi-agent-core';
+import { Type } from '@sinclair/typebox';
 import { spawn } from 'child_process';
 import pc from 'picocolors';
 
-export function createExecTool(signal: AbortSignal): BetaRunnableTool {
-  return {
-    name: 'exec',
-    description: 'Run a command in the terminal.',
-    input_schema: {
-      type: 'object' as const,
-      required: ['command'],
-      properties: {
-        command: {
-          type: 'string',
-          description: 'The command to run',
-        },
-      },
-    },
-    parse: (content: unknown) => content as { command: string },
-    run: async ({ command }: { command: string }) => {
-      return new Promise<string>((resolve, reject) => {
+export async function runExec(
+  params: { command: string },
+  signal?: AbortSignal
+): Promise<string> {
+  const { command } = params;
+  return new Promise<string>((resolve, reject) => {
         const output: string[] = [];
         const errorOutput: string[] = [];
 
@@ -52,7 +42,7 @@ export function createExecTool(signal: AbortSignal): BetaRunnableTool {
         const cleanup = () => {
           if (settled) return;
           settled = true;
-          signal.removeEventListener('abort', abort);
+          signal?.removeEventListener('abort', abort);
         };
 
         if (signal) {
@@ -95,7 +85,21 @@ export function createExecTool(signal: AbortSignal): BetaRunnableTool {
           console.error(pc.red(errorMsg));
           finish(errorMsg);
         });
-      });
-    },
-  };
+  });
 }
+
+export const tools: AgentTool[] = [
+  {
+    name: 'exec',
+    label: 'exec',
+    description: 'Run a command in the terminal.',
+    parameters: Type.Object({
+      command: Type.String({ description: 'The command to run' }),
+    }),
+    execute: async (_id, params, signal, _onUpdate) => {
+      const { command } = params as { command: string };
+      const text = await runExec({ command }, signal);
+      return { content: [{ type: 'text' as const, text }], details: {} };
+    },
+  },
+];

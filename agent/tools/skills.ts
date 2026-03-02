@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import matter from 'gray-matter';
-import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
+import type { AgentTool } from '@mariozechner/pi-agent-core';
+import { Type } from '@sinclair/typebox';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -183,44 +184,40 @@ description: "${safeDescription}"
   return { name: skillName, path: skillMdPath };
 }
 
-const saveSkillRunnable: BetaRunnableTool = {
+const saveSkillTool: AgentTool = {
   name: 'save_skill',
+  label: 'save skill',
   description:
     'Create or update a skill. Call whenever you learn or establish something reusable: a workflow, rule, convention, or capability. Prefer saving when in doubt. Use at the end of your response after teaching or applying something new (e.g. new CLI workflow, project convention, how the user wants something done).',
-  input_schema: {
-    type: 'object',
-    required: ['name', 'description', 'content'],
-    properties: {
-      name: {
-        type: 'string',
-        description:
-          'Skill name: 1-64 chars, lowercase letters numbers hyphens only; no leading/trailing/consecutive hyphens (underscores are converted to hyphens). Skills should have names that are specific to their use-case. E.g. a skill to read Gmail emails shouldn’t be called read-emails but read-gmail.',
-      },
-      description: {
-        type: 'string',
-        description:
-          'Short description for the skill frontmatter (required, 1-1024 characters)',
-      },
-      content: {
-        type: 'string',
-        description:
-          'Markdown body of the skill (instructions and content after the frontmatter)',
-      },
-    },
-  },
-  parse: (c) => c as { name: string; description: string; content: string },
-  run: async (args) => {
+  parameters: Type.Object({
+    name: Type.String({
+      description:
+        'Skill name: 1-64 chars, lowercase letters numbers hyphens only; no leading/trailing/consecutive hyphens (underscores are converted to hyphens). Skills should have names that are specific to their use-case. E.g. a skill to read Gmail emails shouldn’t be called read-emails but read-gmail.',
+    }),
+    description: Type.String({
+      description:
+        'Short description for the skill frontmatter (required, 1-1024 characters)',
+    }),
+    content: Type.String({
+      description:
+        'Markdown body of the skill (instructions and content after the frontmatter)',
+    }),
+  }),
+  execute: async (_id, params) => {
+    const { name, description, content } = params as {
+      name: string;
+      description: string;
+      content: string;
+    };
     try {
-      const { name, path } = saveSkill(
-        args.name,
-        args.description,
-        args.content ?? ''
-      );
-      return `Skill "${name}" saved to ${path}.`;
+      const result = saveSkill(name, description, content ?? '');
+      const text = `Skill "${result.name}" saved to ${result.path}.`;
+      return { content: [{ type: 'text' as const, text }], details: {} };
     } catch (err) {
-      return err instanceof Error ? err.message : String(err);
+      const text = err instanceof Error ? err.message : String(err);
+      return { content: [{ type: 'text' as const, text }], details: {} };
     }
   },
 };
 
-export const tools: BetaRunnableTool[] = [saveSkillRunnable];
+export const tools: AgentTool[] = [saveSkillTool];

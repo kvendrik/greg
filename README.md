@@ -29,40 +29,33 @@ Oh and you don't have to call him Greg. Just say "From now on your name is John"
 ```ts
 // .config.ts
 
-import { Config } from './config-types';
+import { Config, validate } from './config';
+import { getModel } from '@mariozechner/pi-ai';
 
 const config: Config = {
-  /**
-   * Holds all of your memory files in plain Markdown.
-   * If you change these manually make sure to run `greg index`,
-   */
+  workspace: '~/.greg',
   port: '3000',
-  providers: {
-    // https://console.anthropic.com/settings/keys
-    anthropic: {
-      key: 'XXX',
+  models: [
+    {
+      role: 'primary',
+      model: getModel('anthropic', 'claude-sonnet-4-6'),
+      key: 'XXX', // https://console.anthropic.com/settings/keys
     },
-    // https://platform.openai.com/api-keys
-    openai: {
-      key: 'XXX',
+    {
+      role: 'fallback',
+      command: 'openai',
+      model: getModel('openai', 'gpt-5.2'),
+      key: 'XXX', // https://platform.openai.com/api-keys
     },
-    // https://aistudio.google.com/apikey
-    gemini: {
-      key: 'XXX',
-    },
-    roles: {
-      primary: 'anthropic',
-      fallback: 'openai',
-    },
-  },
+  ],
   tools: {
-    // https://cloud.browser-use.com/settings?tab=api-keys&new=1
     browser: {
-      key: 'XXX',
+      key: 'XXX', // https://cloud.browser-use.com/settings?tab=api-keys&new=1
     },
   },
 };
 
+validate(config);
 export default config;
 ```
 
@@ -74,10 +67,9 @@ bun link
 greg start
 ```
 
-4. Then pick how you want to interact with Greg!
+4. Then pick how you want to interact with Greg! Easiest way is to use the CLI:
 
 ```
-# Then pick how to interact with Greg. Easiest to get started is the CLI:
 greg cli
 ```
 
