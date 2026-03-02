@@ -7,6 +7,8 @@ import { getWorkspacePath } from '../agent/utilities';
 import fs from 'node:fs';
 import config from '../.greg';
 import { validate } from '../config';
+import * as prompts from '@clack/prompts';
+import pc from 'picocolors';
 
 if (!scripts.agent) {
   throw new Error('Something is wrong. Agent script not found in package.json');
@@ -122,7 +124,9 @@ program
       .action(() => {
         const notionKey = config.tools.notion?.key;
         if (!notionKey) {
-          console.error('Notion key is not set in the config file');
+          console.error(
+            'Notion key is not set in the config file. Run `greg tools notion setup` to set it up.'
+          );
           process.exit(1);
         }
         const args = program.args.slice(2);
@@ -139,6 +143,57 @@ program
           }
         );
       })
+      .addCommand(
+        new Command('setup')
+          .description('Setup the Notion CLI tool')
+          .action(async () => {
+            console.info(
+              pc.blue(
+                `Go to https://www.notion.so/profile/integrations/internal and create a new integration.`
+              )
+            );
+
+            const result = await prompts.text({
+              message: 'Integration secret',
+              placeholder: 'Enter your Notion integration secret',
+            });
+
+            if (prompts.isCancel(result)) {
+              process.exit(0);
+            }
+
+            config.tools.notion = { key: result.toString() };
+
+            fs.writeFileSync(
+              path.join(projectRoot, '.greg.ts'),
+              JSON.stringify(config, null, 2)
+            );
+
+            console.log(pc.green('Notion API key saved to .greg.ts'));
+
+            if (!fs.existsSync(path.join(getWorkspacePath(), 'skills'))) {
+              fs.mkdirSync(path.join(getWorkspacePath(), 'skills'), {
+                recursive: true,
+              });
+            }
+
+            fs.copyFileSync(
+              path.join(projectRoot, 'scripts', 'tools', 'notion', 'SKILL.md'),
+              path.join(getWorkspacePath(), 'skills', 'SKILL.md')
+            );
+            console.log(pc.green('Copied Notion skill to workspace'));
+
+            console.info(pc.green('Done setting up Notion for Greg.'));
+
+            console.info(
+              pc.gray(
+                `Make sure to share the pages you want to use with your integration. Run \`greg tools notion search\` to see which pages are available. More information here: https://developers.notion.com/guides/get-started/create-a-notion-integration.`
+              )
+            );
+
+            process.exit(0);
+          })
+      )
   )
   .addCommand(
     new Command('strava')

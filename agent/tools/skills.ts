@@ -4,10 +4,12 @@ import { fileURLToPath } from 'node:url';
 import matter from 'gray-matter';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
+import { getWorkspacePath } from '../utilities';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const SKILLS_DIR = path.join(__dirname, '..', '..', 'skills');
+const WORKSPACE_SKILLS_DIR = path.join(getWorkspacePath(), 'skills');
 const SKILL_FILENAME = 'SKILL.md';
 
 const MAX_NAME_LENGTH = 64;
@@ -50,11 +52,27 @@ export function getSkillsDir(): string {
 
 export function discoverSkills(): SkillMeta[] {
   const dir = getSkillsDir();
-  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
-    return [];
+  const workspaceSkillsDir = path.resolve(WORKSPACE_SKILLS_DIR);
+
+  let globalSkills: fs.Dirent[] = [];
+  let workspaceSkills: fs.Dirent[] = [];
+
+  if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+    globalSkills = fs.readdirSync(dir, { withFileTypes: true });
   }
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+  if (
+    fs.existsSync(workspaceSkillsDir) &&
+    fs.statSync(workspaceSkillsDir).isDirectory()
+  ) {
+    workspaceSkills = fs.readdirSync(workspaceSkillsDir, {
+      withFileTypes: true,
+    });
+  }
+
+  const entries = [...globalSkills, ...workspaceSkills];
   const result: SkillMeta[] = [];
+
   for (const ent of entries) {
     if (!ent.isDirectory()) continue;
     const skillPath = path.join(dir, ent.name);
@@ -81,6 +99,7 @@ export function discoverSkills(): SkillMeta[] {
       });
     }
   }
+
   return result;
 }
 
@@ -124,7 +143,11 @@ ${browserSection}
 `;
 }
 
-const BROWSER_USAGE_SKILL_PATH = path.join(SKILLS_DIR, 'browser-usage', SKILL_FILENAME);
+const BROWSER_USAGE_SKILL_PATH = path.join(
+  SKILLS_DIR,
+  'browser-usage',
+  SKILL_FILENAME
+);
 
 function getBrowserUsageSkillBody(): string {
   if (!fs.existsSync(BROWSER_USAGE_SKILL_PATH)) return '';
@@ -169,7 +192,9 @@ export function saveSkill(
     .replace(/"/g, '\\"');
 
   const skillsDir = getSkillsDir();
+  const workspaceSkillsDir = path.resolve(WORKSPACE_SKILLS_DIR);
   fs.mkdirSync(skillsDir, { recursive: true });
+  fs.mkdirSync(workspaceSkillsDir, { recursive: true });
   const skillDir = path.join(skillsDir, skillName);
   fs.mkdirSync(skillDir, { recursive: true });
   const skillMdPath = path.join(skillDir, SKILL_FILENAME);
