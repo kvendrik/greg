@@ -1,11 +1,11 @@
 ---
-name: greg-repo-push
-description: Pushes changes to the Greg repository. Use when the user asks to push changes, commit and push, or get changes up to the repo for Greg itself.
+name: repository-push
+description: Pushes changes to the current git repository. Use when the user asks to push changes, commit and push, or get changes up to the repo (in any project that is a git repo).
 ---
 
-# Pushing changes to the Greg repo
+# Pushing changes to the current git repo
 
-When the user wants to push changes to the Greg (pa-agent) repository:
+When the user wants to push changes and you are inside a git repository (any project, not just this one):
 
 1. **Check status**  
    Run `git status` in the project root to see what’s changed and which branch you’re on.

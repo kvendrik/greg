@@ -21,7 +21,7 @@ Oh and you don't have to call him Greg. Just say "From now on your name is John"
 1. Clone this repository and `cd` into it
 
 ```
-
+git clone git@github.com:kvendrik/greg.git
 ```
 
 2. Set up the config file (`.config.ts` in the cloned folder) with access to the services Greg needs:
@@ -33,6 +33,7 @@ import { Config, validate } from './config';
 import { getModel } from '@mariozechner/pi-ai';
 
 const config: Config = {
+  id: 'greg',
   workspace: '~/.greg',
   port: '3000',
   models: [
@@ -55,7 +56,6 @@ const config: Config = {
   },
 };
 
-validate(config);
 export default config;
 ```
 
@@ -64,6 +64,7 @@ export default config;
 ```
 bun install
 bun link
+greg setup
 greg start
 ```
 

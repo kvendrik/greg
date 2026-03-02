@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
+import config from '../../../.config';
 
-const COLLECTION_NAME = 'pa-agent-chats';
+const COLLECTION_NAME = config.id + '-chats';
 
 type RunResult = { stdout: string; stderr: string; code: number };
 
@@ -41,6 +42,22 @@ function runQmd(
       });
     });
   });
+}
+
+/**
+ * Ensures QMD CLI is available and the collection is set up. Call with the path
+ * to the chats directory (e.g. workspace chats path). Throws if QMD is not
+ * installed or fails to run.
+ */
+export async function ensureQmdInstalledAndSetUp(chatsPath: string): Promise<void> {
+  const listResult = await runQmd(['collection', 'list']);
+  if (listResult.code !== 0) {
+    const out = listResult.stderr || listResult.stdout;
+    throw new Error(
+      `QMD is not installed or failed to run. Ensure @tobilu/qmd is installed (bun install) and the qmd CLI runs. ${out ? `Output: ${out}` : ''}`
+    );
+  }
+  await ensureCollection(chatsPath);
 }
 
 /**

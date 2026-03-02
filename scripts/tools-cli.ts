@@ -1,13 +1,16 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Command } from 'commander';
-import { get } from '../agent/tools';
+import { tools } from '../agent/tools';
 
 function camelCase(s: string): string {
   return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 }
 
 type SchemaProp = { type?: string; description?: string };
-type ParamsSchema = { properties?: Record<string, SchemaProp>; required?: string[] };
+type ParamsSchema = {
+  properties?: Record<string, SchemaProp>;
+  required?: string[];
+};
 
 const program = new Command();
 
@@ -17,8 +20,6 @@ program
   .option('-l, --list', 'List available tools and exit');
 
 function main() {
-  const tools = get();
-
   if (process.argv.includes('--list') || process.argv.includes('-l')) {
     console.log('Available tools:\n');
     for (const t of tools) {
@@ -63,8 +64,9 @@ function main() {
       try {
         const result = await tool.execute('cli', args, signal, () => {});
         const text =
-          result.content?.find((c): c is { type: 'text'; text: string } => c.type === 'text')
-            ?.text ?? JSON.stringify(result);
+          result.content?.find(
+            (c): c is { type: 'text'; text: string } => c.type === 'text'
+          )?.text ?? JSON.stringify(result);
         console.log(text);
         process.exit(0);
       } catch (err) {

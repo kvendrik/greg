@@ -7,6 +7,7 @@
     "greg": "bin/greg.ts"
   },
   "scripts": {
+    "setup": "bun run scripts/setup.ts",
     "agent": "bun run agent/server.ts",
     "agent:tools": "bun run scripts/tools-cli.ts",
     "agent:memory:index": "bun run qmd update --collection agent-chats && bun run qmd embed --collection agent-chats",
@@ -21,6 +22,7 @@
     "@grammyjs/files": "^1.2.0",
     "@mariozechner/pi-agent-core": "^0.55.3",
     "@mariozechner/pi-ai": "^0.55.3",
+    "@notionhq/client": "^5.11.0",
     "@tobilu/qmd": "^1.0.7",
     "@xenova/transformers": "^2.17.2",
     "better-sqlite3": "^12.6.2",
