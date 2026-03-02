@@ -60,19 +60,6 @@ export interface Config {
        */
       key: string;
     };
-    notion?: {
-      /**
-       * https://developers.notion.com/docs/getting-started
-       */
-      key: string;
-    };
-    strava?: {
-      /**
-       * https://developers.strava.com/docs/getting-started
-       */
-      clientId: string;
-      clientSecret: string;
-    };
   };
   clients?: {
     /**
