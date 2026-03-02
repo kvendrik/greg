@@ -2,6 +2,10 @@ import type { Model, Api } from '@mariozechner/pi-ai';
 
 export interface Config {
   /**
+   * ID to use as the QMD collection name
+   */
+  id: string;
+  /**
    * Path to your workspace folder (Markdown memory files live here).
    * Will be created if it doesn't exist.
    */
@@ -55,6 +59,19 @@ export interface Config {
        * https://cloud.browser-use.com/settings?tab=api-keys&new=1
        */
       key: string;
+    };
+    notion?: {
+      /**
+       * https://developers.notion.com/docs/getting-started
+       */
+      key: string;
+    };
+    strava?: {
+      /**
+       * https://developers.strava.com/docs/getting-started
+       */
+      clientId: string;
+      clientSecret: string;
     };
   };
   clients?: {

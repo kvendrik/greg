@@ -1,7 +1,8 @@
 import { getModel } from '@mariozechner/pi-ai';
-import { Config, validate } from './config';
+import { Config } from './config';
 
 const config: Config = {
+  id: 'pa-agent',
   workspace: '~/.pa-agent',
   port: '3000',
   models: [
@@ -27,6 +28,13 @@ const config: Config = {
     browser: {
       key: 'bu_py0s4TYA7qmR_vle2VQ2cG0Jnk4k-JZFeMe1XaE7FqM',
     },
+    notion: {
+      key: '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',
+    },
+    strava: {
+      clientId: '150190',
+      clientSecret: '1374658bf3da5c4af3474cde02af1327ab3f1bba',
+    },
   },
   clients: {
     default: 'cli',
@@ -37,5 +45,4 @@ const config: Config = {
   },
 };
 
-validate(config);
 export default config;
