@@ -1,23 +1,28 @@
-import { Config } from './config-types';
+import { getModel } from '@mariozechner/pi-ai';
+import { Config, validate } from './config';
 
 const config: Config = {
   workspace: '~/.pa-agent',
   port: '3000',
-  providers: {
-    anthropic: {
+  models: [
+    {
+      role: 'primary',
+      model: getModel('anthropic', 'claude-sonnet-4-6'),
       key: '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',
     },
-    openai: {
+    {
+      role: 'fallback',
+      command: 'openai',
+      model: getModel('openai', 'gpt-5.2'),
       key: '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',
     },
-    gemini: {
+    {
+      role: null,
+      command: 'gemini',
+      model: getModel('google', 'gemini-3-flash-preview'),
       key: 'AIzaSyDSl1-wH6mKc42Q14ote7m6g_rcTykJiEo',
     },
-    roles: {
-      primary: 'anthropic',
-      fallback: 'openai',
-    },
-  },
+  ],
   tools: {
     browser: {
       key: 'bu_py0s4TYA7qmR_vle2VQ2cG0Jnk4k-JZFeMe1XaE7FqM',
@@ -32,4 +37,5 @@ const config: Config = {
   },
 };
 
+validate(config);
 export default config;

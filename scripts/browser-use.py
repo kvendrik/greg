@@ -1,7 +1,7 @@
 import sys
 import json
 import asyncio
-from browser_use import Agent, Browser
+from browser_use import Agent, Browser, ChatBrowserUse
 
 EXTEND_SYSTEM_MESSAGE = (
     "If the page or task requires login, account access, or other credentials you do not have, "
@@ -57,6 +57,7 @@ async def main():
                 agent = Agent(
                     task=t,
                     browser_session=browser,
+                    llm=ChatBrowserUse(),
                     extend_system_message=EXTEND_SYSTEM_MESSAGE,
                 )
             else:

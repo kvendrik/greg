@@ -1,14 +1,19 @@
-import { execSync } from 'child_process';
 import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
+import type { AgentTool } from '@mariozechner/pi-agent-core';
+import { Type } from '@sinclair/typebox';
 import { formatDate, getWorkspacePath } from '../../utilities';
+import {
+  ensureCollection,
+  get as qmdGet,
+  multiGet,
+  runUpdateAndEmbed,
+  vsearch,
+} from './qmd';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_IDENTITY_PATH = join(__dirname, 'defaults', 'IDENTITY.md');
-
-const COLLECTION_NAME = 'agent-chats';
 
 function getChatsPath(): string {
   return join(getWorkspacePath(), 'chats');
@@ -34,49 +39,38 @@ if (!fs.existsSync(getIdentityPath())) {
   fs.copyFileSync(DEFAULT_IDENTITY_PATH, getIdentityPath());
 }
 
-function ensureWorkspaceExists() {
+async function ensureWorkspaceExists(): Promise<void> {
   const chatsPath = getChatsPath();
 
   if (!fs.existsSync(chatsPath)) {
     fs.mkdirSync(chatsPath, { recursive: true });
   }
 
-  try {
-    execSync(
-      `bun run qmd collection list | grep -q ${COLLECTION_NAME} || (bun run qmd collection add ${chatsPath} --name ${COLLECTION_NAME} && bun run qmd context add qmd://${COLLECTION_NAME} "PA Agent Long Term Memory")`,
-      { shell: '/bin/bash', stdio: 'pipe' }
-    );
-  } catch (e) {
-    console.error('stdout:', e.stdout?.toString());
-    console.error('stderr:', e.stderr?.toString());
-  }
+  await ensureCollection(chatsPath);
 }
 
-const getRecentConversationNotesRunnable: BetaRunnableTool = {
+const getRecentConversationNotesTool: AgentTool = {
   name: 'get_recent_conversation_notes',
+  label: 'get recent conversation notes',
   description: 'Get the most recent conversation notes.',
-  input_schema: {
-    type: 'object',
-    required: [],
-    properties: {
-      max_notes: {
-        type: 'number',
+  parameters: Type.Object({
+    max_notes: Type.Optional(
+      Type.Number({
         description:
           'Max number of recent days to fetch notes for (each day file can contain multiple notes)',
-        default: 3,
-      },
-    },
-  },
-  parse: (c) => c as { max_notes?: number },
-  run: async ({ max_notes = 3 }) => {
-    ensureWorkspaceExists();
+      })
+    ),
+  }),
+  execute: async (_id, params) => {
+    const max_notes = (params as { max_notes?: number }).max_notes ?? 3;
+    await ensureWorkspaceExists();
     const limit = Math.max(1, Math.min(50, max_notes));
 
     const files = fs.readdirSync(getChatsPath());
     const mdFiles = files.filter((f) => f.endsWith('.md'));
 
     if (mdFiles.length === 0) {
-      return 'No recent conversation notes.';
+      return { content: [{ type: 'text' as const, text: 'No recent conversation notes.' }], details: {} };
     }
 
     const withMtime = mdFiles.map((f) => ({
@@ -87,118 +81,115 @@ const getRecentConversationNotesRunnable: BetaRunnableTool = {
     withMtime.sort((a, b) => b.mtime - a.mtime);
 
     const dayFiles = withMtime.slice(0, limit).map((e) => e.name);
-    const paths = dayFiles.join(', ');
-
-    const result = execSync(
-      `bun run qmd multi-get "${paths}" --collection ${COLLECTION_NAME} --json`
-    );
-
-    return result.toString();
-  },
-};
-
-const searchConversationNotesRunnable: BetaRunnableTool = {
-  name: 'search_past_conversations',
-  description: 'Search through past conversations.',
-  input_schema: {
-    type: 'object',
-    required: ['search_query'],
-    properties: {
-      search_query: {
-        type: 'string',
-        description: 'The query to search for',
-      },
-    },
-  },
-  parse: (c) => c as { search_query: string },
-  run: async ({ search_query }) => {
-    ensureWorkspaceExists();
-    return execSync(
-      `bun run qmd vsearch "${search_query}" --collection ${COLLECTION_NAME} --json`
-    ).toString();
-  },
-};
-
-const getConversationNoteRunnable: BetaRunnableTool = {
-  name: 'get_past_conversation',
-  description: 'Get a single conversation by docid',
-  input_schema: {
-    type: 'object',
-    required: ['docid'],
-    properties: {
-      docid: {
-        type: 'string',
-        description:
-          'The docid of the memory entry to get (Starts with a hash symbol. Example: #79462a)',
-      },
-      start_line: {
-        type: 'number',
-        description: 'Line number to start from (0 is the first line)',
-      },
-      max_lines: {
-        type: 'number',
-        description: 'Max number of lines to return',
-      },
-    },
-  },
-  parse: (c) => c as { docid: string; start_line?: string; max_lines?: string },
-  run: async ({ docid, start_line, max_lines }) => {
-    ensureWorkspaceExists();
+    let text: string;
     try {
-      const result = execSync(
-        `bun run qmd get \\${docid}${start_line ? `:${start_line}` : ''}${max_lines ? ` -l ${max_lines}` : ''} --collection ${COLLECTION_NAME} --json`
-      );
-      return result.toString();
+      text = await multiGet(dayFiles);
+    } catch (err) {
+      text =
+        'Error fetching conversation notes: ' +
+        (err instanceof Error ? err.message : String(err));
+    }
+    return { content: [{ type: 'text' as const, text }], details: {} };
+  },
+};
+
+const searchConversationNotesTool: AgentTool = {
+  name: 'search_past_conversations',
+  label: 'search past conversations',
+  description: 'Search through past conversations.',
+  parameters: Type.Object({
+    search_query: Type.String({ description: 'The query to search for' }),
+  }),
+  execute: async (_id, params) => {
+    const { search_query } = params as { search_query: string };
+    await ensureWorkspaceExists();
+    let text: string;
+    try {
+      text = await vsearch(search_query);
+    } catch (err) {
+      text =
+        'Error searching conversations: ' +
+        (err instanceof Error ? err.message : String(err));
+    }
+    return { content: [{ type: 'text' as const, text }], details: {} };
+  },
+};
+
+const getConversationNoteTool: AgentTool = {
+  name: 'get_past_conversation',
+  label: 'get past conversation',
+  description: 'Get a single conversation by docid',
+  parameters: Type.Object({
+    docid: Type.String({
+      description:
+        'The docid of the memory entry to get (Starts with a hash symbol. Example: #79462a)',
+    }),
+    start_line: Type.Optional(
+      Type.Number({ description: 'Line number to start from (0 is the first line)' })
+    ),
+    max_lines: Type.Optional(Type.Number({ description: 'Max number of lines to return' })),
+  }),
+  execute: async (_id, params) => {
+    const { docid, start_line, max_lines } = params as {
+      docid: string;
+      start_line?: number;
+      max_lines?: number;
+    };
+    await ensureWorkspaceExists();
+    try {
+      const text = await qmdGet(docid, {
+        startLine: start_line,
+        maxLines: max_lines,
+      });
+      return { content: [{ type: 'text' as const, text }], details: {} };
     } catch (err: unknown) {
-      return (
+      const text =
         'Error getting conversation note: ' +
-        (err instanceof Error ? err.message : String(err))
-      );
+        (err instanceof Error ? err.message : String(err));
+      return { content: [{ type: 'text' as const, text }], details: {} };
     }
   },
 };
 
-const updateUserMemoryRunnable: BetaRunnableTool = {
+const updateUserMemoryTool: AgentTool = {
   name: 'save_user_memory',
-  description: `Update ${getUserPath()} with persistent facts about the user. Call whenever the user shares something about themselves (name, preferences, context). Pass the complete updated content (merge with existing so information stays accurate).`,
-  input_schema: {
-    type: 'object',
-    required: ['content'],
-    properties: {
-      content: {
-        type: 'string',
-        description:
-          'The full content for USER.md (include all existing facts plus updates)',
-      },
-    },
-  },
-  parse: (c) => c as { content: string },
-  run: async ({ content }) => {
-    ensureWorkspaceExists();
+  label: 'save user memory',
+  description: `Update USER.md with persistent facts about the user. Call whenever the user shares something about themselves (name, preferences, context). Pass the complete updated content (merge with existing so information stays accurate).`,
+  parameters: Type.Object({
+    content: Type.String({
+      description:
+        'The full content for USER.md (include all existing facts plus updates)',
+    }),
+  }),
+  execute: async (_id, params) => {
+    const { content } = params as { content: string };
+    await ensureWorkspaceExists();
     fs.writeFileSync(getUserPath(), content, 'utf8');
-    return `${getUserPath()} updated.`;
+    return {
+      content: [{ type: 'text' as const, text: `${getUserPath()} updated.` }],
+      details: {},
+    };
   },
 };
 
-const updateIdentityRunnable: BetaRunnableTool = {
+const updateIdentityTool: AgentTool = {
   name: 'save_identity',
-  description: `Update ${getIdentityPath()} with who you (Greg) are. Call when the user defines or changes your identity, persona, or how you should behave. Pass the complete updated content (merge with existing).`,
-  input_schema: {
-    type: 'object',
-    required: ['content'],
-    properties: {
-      content: {
-        type: 'string',
-        description:
-          'The full content for IDENTITY.md (include all existing identity info plus updates)',
-      },
-    },
-  },
-  parse: (c) => c as { content: string },
-  run: async ({ content }) => {
-    ensureWorkspaceExists();
+  label: 'save identity',
+  description: `Update IDENTITY.md with who you (Greg) are. Call when the user defines or changes your identity, persona, or how you should behave. Pass the complete updated content (merge with existing).`,
+  parameters: Type.Object({
+    content: Type.String({
+      description:
+        'The full content for IDENTITY.md (include all existing identity info plus updates)',
+    }),
+  }),
+  execute: async (_id, params) => {
+    const { content } = params as { content: string };
+    await ensureWorkspaceExists();
     fs.writeFileSync(getIdentityPath(), content, 'utf8');
-    return `${getIdentityPath()} updated.`;
+    return {
+      content: [{ type: 'text' as const, text: `${getIdentityPath()} updated.` }],
+      details: {},
+    };
   },
 };
 
@@ -206,7 +197,7 @@ const updateIdentityRunnable: BetaRunnableTool = {
  * Append a conversation note to the workspace YYYY-MM-DD.md.
  * Exported for use by context condense (agent/context.ts).
  */
-export function saveConversationNote(
+export async function saveConversationNote(
   note: string,
   conversationStartIso: string
 ): Promise<void> {
@@ -218,7 +209,7 @@ export function saveConversationNote(
     throw new Error(`Invalid conversationStartIso: ${conversationStartIso}`);
   }
 
-  ensureWorkspaceExists();
+  await ensureWorkspaceExists();
 
   const date = d.toLocaleDateString('en-CA');
   const time = d.toLocaleTimeString('en-GB', {
@@ -235,7 +226,7 @@ export function saveConversationNote(
   body = ensureDateH1(body, date);
 
   fs.writeFileSync(dayPath, body.trimEnd() + '\n', 'utf8');
-  execSync(`bun run agent:memory:index`);
+  runUpdateAndEmbed();
 
   function ensureDateH1(body: string, date: string): string {
     const h1 = `# ${date}`;
@@ -264,28 +255,31 @@ export function saveConversationNote(
   }
 }
 
-const saveConversationNoteRunnable: BetaRunnableTool = {
+const saveConversationNoteTool: AgentTool = {
   name: 'save_conversation_note',
-  description: `Append a note to the workspace YYYY-MM-DD.md (under ${getWorkspacePath()}/chats) at the time the conversation started. Call at the end of substantive replies for task-related info, topics discussed, decisions, or actions taken (not persistent user facts). Prefer calling too often. Use conversation_start_iso from the system prompt.`,
-  input_schema: {
-    type: 'object',
-    required: ['note', 'conversation_start_iso'],
-    properties: {
-      note: {
-        type: 'string',
-        description: 'The note to save (task, topic, or conversation summary)',
-      },
-      conversation_start_iso: {
-        type: 'string',
-        description:
-          'ISO timestamp when this conversation started (use the value from the system prompt)',
-      },
-    },
-  },
-  parse: (c) => c as { note: string; conversation_start_iso: string },
-  run: async ({ note, conversation_start_iso }) => {
+  label: 'save conversation note',
+  description: `Append a note to the workspace YYYY-MM-DD.md at the time the conversation started. Call at the end of substantive replies for task-related info, topics discussed, decisions, or actions taken (not persistent user facts). Prefer calling too often. Use conversation_start_iso from the system prompt.`,
+  parameters: Type.Object({
+    note: Type.String({
+      description: 'The note to save (task, topic, or conversation summary)',
+    }),
+    conversation_start_iso: Type.String({
+      description:
+        'ISO timestamp when this conversation started (use the value from the system prompt)',
+    }),
+  }),
+  execute: async (_id, params) => {
+    const { note, conversation_start_iso } = params as {
+      note: string;
+      conversation_start_iso: string;
+    };
     const trimmed = note.trim();
-    if (!trimmed) return 'No content to save.';
+    if (!trimmed) {
+      return {
+        content: [{ type: 'text' as const, text: 'No content to save.' }],
+        details: {},
+      };
+    }
 
     const d = new Date(conversation_start_iso);
     const date = d.toLocaleDateString('en-CA');
@@ -294,40 +288,41 @@ const saveConversationNoteRunnable: BetaRunnableTool = {
       minute: '2-digit',
     });
 
-    setImmediate(() => {
-      saveConversationNote(note, conversation_start_iso);
-    });
-
-    return `Saving to ${date}.md under ${time}.`;
+    await saveConversationNote(note, conversation_start_iso);
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `Saving to ${date}.md under ${time}.`,
+        },
+      ],
+      details: {},
+    };
   },
 };
 
-export const tools: BetaRunnableTool[] = [
-  updateUserMemoryRunnable,
-  updateIdentityRunnable,
-  searchConversationNotesRunnable,
-  getConversationNoteRunnable,
-  saveConversationNoteRunnable,
-  getRecentConversationNotesRunnable,
+export const tools: AgentTool[] = [
+  updateUserMemoryTool,
+  updateIdentityTool,
+  searchConversationNotesTool,
+  getConversationNoteTool,
+  saveConversationNoteTool,
+  getRecentConversationNotesTool,
 ];
 
 export function getInstructions(conversationStartIso: string): string {
   return `
-## Memory
+## Memory recall
+Memory has three layers: this conversation (short-term), daily notes in chats/ (medium-term; use \`get_recent_conversation_notes\` and \`search_past_conversations\`), and the blocks below (long-term; USER.md + IDENTITY.md). Before your first reply, call \`get_recent_conversation_notes\` to load recent context. Use \`search_past_conversations\` when you need something specific. When you use that context or the blocks below, weave it in naturally—do not say "I see that...", "Based on our previous conversation...", or similar. Respond as if you remember.
 
-Before replying for the first time do a quick search through recent conversations using \`get_recent_conversation_notes\` to gather possibly relevant information.
+## Saving to memory
+At the end of each substantive reply, call the right tool. Prefer saving too often over too rarely. Keep USER.md and IDENTITY.md concise: quality over quantity; only include information that will still be relevant.
 
-When you use that context (or "Information about the user" below), weave it in naturally. Do not say things like "I see that...", "I see we've...", "I noticed that...", or "Based on our previous conversation...". Just respond as if you remember—reference recent topics or the user's situation without acknowledging that you looked anything up.
+- **Persistent user facts** (name, preferences, context) → \`save_user_memory\` with the full updated USER.md. Merge with "Information about the user" below. Before saving, ask: "Will this still be true in 2 weeks?". Call when the user shares something about themselves.
+- **Your identity** (persona, how you should behave) → \`save_identity\` with the full updated IDENTITY.md. Merge with "Your identity" below. Call when the user defines or changes who you are.
+- **Conversation/task info** → \`save_conversation_note\` for non-trivial exchanges: what was discussed, decisions, tasks, or what you did. Write notes that are self-contained and use natural language (and key names/terms) so search can find them later. Use \`conversation_start_iso\` from below. Do not save: small talk or greetings only, temporary debugging, or one-line exchanges.
 
-## Saving to memory (do this often)
-At the end of each substantive reply, call the appropriate memory tool. Prefer saving too often rather than too rarely.
-
-1. **Persistent user facts** (name, preferences, context) → \`save_user_memory\` with the full updated content for the workspace USER.md. Merge with "Information about the user" below so it stays accurate. Before saving something, ask yourself: "will this be true in 2 weeks?". Call whenever the user shares something about themselves.
-2. **Your identity** (who you are, persona, how you should behave) → \`save_identity\` with the full updated content for the workspace IDENTITY.md. Merge with "Your identity" below. Call when the user defines or changes who you are.
-3. **Conversation/task info** → \`save_conversation_note\` for almost every non-trivial exchange: what was discussed, decisions made, tasks or topics, things you did for them. Append to the workspace YYYY-MM-DD.md. Always use the \`conversation_start_iso\` value from below (it is provided in this message).
-
-Call \`save_conversation_note\` when: the user shared a task or decision, you completed an action, you discussed a topic they might refer back to, or the exchange was more than a quick greeting. When in doubt, save a short note.
-Before ending your response: consider calling save_conversation_note (for what was discussed), save_user_memory (if they shared something about themselves), save_identity (if they defined or changed who you are), and/or save_skill (if something reusable was learned or established).
+Before ending your response, consider: \`save_conversation_note\`, \`save_user_memory\` (if they shared something about themselves), \`save_identity\` (if they defined or changed who you are), \`save_skill\` (if something reusable was learned).
 
 ### Your identity
 ${fs.readFileSync(getIdentityPath(), 'utf8')}
@@ -335,10 +330,10 @@ ${fs.readFileSync(getIdentityPath(), 'utf8')}
 ### Information about the user
 ${fs.readFileSync(getUserPath(), 'utf8')}
 
-### Files location
-Your workspace with all memory files etc is at: ${getWorkspacePath()}.
+### Workspace
+Memory files and workspace: ${getWorkspacePath()}.
 
-### Conversation start time
+### Conversation start
 Conversation started: ${formatDate(conversationStartIso)}. For \`save_conversation_note\` use conversation_start_iso: \`${conversationStartIso}\`.
   `;
 }
