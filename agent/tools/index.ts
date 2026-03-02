@@ -11,10 +11,10 @@ import {
   getInstructions as getSkillsInstructions,
   tools as skillTools,
 } from './skills';
-import { tools as terminalTools } from './terminal';
+import { tools as execTools } from './exec';
 
 export const tools: AgentTool[] = [
-  ...terminalTools,
+  ...execTools,
   ...browserTools,
   ...memoryTools,
   ...skillTools,
