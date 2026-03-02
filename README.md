@@ -79,4 +79,6 @@ the `greg telegram` command will tell you how to set it up.
 
 ## Skills
 
-Greg can be thought how to do anything by simply telling him to read an AgentSkill and to save it for later use. Doing so will cause Greg to save a new skill to your workspace Greg also ships with a couple of CLI's that I couldn't find good versions of elsewhere. These are available in `./scripts/hub/*`.
+Greg can be thought how to do anything by simply telling him to read an AgentSkill and to save it for later use. Doing so will cause Greg to save a new skill to your workspace
+
+Greg also ships with a couple of CLI's that I couldn't find good versions of elsewhere. These are available in `/hub`. If you'd like to use one just ask Greg to read it's skill by saying something like: _"Have a look at hub/ in your code folder and learn the Notion skill."_.
