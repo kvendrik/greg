@@ -1,7 +1,7 @@
 import { completeSimple } from '@mariozechner/pi-ai';
 import type { Model } from '@mariozechner/pi-ai';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import config from '../../.config';
+import config from '../../.greg';
 
 const SUMMARIZE_SYSTEM = `You are a summarizer. Given a conversation history, produce a concise summary that preserves key facts, decisions, topics, and context needed to continue the conversation. Output only the summary, no preamble.`;
 

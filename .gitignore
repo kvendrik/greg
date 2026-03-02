@@ -1,4 +1,4 @@
 node_modules/
-./.config.ts
+./.greg.ts
 memory/.data/
 .DS_Store

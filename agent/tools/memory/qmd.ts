@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import config from '../../../.config';
+import config from '../../../.greg';
 
 const COLLECTION_NAME = config.id + '-chats';
 
@@ -49,7 +49,9 @@ function runQmd(
  * to the chats directory (e.g. workspace chats path). Throws if QMD is not
  * installed or fails to run.
  */
-export async function ensureQmdInstalledAndSetUp(chatsPath: string): Promise<void> {
+export async function ensureQmdInstalledAndSetUp(
+  chatsPath: string
+): Promise<void> {
   const listResult = await runQmd(['collection', 'list']);
   if (listResult.code !== 0) {
     const out = listResult.stderr || listResult.stdout;

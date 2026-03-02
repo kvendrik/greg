@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { APIUserAbortError } from '@anthropic-ai/sdk';
 import { thread, type PromptOptions } from './llm';
 import pc from 'picocolors';
-import config from '../.config';
+import config from '../.greg';
 
 const IDLE_MS = 10 * 60 * 1000; // 10 minutes
 

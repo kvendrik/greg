@@ -13,7 +13,7 @@ CLI to authenticate with Strava (OAuth) and fetch your latest activities.
 From the project root:
 
 ```bash
-bun run scripts/tools/strava/strava.ts <command> [options]
+strava <command> [options]
 ```
 
 ## Commands
@@ -29,13 +29,13 @@ Starts a local server, opens the Strava authorization page in your browser, and 
 ```bash
 export STRAVA_CLIENT_ID=your_client_id
 export STRAVA_CLIENT_SECRET=your_client_secret
-bun run scripts/tools/strava/strava.ts auth
+strava auth
 ```
 
 Or pass credentials on the command line:
 
 ```bash
-bun run scripts/tools/strava/strava.ts auth --client-id ID --client-secret SECRET
+strava auth --client-id ID --client-secret SECRET
 ```
 
 **With an existing authorization code:**
@@ -43,7 +43,7 @@ bun run scripts/tools/strava/strava.ts auth --client-id ID --client-secret SECRE
 If you already have a `code` from the redirect URL (e.g. from another tool or manual copy):
 
 ```bash
-bun run scripts/tools/strava/strava.ts auth --code "THE_CODE_FROM_REDIRECT"
+strava auth --code "THE_CODE_FROM_REDIRECT"
 ```
 
 **Options:**
@@ -61,7 +61,7 @@ bun run scripts/tools/strava/strava.ts auth --code "THE_CODE_FROM_REDIRECT"
 Uses your refresh token to get a new access token without opening the browser.
 
 ```bash
-bun run scripts/tools/strava/strava.ts refresh --refresh-token "YOUR_REFRESH_TOKEN"
+strava refresh --refresh-token "YOUR_REFRESH_TOKEN"
 ```
 
 Or set `STRAVA_REFRESH_TOKEN` and optionally pass client credentials via env or flags.
@@ -78,7 +78,7 @@ Fetches your latest Strava activities. Requires `STRAVA_ACCESS_TOKEN` (from `aut
 
 ```bash
 export STRAVA_ACCESS_TOKEN=your_access_token
-bun run scripts/tools/strava/strava.ts activities
+strava activities
 ```
 
 **Options:**
@@ -92,16 +92,16 @@ bun run scripts/tools/strava/strava.ts activities
 **Example:** Last 10 activities as a table:
 
 ```bash
-bun run scripts/tools/strava/strava.ts activities --per-page 10
+strava activities --per-page 10
 ```
 
 ## Environment variables
 
-| Variable | Used by | Description |
-|----------|---------|-------------|
-| `STRAVA_CLIENT_ID` | `auth`, `refresh` | Strava application client ID |
-| `STRAVA_CLIENT_SECRET` | `auth`, `refresh` | Strava application client secret |
-| `STRAVA_ACCESS_TOKEN` | `activities` | Current access token (from `auth` or `refresh`) |
-| `STRAVA_REFRESH_TOKEN` | `refresh` | Refresh token (from `auth`) |
+| Variable               | Used by           | Description                                     |
+| ---------------------- | ----------------- | ----------------------------------------------- |
+| `STRAVA_CLIENT_ID`     | `auth`, `refresh` | Strava application client ID                    |
+| `STRAVA_CLIENT_SECRET` | `auth`, `refresh` | Strava application client secret                |
+| `STRAVA_ACCESS_TOKEN`  | `activities`      | Current access token (from `auth` or `refresh`) |
+| `STRAVA_REFRESH_TOKEN` | `refresh`         | Refresh token (from `auth`)                     |
 
 You can use a `.env` file in the project root and load it before running (e.g. with `dotenv` or your shell) so you don’t have to export these every time.

@@ -3,7 +3,7 @@ import { Type } from '@sinclair/typebox';
 import { spawn, type ChildProcess } from 'child_process';
 import * as readline from 'readline';
 
-import config from '../../.config';
+import config from '../../.greg';
 
 let proc: ChildProcess | null = null;
 let rl: readline.Interface | null = null;
