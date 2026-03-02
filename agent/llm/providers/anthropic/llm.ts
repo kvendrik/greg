@@ -3,8 +3,9 @@ import { Anthropic } from '@anthropic-ai/sdk';
 import type { BetaMessageParam } from '@anthropic-ai/sdk/resources/beta';
 import { getErrorType } from './errors';
 import { neutralToAnthropic, anthropicToNeutral } from './convert';
+import config from '../../../../.config';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const anthropic = new Anthropic({ apiKey: config.providers.anthropic.key });
 
 export async function run(
   params: RunParams,

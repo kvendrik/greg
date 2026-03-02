@@ -8,6 +8,7 @@ import {
   getErrorMessage,
 } from './utilities';
 import { providers } from './providers';
+import config from '../../.config';
 import pc from 'picocolors';
 
 export type PromptOptions = {
@@ -47,9 +48,9 @@ The code you're running on is at: ${process.cwd()}.
         onError,
       }: PromptOptions
     ) => {
-      const command = content.match(/^\/([^\s]+) ([^\s]+)/);
+      const command = content.match(/^\/([^\s\:]+)/);
 
-      let defaultProviderId: ProviderId = 'anthropic';
+      let defaultProviderId: ProviderId = config.providers.roles.primary;
       let thinkingEffort: NeutralThinking = 'medium';
 
       if (command) {
@@ -57,26 +58,27 @@ The code you're running on is at: ${process.cwd()}.
           case 'openai':
             defaultProviderId = 'openai';
             break;
-          case 'thinking':
-            const thinking = command[2] as NeutralThinking | 'none';
-            if (
-              thinking !== 'low' &&
-              thinking !== 'medium' &&
-              thinking !== 'high' &&
-              thinking !== 'max' &&
-              thinking !== 'none'
-            ) {
-              onError(
-                `Invalid thinking level: "${thinking}". Available levels: low, medium, high, max, none`
-              );
-              return;
-            }
-            thinkingEffort =
-              thinking === 'none' ? null : (thinking as NeutralThinking);
+          case 'gemini':
+            defaultProviderId = 'gemini';
+            break;
+          case 'no_think':
+            thinkingEffort = null;
+            break;
+          case 'low_think':
+            thinkingEffort = 'low';
+            break;
+          case 'medium_think':
+            thinkingEffort = 'medium';
+            break;
+          case 'high_think':
+            thinkingEffort = 'high';
+            break;
+          case 'max_think':
+            thinkingEffort = 'max';
             break;
           default:
             onError(
-              `Unknown command: "${command[1]}". Available commands: /m:provider`
+              `Unknown command: "${command[1]}". Available: /openai, /gemini, /no_think, /low_think, /medium_think, /high_think, /max_think`
             );
         }
       }
@@ -149,7 +151,7 @@ async function runPrompt(
       system: opts.system,
       messages: prepared,
       model: resolved.modelId,
-      thinking: 'medium',
+      thinking: opts.thinking,
       conversationStartIso: opts.conversationStartIso,
       signal: opts.signal,
       tools,
@@ -158,7 +160,7 @@ async function runPrompt(
       onContent: opts.onContent,
       onThinking: opts.onThinking,
       onToolCall(name, args) {
-        console.info(pc.cyan(`[${name}(${args})]`));
+        console.info(pc.cyan(`[${name}(${JSON.stringify(args)})]`));
         opts.onToolcall(name, args);
       },
       onDone(messages) {
@@ -166,11 +168,16 @@ async function runPrompt(
         console.info(pc.green(`Done.\n`));
       },
       async onError(errorType) {
-        if (errorType === 'overloaded' && providerId === 'anthropic') {
+        if (
+          errorType === 'overloaded' &&
+          providerId === config.providers.roles.primary
+        ) {
           console.info(
-            pc.yellow('Claude is overloaded. Trying again with OpenAI.')
+            pc.yellow(
+              `${resolved.label} is overloaded. Trying again with ${config.providers.roles.fallback}.`
+            )
           );
-          await runPrompt('openai', content, opts);
+          await runPrompt(config.providers.roles.fallback, content, opts);
           return;
         }
         opts.onError(getErrorMessage(errorType));

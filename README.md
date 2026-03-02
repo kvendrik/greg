@@ -1,8 +1,3 @@
-- [ ] It should send periodic updates during long tasks like the browser. Every paragraph should be send to the telegram bot so that if you use it there the updates work
-- [ ] Using Haiku for the greetings is fast but its also way less fun. What to do about that?
-
----
-
 # Greg
 
 An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ less lines of code and therefor easier to understand, customize, and be used with confidence.
@@ -29,15 +24,46 @@ Oh and you don't have to call him Greg. Just say "From now on your name is John"
 
 ```
 
-2. Set up the `.env` file with access to the services Greg needs:
+2. Set up the config file (`.config.ts` in the cloned folder) with access to the services Greg needs:
 
-```
-ANTHROPIC_API_KEY=XXX
-OPENAI_API_KEY=XXX
-BROWSER_USE_API_KEY=XXX
+```ts
+// .config.ts
 
-WORKSPACE_PATH=~/.greg
-AGENT_PORT=3000
+import { Config } from './config-types';
+
+const config: Config = {
+  /**
+   * Holds all of your memory files in plain Markdown.
+   * If you change these manually make sure to run `greg index`,
+   */
+  port: '3000',
+  providers: {
+    // https://console.anthropic.com/settings/keys
+    anthropic: {
+      key: 'XXX',
+    },
+    // https://platform.openai.com/api-keys
+    openai: {
+      key: 'XXX',
+    },
+    // https://aistudio.google.com/apikey
+    gemini: {
+      key: 'XXX',
+    },
+    roles: {
+      primary: 'anthropic',
+      fallback: 'openai',
+    },
+  },
+  tools: {
+    // https://cloud.browser-use.com/settings?tab=api-keys&new=1
+    browser: {
+      key: 'XXX',
+    },
+  },
+};
+
+export default config;
 ```
 
 3. Then run the setup commands:
@@ -53,12 +79,7 @@ greg start
 ```
 # Then pick how to interact with Greg. Easiest to get started is the CLI:
 greg cli
-
-# when used to the agent you can start using Telegram to communicate.
-# running the `telegram` command will tell you how to set it up.
-greg telegram
 ```
 
-## Workspace
-
-`WORKSPACE_PATH` holds all of your memory files. They’re all plain Markdown so you can edit them directly. If you do just make sure to run `greg index` to ensure Greg's vector store is updated with the changes.
+When used to the agent you can start using Telegram to communicate. Running
+the `greg telegram` command will tell you how to set it up.

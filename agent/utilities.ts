@@ -1,5 +1,6 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import config from '../.config';
 
 /** Format an ISO date string for display (weekday, date, time) in the current timezone. */
 export function formatDate(iso: string): string {
@@ -19,10 +20,7 @@ export function formatDate(iso: string): string {
 }
 
 export function getWorkspacePath(): string {
-  const raw = process.env.WORKSPACE_PATH;
-  if (!raw) {
-    throw new Error('WORKSPACE_PATH is not set');
-  }
+  const raw = config.workspace;
   if (raw.startsWith('~/') || raw === '~') {
     return join(homedir(), raw.slice(1));
   }

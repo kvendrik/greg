@@ -2,9 +2,10 @@ import { Anthropic } from '@anthropic-ai/sdk';
 import type { TaskComplexity, ProviderId } from '../providers/types';
 import type { ProviderModel, ProviderModelSet } from '../providers';
 import { providers } from '../providers';
+import config from '../../../.config';
 
 const COMPLEXITY_VALUES: TaskComplexity[] = ['trivial', 'normal', 'complex'];
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const anthropic = new Anthropic({ apiKey: config.providers.anthropic.key });
 
 export async function classifyComplexity(
   content: string,

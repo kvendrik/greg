@@ -4,6 +4,7 @@ import path from 'node:path';
 import { Command } from 'commander';
 import { ping } from '../clients/agent-sdk';
 import { name, description, version, scripts } from '../package.json';
+import config from '../.config';
 
 if (!scripts.agent) {
   throw new Error('Something is wrong. Agent script not found in package.json');
@@ -83,5 +84,5 @@ const args = process.argv.slice(2);
 program.parse([
   process.argv[0],
   process.argv[1],
-  ...(args.length ? args : [(await ping()) ? 'cli' : 'start']),
+  ...(args.length ? args : [(await ping()) ? config.clients.default : 'start']),
 ]);

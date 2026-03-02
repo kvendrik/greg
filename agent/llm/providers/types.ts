@@ -1,13 +1,18 @@
 import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
 import { type AnthropicModel } from './anthropic/models';
+import { type GeminiModel } from './gemini/models';
 import { type OpenAIModel } from './openai/models';
 
 export type TaskComplexity = 'trivial' | 'normal' | 'complex';
-export const PROVIDERS = ['anthropic', 'openai'];
-export type ProviderId = 'anthropic' | 'openai';
+export const PROVIDERS = ['anthropic', 'gemini', 'openai'];
+export type ProviderId = 'anthropic' | 'gemini' | 'openai';
 
 export type ProviderModel<P extends ProviderId> = {
-  modelId: P extends 'anthropic' ? AnthropicModel : OpenAIModel;
+  modelId: P extends 'anthropic'
+    ? AnthropicModel
+    : P extends 'gemini'
+      ? GeminiModel
+      : OpenAIModel;
   label: string;
 };
 

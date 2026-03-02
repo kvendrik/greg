@@ -1,8 +1,9 @@
 import type { SummarizeResult } from '../types';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import { Anthropic } from '@anthropic-ai/sdk';
+import config from '../../../../.config';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const anthropic = new Anthropic({ apiKey: config.providers.anthropic.key });
 
 const SUMMARIZE_SYSTEM = `You are summarizing a long conversation so the assistant can continue in a new context.
 

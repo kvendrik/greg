@@ -6,11 +6,9 @@ import type { RunnableToolFunctionWithParse } from 'openai/lib/RunnableFunction.
 import type { BetaRunnableTool } from '@anthropic-ai/sdk/lib/tools/BetaRunnableTool';
 import { getErrorType } from './errors';
 import { neutralToOpenAI, openaiToNeutral } from './convert';
+import config from '../../../../.config';
 
-const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey)
-  throw new Error('OPENAI_API_KEY is required when using the OpenAI provider.');
-const openai = new OpenAI({ apiKey });
+const openai = new OpenAI({ apiKey: config.providers.openai.key });
 
 type ToolShape = {
   name: string;
