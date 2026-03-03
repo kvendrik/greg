@@ -89,22 +89,26 @@ export function runBrowserTask(
   });
 }
 
-export const tools: AgentTool[] = [
-  {
-    name: 'run_browser_task',
-    label: 'run browser task',
-    description:
-      'Runs one task in a persistent browser session. Send one clear action per call (e.g. "Open klm.nl" or "Search for flights"); do not send multi-step instructions in a single task. The browser stays alive between calls so you can chain steps.',
-    parameters: Type.Object({
-      task: Type.String({ description: 'The task to perform in the browser.' }),
-    }),
-    execute: async (_id, params, signal, _onUpdate) => {
-      const { task } = params as { task: string };
-      const text = await runBrowserTask(task, signal);
-      return { content: [{ type: 'text' as const, text }], details: {} };
-    },
-  },
-];
+export const tools: AgentTool[] = config.tools.browser
+  ? [
+      {
+        name: 'run_browser_task',
+        label: 'run browser task',
+        description:
+          'Runs one task in a persistent browser session. Send one clear action per call (e.g. "Open klm.nl" or "Search for flights"); do not send multi-step instructions in a single task. The browser stays alive between calls so you can chain steps.',
+        parameters: Type.Object({
+          task: Type.String({
+            description: 'The task to perform in the browser.',
+          }),
+        }),
+        execute: async (_id, params, signal, _onUpdate) => {
+          const { task } = params as { task: string };
+          const text = await runBrowserTask(task, signal);
+          return { content: [{ type: 'text' as const, text }], details: {} };
+        },
+      },
+    ]
+  : [];
 
 export function cleanup() {
   proc?.kill();

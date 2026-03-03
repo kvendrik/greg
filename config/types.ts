@@ -54,8 +54,10 @@ export interface Config {
       }
   )[];
   tools: {
-    browser: {
+    browser?: {
       /**
+       * Enables the browser automation tool using Browser Use
+       * and their blazingly fast finetuned model.
        * https://cloud.browser-use.com/settings?tab=api-keys&new=1
        */
       key: string;
