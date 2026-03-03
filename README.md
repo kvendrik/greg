@@ -4,15 +4,14 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ less 
 
 ## Features
 
-- 🧠 **Memory**. Greg remembers facts you tell him about yourself as well as conversation notes to Markdown files in your workspace
-- 🌍 **Browser Automation**. Greg is capable of controlling your Chrome browser autonomously and can therefor do anything online you can do.
+- 🧠 **Memory**. Greg remembers facts you tell him about yourself as well as conversation notes to Markdown files in your workspace.
+- 🌍 **Web Search & Fetching**. Greg is capable of searching the web using Google Search Grounding. He can then also fetch websites automatically to answer questions.
+- 🌍 **Browser Automation**. When a simple fetch isn't enough, Greg is also capable of controlling your Chrome browser and can therefor do anything online you can do.
 - 👨‍💻 **Command-line Access**. Greg has access to your command line and can therefor do most of the things you do on your computer.
 - 🔨 **Skills**. Greg learns on his own. If he has trouble figuring something out, help him, and then simply say "What have you learned? Write a skill for yourself so you know this next time". He'll create a skill for himself so that in the future he won't struggle.
-- 🚏 **Supports Multiple Providers**. By default Greg uses [Claude Sonnet 4.6](https://platform.claude.com/docs/en/about-claude/models/overview) but when the Anthropic API is overloaded he switches to using [GPT 5.2](https://developers.openai.com/api/docs/models). You can also manually ask Greg to use GPT 5.2 by prefixing your message with `/openai`.
+- 🚏 **Supports Most Popular Models**. Greg uses [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) and therefor supports most popular models. He ships with a fallback system that allows you what model should be used in case your preferred model isn't available. You can also define additional models and invoke them for whatever prompt you want using `/` commands.
 - 🗣️ **Threads**. Talk to Greg in multiple threads at the same time.
-- **Soon:**
-  - 📆 **Scheduled Tasks**. Schedule reocurring tasks by saying things like "Every morning at 6am send me a list of my unread emails".
-  - 💗 **Heartbeat**. Every 30 minutes Greg will check his `HEARTBEAT.md` file for things to do.
+- 📆 **Scheduled Tasks**. Schedule reocurring tasks by saying things like "Every morning at 6am send me a list of my unread emails".
 
 Oh and you don't have to call him Greg. Just say "From now on your name is John" and that's it.
 
@@ -44,6 +43,8 @@ const config: Config = {
     },
     {
       role: 'fallback',
+      // /command to use to ask Greg to use this model for a given prompt
+      // e.g. "/openai How’s the weather today?" will use this model over Sonnet
       command: 'openai',
       model: getModel('openai', 'gpt-5.2'),
       key: 'XXX', // https://platform.openai.com/api-keys
@@ -53,18 +54,26 @@ const config: Config = {
     browser: {
       key: 'XXX', // https://cloud.browser-use.com/settings?tab=api-keys&new=1
     },
+    webSearch: {
+      // Defining this enables the web_search tool. Optional, but recommended.
+      // Uses Gemini to use Google Search Grounding and therefor requires a key
+      // https://cloud.google.com/gemini-api/docs/get-started
+      geminiKey: 'XXX',
+    },
   },
 };
 
 export default config;
 ```
 
+(See the [`Config type`](/config/types.ts)) for all config options)
+
 3. Then run the setup commands:
 
 ```
 bun install
 bun link
-greg setup
+
 greg start
 ```
 
