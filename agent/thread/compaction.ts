@@ -106,7 +106,7 @@ function extractTextFromAssistantMessage(msg: {
 
 export async function compactContext(
   messages: AgentMessage[],
-  signal: AbortSignal | undefined
+  signal: AbortSignal
 ): Promise<AgentMessage[]> {
   const model = config.models.find((model) => model.role === 'primary')!.model;
   const getApiKey = (provider: string) => {

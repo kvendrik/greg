@@ -5,7 +5,7 @@ import pc from 'picocolors';
 
 export async function runExec(
   params: { command: string },
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<string> {
   const { command } = params;
   return new Promise<string>((resolve, reject) => {

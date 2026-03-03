@@ -806,6 +806,17 @@ wheels = [
 ]
 
 [[package]]
+name = "greg"
+version = "0.0.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "browser-use" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "browser-use" }]
+
+[[package]]
 name = "groq"
 version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1332,17 +1343,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/b1/6c/e4c964fcf1d527fdf
 wheels = [
     { url = "https://files.pythonhosted.org/packages/16/83/0315bf2cfd75a2ce8a7e54188e9456c60cec6c0cf66728ed07bd9859ff26/openai-2.16.0-py3-none-any.whl", hash = "sha256:5f46643a8f42899a84e80c38838135d7038e7718333ce61396994f887b09a59b", size = 1068612, upload-time = "2026-01-27T23:28:00.356Z" },
 ]
-
-[[package]]
-name = "pa-agent"
-version = "0.0.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "browser-use" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "browser-use" }]
 
 [[package]]
 name = "pfzy"

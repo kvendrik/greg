@@ -9,7 +9,6 @@ import config from '../../.greg';
 import pc from 'picocolors';
 
 export type PromptOptions = {
-  signal: AbortSignal;
   onContent: (chunk: string) => void;
   onThinking: (chunk: string) => void;
   onDone: () => void;
@@ -17,9 +16,13 @@ export type PromptOptions = {
   onError: (err: string) => void;
 };
 
-export async function thread(): Promise<{
+export type Thread = {
   prompt: (content: string, options: PromptOptions) => Promise<void>;
-}> {
+  abort: () => void;
+};
+
+export async function thread(): Promise<Thread> {
+  const abortController = new AbortController();
   const conversationStartIso = new Date().toISOString();
   const system = `
 You are a helpful personal assistant that runs on my personal computer and talks to me through a chat interface.
@@ -61,16 +64,10 @@ ${getToolsInstructions(conversationStartIso)}
   )!.model;
 
   return {
+    abort: () => abortController.abort(),
     prompt: async (
       initialContent: string,
-      {
-        signal,
-        onContent,
-        onThinking,
-        onToolcall,
-        onDone,
-        onError,
-      }: PromptOptions
+      { onContent, onThinking, onToolcall, onDone, onError }: PromptOptions
     ) => {
       const parsed = parseCommands({
         content: initialContent,
@@ -151,10 +148,11 @@ ${getToolsInstructions(conversationStartIso)}
         }
       });
 
-      if (signal?.aborted) {
+      if (abortController.signal?.aborted) {
         agent.abort();
       }
-      signal?.addEventListener(
+
+      abortController.signal?.addEventListener(
         'abort',
         () => {
           agent.abort();
