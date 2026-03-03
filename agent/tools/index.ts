@@ -12,10 +12,12 @@ import {
   tools as skillTools,
 } from './skills';
 import { tools as execTools } from './exec';
+import { tools as webTools } from './web';
 
 export const tools: AgentTool[] = [
   ...execTools,
   ...browserTools,
+  ...webTools,
   ...memoryTools,
   ...skillTools,
 ];
