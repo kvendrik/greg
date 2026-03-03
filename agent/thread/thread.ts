@@ -114,7 +114,6 @@ ${getToolsInstructions(conversationStartIso)}
 
       const modelLabel = agent.state.model?.name;
       console.info(pc.gray(`Using ${modelLabel}.`));
-      onContent(`Using ${modelLabel}.\n\n`);
 
       const unsubscribe = agent.subscribe((event) => {
         switch (event.type) {
