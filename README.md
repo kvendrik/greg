@@ -1,17 +1,17 @@
 # Greg
 
-An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ less lines of code and therefor easier to understand, customize, and be used with confidence.
+An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ less lines of code and therefore easier to understand, customize, and be used with confidence.
 
 ## Features
 
 - 🧠 **Memory**. Greg remembers facts you tell him about yourself as well as conversation notes to Markdown files in your workspace.
 - 🌍 **Web Search & Fetching**. Greg is capable of searching the web using Google Search Grounding. He can then also fetch websites automatically to answer questions.
-- 🌍 **Browser Automation**. When a simple fetch isn't enough, Greg is also capable of controlling your Chrome browser and can therefor do anything online you can do.
-- 👨‍💻 **Command-line Access**. Greg has access to your command line and can therefor do most of the things you do on your computer.
+- 🌍 **Browser Automation**. When a simple fetch isn't enough, Greg is also capable of controlling your Chrome browser and can therefore do anything online you can do.
+- 👨‍💻 **Command-line Access**. Greg has access to your command line and can therefore do most of the things you do on your computer.
 - 🔨 **Skills**. Greg learns on his own. If he has trouble figuring something out, help him, and then simply say "What have you learned? Write a skill for yourself so you know this next time". He'll create a skill for himself so that in the future he won't struggle.
-- 🚏 **Supports Most Popular Models**. Greg uses [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) and therefor supports most popular models. He ships with a fallback system that allows you what model should be used in case your preferred model isn't available. You can also define additional models and invoke them for whatever prompt you want using `/` commands.
+- 🚏 **Supports Most Popular Models**. Greg uses [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) and therefore supports most popular models. He ships with a fallback system that allows you to configure what model should be used in case your preferred model isn't available. You can also define additional models and invoke them for whatever prompt you want using `/` commands.
 - 🗣️ **Threads**. Talk to Greg in multiple threads at the same time.
-- 📆 **Scheduled Tasks**. Schedule reocurring tasks by saying things like "Every morning at 6am send me a list of my unread emails".
+- 📆 **Scheduled Tasks**. Schedule recurring tasks by saying things like "Every morning at 6am send me a list of my unread emails".
 
 Oh and you don't have to call him Greg. Just say "From now on your name is John" and that's it.
 
@@ -53,7 +53,7 @@ const config: Config = {
   tools: {
     webSearch: {
       // Defining this enables the web_search tool. Optional, but recommended.
-      // Uses Gemini to use Google Search Grounding and therefor requires a key
+      // Uses Gemini to use Google Search Grounding and therefore requires a key
       // https://cloud.google.com/gemini-api/docs/get-started
       geminiKey: 'XXX',
     },
@@ -91,7 +91,7 @@ the `greg telegram` command will tell you how to set it up.
 
 ## Skills
 
-Greg can be thought how to do anything by simply telling him to read an AgentSkill and to save it for later use. Doing so will cause Greg to save a new skill to your workspace
+Greg can be taught how to do anything by simply telling him to read an AgentSkill and to save it for later use. Doing so will cause Greg to save a new skill to your workspace
 
 Greg also ships with a couple of CLI's that I couldn't find good versions of elsewhere. These are available in `/hub`. Greg already knows how to use them but they require auth tokens. When Greg tries to use them at the start he'll come back to you saying he needs access.
 
