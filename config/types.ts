@@ -60,6 +60,13 @@ export interface Config {
        */
       key: string;
     };
+    webSearch?: {
+      /**
+       * Web Search tool uses Google Gemini API to search the web.
+       * https://cloud.google.com/gemini-api/docs/get-started
+       */
+      geminiKey: string;
+    };
   };
   clients?: {
     /**
