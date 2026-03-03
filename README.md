@@ -51,14 +51,17 @@ const config: Config = {
     },
   ],
   tools: {
-    browser: {
-      key: 'XXX', // https://cloud.browser-use.com/settings?tab=api-keys&new=1
-    },
     webSearch: {
       // Defining this enables the web_search tool. Optional, but recommended.
       // Uses Gemini to use Google Search Grounding and therefor requires a key
       // https://cloud.google.com/gemini-api/docs/get-started
       geminiKey: 'XXX',
+    },
+    browser: {
+      // Enables the browser automation tool using Browser Use and their blazingly
+      // fast finetuned model. Optional, but recommended.
+      // https://cloud.browser-use.com/settings?tab=api-keys&new=1
+      key: 'XXX',
     },
   },
 };
