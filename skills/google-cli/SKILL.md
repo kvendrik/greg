@@ -1,6 +1,6 @@
 ---
 name: google-cli
-description: Use the gog CLI (gogcli) to read calendar events, Gmail emails, and Google Tasks, and to create Gmail drafts. Use when the user wants Google Calendar, Gmail, or Google Tasks data, or to compose or draft emails.
+description: 'Use the gog CLI (gogcli) to read calendar events, Gmail emails, and Google Tasks, and to create Gmail drafts. Use when the user wants Google Calendar, Gmail, or Google Tasks data, or to compose or draft emails.'
 ---
 
 # Google CLI (gog)
@@ -44,7 +44,51 @@ gog calendar search "meeting" --today --json
 gog calendar search "meeting" --days 30 --max 50 --json
 ```
 
-## 2. Read Gmail emails
+## 2. Create calendar events
+
+```bash
+gog calendar create primary --summary "Event title" --from "2026-03-04T10:00:00+01:00" --to "2026-03-04T11:00:00+01:00" --json
+
+# With description and location
+gog calendar create primary --summary "Meeting" --from "2026-03-04T10:00:00+01:00" --to "2026-03-04T11:00:00+01:00" --description "Catch-up" --location "Amsterdam" --json
+
+# All-day event
+gog calendar create primary --summary "Holiday" --from "2026-03-10" --to "2026-03-11" --all-day --json
+
+# With attendees and Google Meet
+gog calendar create primary --summary "Call" --from "2026-03-04T10:00:00+01:00" --to "2026-03-04T11:00:00+01:00" --attendees "someone@example.com" --with-meet --json
+
+# With reminder
+gog calendar create primary --summary "Dentist" --from "2026-03-05T09:00:00+01:00" --to "2026-03-05T10:00:00+01:00" --reminder "popup:30m" --json
+
+# Recurring event
+gog calendar create primary --summary "Weekly sync" --from "2026-03-04T10:00:00+01:00" --to "2026-03-04T11:00:00+01:00" --rrule "RRULE:FREQ=WEEKLY" --json
+```
+
+Key flags:
+
+- `--summary` — event title
+- `--from` / `--to` — RFC3339 datetime or date-only for all-day
+- `--description` — event description
+- `--location` — location string
+- `--attendees` — comma-separated emails
+- `--all-day` — all-day event
+- `--with-meet` — add Google Meet link
+- `--reminder` — e.g. `popup:30m`, `email:1d`
+- `--rrule` — recurrence rule
+- `--send-updates` — `all`, `externalOnly`, `none` (default: none)
+
+## 3. Update and delete calendar events
+
+```bash
+# Update an event
+gog calendar update primary <eventId> --summary "New title" --from "2026-03-04T11:00:00+01:00" --to "2026-03-04T12:00:00+01:00" --json
+
+# Delete an event
+gog calendar delete primary <eventId> --json
+```
+
+## 4. Read Gmail emails
 
 Search by query, then fetch thread or message. Use Gmail search syntax (e.g. `newer_than:7d`, `from:user@example.com`, `is:unread`, `has:attachment`).
 
@@ -65,7 +109,7 @@ gog gmail get <messageId> --json
 gog gmail get <messageId> --format metadata --json
 ```
 
-## 3. Write Gmail drafts
+## 5. Write Gmail drafts
 
 Create and update drafts. Optionally send a draft.
 
@@ -92,7 +136,7 @@ gog gmail drafts update <draftId> --to a@b.com --subject "Subject" --body "Body"
 gog gmail drafts send <draftId>
 ```
 
-## 4. Read Google Tasks
+## 6. Read Google Tasks
 
 List task lists, then list tasks or get one task.
 
