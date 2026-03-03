@@ -7,9 +7,8 @@
     "greg": "bin/greg.ts"
   },
   "scripts": {
-    "setup": "bun run scripts/setup.ts",
-    "agent": "bun run agent/server.ts",
-    "agent:tools": "bun run scripts/tools-cli.ts",
+    "agent": "bun run agent/index.ts",
+    "agent:caffeinate": "caffeinate -i bun run agent",
     "agent:memory:index": "bun run qmd update --collection agent-chats && bun run qmd embed --collection agent-chats",
     "clients:cli": "bun run clients/cli.ts",
     "clients:telegram": "bun run clients/telegram/cli.ts",
@@ -29,6 +28,7 @@
     "better-sqlite3": "^12.6.2",
     "commander": "^12.0.0",
     "cron": "^4.4.0",
+    "execa": "^9.6.1",
     "fluent-ffmpeg": "^2.1.3",
     "grammy": "^1.40.0",
     "gray-matter": "^4.0.3",

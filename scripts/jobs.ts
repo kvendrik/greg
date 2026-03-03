@@ -53,6 +53,28 @@ function extractTextFromResponse(msg: {
     .join('');
 }
 
+async function runJob(job: JobEntry): Promise<void> {
+  const preview =
+    job.jobPrompt.length > 40
+      ? job.jobPrompt.slice(0, 40) + '…'
+      : job.jobPrompt;
+  const label = `${job.id}: ${preview}`;
+  console.log(pc.gray(`[${new Date().toISOString()}] Running job ${label}`));
+  try {
+    const thread = await createThread();
+    await thread.prompt(job.jobPrompt, {
+      onThinking: () => {},
+      onContent: (chunk) => process.stdout.write(chunk),
+      onToolcall: () => {},
+      onDone: () => {},
+      onError: (err) => console.error(pc.red(`Job ${job.id} error: ${err}`)),
+    });
+    await thread.destroy();
+  } catch (err) {
+    console.error(pc.red(`Job ${job.id} failed:`), err);
+  }
+}
+
 async function parseScheduleAndJob(description: string): Promise<{
   cronTime: string;
   jobPrompt: string;
@@ -96,28 +118,7 @@ function createCronJobs(jobs: JobEntry[]): CronJob[] {
     CronJob.from({
       cronTime: job.cronTime,
       onTick: async () => {
-        const preview =
-          job.jobPrompt.length > 40
-            ? job.jobPrompt.slice(0, 40) + '…'
-            : job.jobPrompt;
-        const label = `${job.id}: ${preview}`;
-        console.log(
-          pc.gray(`[${new Date().toISOString()}] Running job ${label}`)
-        );
-        try {
-          const thread = await createThread();
-          await thread.prompt(job.jobPrompt, {
-            onThinking: () => {},
-            onContent: (chunk) => process.stdout.write(chunk),
-            onToolcall: () => {},
-            onDone: () => {},
-            onError: (err) =>
-              console.error(pc.red(`Job ${job.id} error: ${err}`)),
-          });
-          await thread.destroy();
-        } catch (err) {
-          console.error(pc.red(`Job ${job.id} failed:`), err);
-        }
+        await runJob(job);
       },
       start: true,
     })
@@ -185,6 +186,20 @@ program
     jobs.splice(index, 1);
     saveJobs(jobs);
     console.log('Removed job', id);
+  });
+
+program
+  .command('run')
+  .description('Run a job by id immediately (without scheduling).')
+  .argument('<id>', 'Job id (from list or add output)')
+  .action(async (id: string) => {
+    const jobs = loadJobs();
+    const job = jobs.find((entry) => entry.id === id);
+    if (!job) {
+      console.error(pc.red(`No job with id "${id}".`));
+      process.exit(1);
+    }
+    await runJob(job);
   });
 
 program

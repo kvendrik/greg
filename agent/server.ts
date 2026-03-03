@@ -1,19 +1,9 @@
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { APIUserAbortError } from '@anthropic-ai/sdk';
-import { thread, type PromptOptions } from './llm';
+import { createThread, getThread } from './agent';
 import pc from 'picocolors';
 import config from '../.greg';
-
-const IDLE_MS = 10 * 60 * 1000; // 10 minutes
-
-type ThreadState = {
-  llm: Awaited<ReturnType<typeof thread>>;
-  idleTimeout: ReturnType<typeof setTimeout>;
-  abortController: AbortController | null;
-};
-
-const threads = new Map<string, ThreadState>();
 
 function parsePath(url: string): string[] {
   const pathname = new URL(url || '/', 'http://localhost').pathname;
@@ -38,19 +28,9 @@ const server = http.createServer(async (req, res) => {
     path.length === 2 &&
     method === 'POST'
   ) {
-    const id = randomUUID();
-    const llm = await thread();
-    const state: ThreadState = {
-      llm,
-      idleTimeout: setTimeout(() => {
-        threads.delete(id);
-        console.log(pc.gray(`Thread ${id} expired (idle 10 min).`));
-      }, IDLE_MS),
-      abortController: null,
-    };
-    threads.set(id, state);
+    const thread = await createThread();
     res.writeHead(201, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ id }));
+    res.end(JSON.stringify({ id: thread.id }));
     return;
   }
 
@@ -62,16 +42,13 @@ const server = http.createServer(async (req, res) => {
     method === 'POST'
   ) {
     const id = path[1];
-    const state = threads.get(id);
-    if (!state) {
+    const thread = getThread(id);
+    if (!thread) {
       res.writeHead(404);
       res.end(JSON.stringify({ error: 'Thread not found' }));
       return;
     }
-    if (state.abortController) {
-      state.abortController.abort();
-      state.abortController = null;
-    }
+    thread.abort();
     res.writeHead(202, { 'Content-Type': 'application/json' });
     res.end();
     return;
@@ -84,14 +61,9 @@ const server = http.createServer(async (req, res) => {
     method === 'DELETE'
   ) {
     const id = path[1];
-    const state = threads.get(id);
-    if (state) {
-      clearTimeout(state.idleTimeout);
-      if (state.abortController) {
-        state.abortController.abort();
-        state.abortController = null;
-      }
-      threads.delete(id);
+    const thread = getThread(id);
+    if (thread) {
+      thread.delete();
     }
     res.writeHead(204);
     res.end();
@@ -110,14 +82,16 @@ const server = http.createServer(async (req, res) => {
   }
 
   const id = path[1];
-  const state = threads.get(id);
-  if (!state) {
+  const thread = getThread(id);
+
+  if (!thread) {
     res.writeHead(404);
     res.end(JSON.stringify({ error: 'Thread not found' }));
     return;
   }
 
   let body = '';
+
   req.on('data', (chunk) => {
     body += chunk;
   });
@@ -148,39 +122,33 @@ const server = http.createServer(async (req, res) => {
 
     req.socket.setTimeout(0);
 
-    const abortController = new AbortController();
-    state.abortController = abortController;
-
-    const promptOptions: PromptOptions = {
-      signal: abortController.signal,
-      onContent(chunk) {
-        res.write(JSON.stringify({ type: 'content', chunk }) + '\n');
-      },
-      onThinking(chunk) {
-        res.write(JSON.stringify({ type: 'thinking', chunk }) + '\n');
-      },
-      onToolcall(name, args) {
-        res.write(
-          JSON.stringify({
-            type: 'toolcall',
-            name,
-            args: JSON.stringify(args),
-          }) + '\n'
-        );
-      },
-      onDone() {
-        res.end();
-      },
-      onError(err) {
-        if (!res.writableEnded) {
-          res.write(JSON.stringify({ type: 'error', error: err }) + '\n');
-          res.end();
-        }
-      },
-    };
-
     try {
-      await state.llm.prompt(userPrompt.trim(), promptOptions);
+      await thread.prompt(userPrompt.trim(), {
+        onContent(chunk) {
+          res.write(JSON.stringify({ type: 'content', chunk }) + '\n');
+        },
+        onThinking(chunk) {
+          res.write(JSON.stringify({ type: 'thinking', chunk }) + '\n');
+        },
+        onToolcall(name, args) {
+          res.write(
+            JSON.stringify({
+              type: 'toolcall',
+              name,
+              args: JSON.stringify(args),
+            }) + '\n'
+          );
+        },
+        onDone() {
+          res.end();
+        },
+        onError(err) {
+          if (!res.writableEnded) {
+            res.write(JSON.stringify({ type: 'error', error: err }) + '\n');
+            res.end();
+          }
+        },
+      });
     } catch (err) {
       if (
         err instanceof APIUserAbortError ||
@@ -196,21 +164,21 @@ const server = http.createServer(async (req, res) => {
           res.end();
         }
       }
-    } finally {
-      state.abortController = null;
     }
   });
 });
 
 server.timeout = 0;
 
-server.listen(Number(config.port), () => {
-  console.log('Running...');
-  console.log(
-    'Endpoints: GET /ping, POST /threads/new, POST /threads/:id, POST /threads/:id/abort, DELETE /threads/:id'
-  );
-  console.log(
-    'Use a client to interact. E.g. `bun run clients:cli "How are you today?"`'
-  );
-  console.log('Ctrl+C to stop');
-});
+export function startServer() {
+  server.listen(Number(config.port), () => {
+    console.log('Running...');
+    console.log(
+      'Endpoints: GET /ping, POST /threads/new, POST /threads/:id, POST /threads/:id/abort, DELETE /threads/:id'
+    );
+    console.log(
+      'Use a client to interact. E.g. `bun run clients:cli "How are you today?"`'
+    );
+    console.log('Ctrl+C to stop');
+  });
+}

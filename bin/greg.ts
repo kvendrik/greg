@@ -3,12 +3,8 @@ import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { Command } from 'commander';
 import { name, description, version, scripts } from '../package.json';
-import { getWorkspacePath } from '../agent/utilities';
-import fs from 'node:fs';
 import config from '../.greg';
 import { validate } from '../config';
-import * as prompts from '@clack/prompts';
-import pc from 'picocolors';
 
 if (!scripts.agent) {
   throw new Error('Something is wrong. Agent script not found in package.json');
@@ -48,27 +44,39 @@ program
 
 program
   .command('start')
-  .description('Start the server')
-  .action(() => {
-    const proc = spawn('bun', ['run', 'agent'], {
-      stdio: 'inherit',
-      cwd: projectRoot,
-    });
+  .description('Starts Greg')
+  .option(
+    '-c, --caffeinate',
+    'Run using \`caffeinate\` to prevent it from turning off due to your computer going to sleep'
+  )
+  .action(({ caffeinate }: { caffeinate: boolean }) => {
+    const proc = spawn(
+      'bun',
+      ['run', caffeinate ? 'agent:caffeinate' : 'agent'],
+      {
+        stdio: 'inherit',
+        cwd: projectRoot,
+      }
+    );
     proc.on('exit', (code) => process.exit(code ?? 0));
   });
 
 program
-  .command('index')
-  .description(
-    'Index the memory. Run after you’ve changed Markdown files in the workspace.'
-  )
-  .action(() => {
-    const proc = spawn('bun', ['run', 'agent:memory:index'], {
-      stdio: 'inherit',
-      cwd: projectRoot,
-    });
-    proc.on('exit', (code) => process.exit(code ?? 0));
-  });
+  .command('memory')
+  .description('Manage Greg’s memory')
+  .addCommand(
+    new Command('index')
+      .description(
+        'Index the memory. Run after you’ve changed Markdown files in the workspace.'
+      )
+      .action(() => {
+        const proc = spawn('bun', ['run', 'agent:memory:index'], {
+          stdio: 'inherit',
+          cwd: projectRoot,
+        });
+        proc.on('exit', (code) => process.exit(code ?? 0));
+      })
+  );
 
 program
   .command('cli')
@@ -118,7 +126,7 @@ program
   .command('jobs')
   .description('Manage scheduled jobs')
   .action(() => {
-    const args = program.args.slice(2);
+    const args = program.args.slice(1);
     const proc = spawn('bun', ['run', 'scripts/jobs', ...args], {
       stdio: 'inherit',
       cwd: projectRoot,
