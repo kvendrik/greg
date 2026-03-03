@@ -275,7 +275,11 @@ async function guardedFetch(
     const url = new URL(current);
     await checkSsrf(url);
 
-    const response = await fetch(current, { ...options, redirect: 'manual' });
+    const response = await fetch(current, {
+      ...options,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location');
@@ -291,6 +295,7 @@ async function guardedFetch(
   throw new Error(`Too many redirects (max ${maxRedirects})`);
 }
 
+const FETCH_TIMEOUT_MS = 15_000;
 const MAX_CHARS = 20_000;
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5MB
 

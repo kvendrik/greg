@@ -55,7 +55,6 @@ export async function runExec(
 
     child.stdout?.on('data', (data: Buffer) => {
       const text = data.toString();
-      process.stdout.write(pc.gray(text));
       output.push(text);
     });
 

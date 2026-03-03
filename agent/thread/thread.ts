@@ -138,6 +138,9 @@ ${getToolsInstructions(conversationStartIso)}
               )
             );
             break;
+          case 'tool_execution_end':
+            console.info(pc.gray(JSON.stringify(event.result)));
+            break;
           case 'agent_end':
             console.info(pc.green('Done.\n'));
             onDone();
