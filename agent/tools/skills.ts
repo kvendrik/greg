@@ -136,30 +136,28 @@ function escapeXml(s: string): string {
 export function saveSkill(
   name: string,
   description: string,
-  content: string
+  content: string,
+  filePath?: string
 ): { name: string; path: string } {
   const skillName = normalizeAndValidateSkillName(name);
 
-  const rawDescription = (description ?? '').trim();
+  const rawDescription = description.trim();
+
   if (!rawDescription) {
     throw new Error('Skill description is required and must be non-empty.');
   }
+
   if (rawDescription.length > MAX_DESCRIPTION_LENGTH) {
     throw new Error(
       `Skill description must be at most ${MAX_DESCRIPTION_LENGTH} characters (got ${rawDescription.length}).`
     );
   }
+
   // Single-line, YAML-safe description (newlines and unescaped quotes would break frontmatter)
   const safeDescription = rawDescription
     .replace(/\r?\n/g, ' ')
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"');
-
-  const workspaceSkillsDir = path.resolve(WORKSPACE_SKILLS_DIR);
-  fs.mkdirSync(workspaceSkillsDir, { recursive: true });
-  const skillDir = path.join(workspaceSkillsDir, skillName);
-  fs.mkdirSync(skillDir, { recursive: true });
-  const skillMdPath = path.join(skillDir, SKILL_FILENAME);
 
   const frontmatter = `---
 name: ${skillName}
@@ -167,8 +165,17 @@ description: "${safeDescription}"
 ---
 
 `;
-  fs.writeFileSync(skillMdPath, frontmatter + content, 'utf8');
-  return { name: skillName, path: skillMdPath };
+  const finalPath = filePath ? filePath : filePathForSkillName(skillName);
+  fs.writeFileSync(finalPath, frontmatter + content, 'utf8');
+  return { name: skillName, path: finalPath };
+
+  function filePathForSkillName(name: string): string {
+    const workspaceSkillsDir = path.resolve(WORKSPACE_SKILLS_DIR);
+    fs.mkdirSync(workspaceSkillsDir, { recursive: true });
+    const skillDir = path.join(workspaceSkillsDir, skillName);
+    fs.mkdirSync(skillDir, { recursive: true });
+    return path.join(skillDir, SKILL_FILENAME);
+  }
 }
 
 const saveSkillTool: AgentTool = {
@@ -189,15 +196,22 @@ const saveSkillTool: AgentTool = {
       description:
         'Markdown body of the skill (instructions and content after the frontmatter)',
     }),
+    path: Type.Optional(
+      Type.String({
+        description:
+          'Path to the skill file to save to in case the skill already exists.',
+      })
+    ),
   }),
   execute: async (_id, params) => {
-    const { name, description, content } = params as {
+    const { name, description, content, path } = params as {
       name: string;
       description: string;
       content: string;
+      path?: string;
     };
     try {
-      const result = saveSkill(name, description, content ?? '');
+      const result = saveSkill(name, description, content, path);
       const text = `Skill "${result.name}" saved to ${result.path}.`;
       return { content: [{ type: 'text' as const, text }], details: {} };
     } catch (err) {
