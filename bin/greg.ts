@@ -102,11 +102,11 @@ program
   });
 
 program.command('config').addCommand(
-  new Command('validate').description('Validate the config file').action(() => {
-    validate(config);
-    console.info('Config is valid');
-    process.exit(0);
-  })
+  new Command('validate')
+    .description('Validate the config file')
+    .action(async () => {
+      await validate(config);
+    })
 );
 
 program

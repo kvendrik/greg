@@ -135,7 +135,7 @@ async function handoffToAgent(message: string, ctx: BotContext) {
   const t = await getOrCreateThread();
 
   await t.prompt(message, {
-    onThinking: (chunk: string) => process.stdout.write(pc.gray(chunk)),
+    onThinking: (chunk: string) => {}, //process.stdout.write(pc.gray(chunk)),
     onContent: (chunk: string) => {
       process.stdout.write(pc.green(chunk));
       llmState.response += chunk;
@@ -150,15 +150,21 @@ async function handoffToAgent(message: string, ctx: BotContext) {
       }
     },
     onDone: async () => {
-      process.stdout.write(`\n\nSending response to ${ctx.from?.username}...`);
-      await ctx.reply(llmState.response);
+      if (llmState.response.trim() !== '') {
+        process.stdout.write(
+          `\n\nSending response to ${ctx.from?.username}...`
+        );
+        await ctx.reply(llmState.response);
+      }
       llmState.working = false;
       llmState.response = '';
       process.stdout.write(`done. ${pc.green('✓')}\n`);
     },
     onError: async (error: string) => {
-      console.error(pc.red(`Error: ${error}`));
-      await ctx.reply(`Error: ${error}`);
+      if (error) {
+        console.error(pc.red(`Error: ${error}`));
+        await ctx.reply(`Error: ${error}`);
+      }
       llmState.working = false;
       llmState.response = '';
     },

@@ -1,3 +1,9 @@
+- [ ] Remove `.greg.ts` from repo
+- [ ] Handle failures in one of the server processes (Telegram one in particular)
+- [ ] Plan what else you'd like to be able to do
+
+---
+
 # 🤖 Greg
 
 An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ less lines of code and therefore easier to understand, customize, and be used with confidence.
