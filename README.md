@@ -1,6 +1,4 @@
-- [ ] Remove `.greg.ts` from repo
-- [ ] Handle failures in one of the server processes (Telegram one in particular)
-- [ ] Plan what else you'd like to be able to do
+- [ ] When Greg restarts it should remember the conversation
 
 ---
 
