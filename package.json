@@ -7,8 +7,7 @@
     "greg": "bin/greg.ts"
   },
   "scripts": {
-    "agent": "pm2 start \"bun run agent/index.ts\" --name greg",
-    "agent:caffeinate": "pm2 start \"caffeinate -i bun run agent/index.ts\" --name greg",
+    "agent": "pm2 start \"caffeinate -i bun run agent/index.ts\" --name greg",
     "agent:stop": "pm2 delete greg",
     "agent:restart": "pm2 restart greg",
     "agent:logs": "pm2 logs greg",
