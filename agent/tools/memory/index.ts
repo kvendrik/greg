@@ -70,7 +70,12 @@ const getRecentConversationNotesTool: AgentTool = {
     const mdFiles = files.filter((f) => f.endsWith('.md'));
 
     if (mdFiles.length === 0) {
-      return { content: [{ type: 'text' as const, text: 'No recent conversation notes.' }], details: {} };
+      return {
+        content: [
+          { type: 'text' as const, text: 'No recent conversation notes.' },
+        ],
+        details: {},
+      };
     }
 
     const withMtime = mdFiles.map((f) => ({
@@ -125,9 +130,13 @@ const getConversationNoteTool: AgentTool = {
         'The docid of the memory entry to get (Starts with a hash symbol. Example: #79462a)',
     }),
     start_line: Type.Optional(
-      Type.Number({ description: 'Line number to start from (0 is the first line)' })
+      Type.Number({
+        description: 'Line number to start from (0 is the first line)',
+      })
     ),
-    max_lines: Type.Optional(Type.Number({ description: 'Max number of lines to return' })),
+    max_lines: Type.Optional(
+      Type.Number({ description: 'Max number of lines to return' })
+    ),
   }),
   execute: async (_id, params) => {
     const { docid, start_line, max_lines } = params as {
@@ -187,7 +196,9 @@ const updateIdentityTool: AgentTool = {
     await ensureWorkspaceExists();
     fs.writeFileSync(getIdentityPath(), content, 'utf8');
     return {
-      content: [{ type: 'text' as const, text: `${getIdentityPath()} updated.` }],
+      content: [
+        { type: 'text' as const, text: `${getIdentityPath()} updated.` },
+      ],
       details: {},
     };
   },
@@ -335,5 +346,8 @@ Memory files and workspace: ${getWorkspacePath()}.
 
 ### Conversation start
 Conversation started: ${formatDate(conversationStartIso)}. For \`save_conversation_note\` use conversation_start_iso: \`${conversationStartIso}\`.
+
+### Restarting yourself
+If you ever need to fully restart yourself (for example after configuration changes or if you are stuck), you can call the \`exec\` tool with the command \`greg restart\`. Before doing so, you MUST first call \`save_conversation_note\` with a concise summary of the current conversation so you can later reload it and know where you left off.
   `;
 }
