@@ -34,20 +34,19 @@ program.name(name).description(description).version(version);
 program
   .command('start')
   .description('Starts Greg')
-  .option(
-    '-c, --caffeinate',
-    'Run using \`caffeinate\` to prevent it from turning off due to your computer going to sleep'
-  )
-  .action(({ caffeinate }: { caffeinate: boolean }) => {
-    const proc = spawn(
-      'bun',
-      ['run', caffeinate ? 'agent:caffeinate' : 'agent'],
-      {
+  .option('-a, --attach', 'Run using attach to immediately see the logs')
+  .action(({ attach }: { attach: boolean }) => {
+    spawnSync('bun', ['run', 'agent'], {
+      stdio: 'inherit',
+      cwd: projectRoot,
+    });
+
+    if (attach) {
+      spawnSync('bun', ['run', 'agent:logs'], {
         stdio: 'inherit',
         cwd: projectRoot,
-      }
-    );
-    proc.on('exit', (code) => process.exit(code ?? 0));
+      });
+    }
   });
 
 program
