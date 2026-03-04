@@ -29,7 +29,12 @@ if (!scripts['clients:telegram']) {
 const projectRoot = path.join(import.meta.dirname, '..');
 const program = new Command();
 
-program.name(name).description(description).version(version);
+program
+  .name(name)
+  .description(
+    `${description}.\nSee ${path.resolve('./README.md')} for details.`
+  )
+  .version(version);
 
 program
   .command('start')
@@ -119,13 +124,21 @@ program
     proc.on('exit', (code) => process.exit(code ?? 0));
   });
 
-program.command('config').addCommand(
-  new Command('validate')
-    .description('Validate the config file')
-    .action(async () => {
-      await validate(config);
-    })
-);
+program
+  .command('config')
+  .description('Manage Greg’s config')
+  .addCommand(
+    new Command('validate')
+      .description('Validate the config file')
+      .action(async () => {
+        await validate(config);
+      })
+  )
+  .addCommand(
+    new Command('path')
+      .description('Get the current config path')
+      .action(() => console.log(path.resolve('./.greg.ts')))
+  );
 
 program
   .command('tools')

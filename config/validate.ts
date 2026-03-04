@@ -40,10 +40,9 @@ async function validateAnthropicKey(key: string): Promise<void> {
 
 async function validateGoogleKey(key: string): Promise<void> {
   const ai = new GoogleGenAI({ apiKey: key });
-  await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+  await ai.models.countTokens({
+    model: 'gemini-3-flash-preview',
     contents: 'x',
-    config: { maxOutputTokens: 1 },
   });
 }
 
