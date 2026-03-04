@@ -32,17 +32,6 @@ const program = new Command();
 program.name(name).description(description).version(version);
 
 program
-  .command('setup')
-  .description('Setup Greg for the first time')
-  .action(() => {
-    const proc = spawn('bun', ['run', 'setup'], {
-      stdio: 'inherit',
-      cwd: projectRoot,
-    });
-    proc.on('exit', (code) => process.exit(code ?? 0));
-  });
-
-program
   .command('start')
   .description('Starts Greg')
   .option(
@@ -59,6 +48,36 @@ program
       }
     );
     proc.on('exit', (code) => process.exit(code ?? 0));
+  });
+
+program
+  .command('stop')
+  .description('Stops Greg')
+  .action(() => {
+    spawn('bun', ['run', 'agent:stop'], {
+      stdio: 'inherit',
+      cwd: projectRoot,
+    });
+  });
+
+program
+  .command('restart')
+  .description('Restarts Greg')
+  .action(() => {
+    spawn('bun', ['run', 'agent:restart'], {
+      stdio: 'inherit',
+      cwd: projectRoot,
+    });
+  });
+
+program
+  .command('logs')
+  .description("Shows Greg's logs")
+  .action(() => {
+    spawn('bun', ['run', 'agent:logs'], {
+      stdio: 'inherit',
+      cwd: projectRoot,
+    });
   });
 
 program
