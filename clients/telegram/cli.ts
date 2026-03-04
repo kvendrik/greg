@@ -145,8 +145,9 @@ async function handoffToAgent(message: string, ctx: BotContext) {
         process.stdout.write(
           `\n\nSending partial response to ${ctx.from?.username}...`
         );
-        await ctx.reply(llmState.response);
+        const text = llmState.response;
         llmState.response = '';
+        await ctx.reply(text);
       }
     },
     onDone: async () => {
