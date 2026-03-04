@@ -32,7 +32,7 @@ function estimateTokensFromChars(messages: AgentMessage[]): number {
 
 type MessageWithUsage = AgentMessage & {
   role: 'assistant';
-  usage: { input: number };
+  usage: { input: number; cacheRead?: number; cacheWrite?: number };
 };
 
 function hasUsage(msg: AgentMessage): msg is MessageWithUsage {
@@ -44,7 +44,7 @@ function hasUsage(msg: AgentMessage): msg is MessageWithUsage {
 
 /**
  * Context size in tokens. Uses provider-reported usage when available (last
- * assistant message's input tokens; cache excluded per OpenClaw). Otherwise
+ * assistant message's input + cache tokens). Otherwise
  * falls back to char-based estimate.
  */
 export function deriveContextTokens(messages: AgentMessage[]): number {
@@ -54,7 +54,8 @@ export function deriveContextTokens(messages: AgentMessage[]): number {
   for (let i = messages.length - 1; i >= 0; i--) {
     if (hasUsage(messages[i])) {
       lastUsageIndex = i;
-      lastInputTokens = (messages[i] as MessageWithUsage).usage.input;
+      const u = (messages[i] as MessageWithUsage).usage;
+ lastInputTokens = u.input + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
       break;
     }
   }
