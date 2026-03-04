@@ -90,6 +90,48 @@ bot.on('message:voice', async (ctx) => {
   fs.unlinkSync('./temp.pcm');
 });
 
+bot.on('message:photo', async (ctx) => {
+  if (ctx.from?.id.toString() !== senderId) {
+    console.log(
+      `401: Received photo from ${ctx.from?.username} (${ctx.from?.id}) but not allowed to send messages to the bot`
+    );
+    return;
+  }
+
+  if (!(await ping())) {
+    await ctx.reply('Agent is not running');
+    process.exit(1);
+  }
+
+  const photos = ctx.message.photo;
+  const largestPhoto = photos[photos.length - 1];
+
+  console.log('Received photo message:', {
+    width: largestPhoto.width,
+    height: largestPhoto.height,
+    fileSize: largestPhoto.file_size,
+    fileId: largestPhoto.file_id,
+  });
+
+  const file = await ctx.getFile();
+
+  if (!fs.existsSync('./telegram-images')) {
+    fs.mkdirSync('./telegram-images', { recursive: true });
+  }
+
+  const localPath = `./telegram-images/${file.file_id}.jpg`;
+  await file.download(localPath);
+
+  const caption = ctx.message.caption ?? '';
+  const prompt = [
+    'User sent an image via Telegram.',
+    `Local file path: ${localPath}`,
+    caption ? `Caption: ${caption}` : 'No caption provided.',
+  ].join('\n');
+
+  await handoffToAgent(prompt, ctx);
+});
+
 bot.start();
 console.log('Ready.');
 
