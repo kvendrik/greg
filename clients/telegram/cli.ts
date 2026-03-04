@@ -94,9 +94,9 @@ const mediaGroupCollector = new Map<
   { contexts: BotContext[]; timer: ReturnType<typeof setTimeout> }
 >();
 
-async function downloadFileToBuffer(
-  file: { getUrl: () => string }
-): Promise<Buffer> {
+async function downloadFileToBuffer(file: {
+  getUrl: () => string;
+}): Promise<Buffer> {
   const url = file.getUrl();
   const res = await fetch(url);
   if (!res.ok) {
@@ -234,11 +234,11 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
   }
 
   llmState.working = true;
+  console.log('Working...');
 
   await thread.prompt(input, {
     onThinking: (chunk: string) => {}, //process.stdout.write(pc.gray(chunk)),
     onContent: (chunk: string) => {
-      process.stdout.write(pc.green(chunk));
       llmState.response += chunk;
     },
     onToolcall: async () => {
@@ -251,7 +251,8 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
     },
     onDone: async () => {
       if (llmState.response.trim() !== '') {
-        process.stdout.write(`\n\n${message}`);
+        console.log(`\n\n${message}`);
+        console.log(`"${llmState.response}"`);
         await send(llmState.response);
       }
       llmState.working = false;
