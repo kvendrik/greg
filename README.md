@@ -1,7 +1,3 @@
-- [x] When Greg restarts it should remember the conversation
-
----
-
 # 🤖 Greg
 
 An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ less lines of code and therefore easier to understand, customize, and be used with confidence.
