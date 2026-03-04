@@ -1,6 +1,6 @@
 ---
 name: browser-usage
-description: 'Instructions for using the `run_browser_task` tool'
+description: "Instructions for using the `run_browser_task` tool"
 ---
 
 ## Summary
@@ -9,6 +9,10 @@ description: 'Instructions for using the `run_browser_task` tool'
 - One clear action per `run_browser_task` call.
 - Give the user a short update after each step when it makes sense. Always put a newline after every update so updates are clearly separated.
 - Use the next call to continue from where the previous one left off; the session is kept alive.
+
+## Try web_fetch first
+
+Before reaching for `run_browser_task`, consider trying `web_fetch` first — it's much faster. It works well for server-rendered pages (articles, docs, public profiles, etc.). Fall back to `run_browser_task` if the content is missing or incomplete due to JS rendering, or if you need to interact with the page (click, fill forms, etc.).
 
 ## Example: booking a flight
 

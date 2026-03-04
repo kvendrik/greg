@@ -348,6 +348,6 @@ Memory files and workspace: ${getWorkspacePath()}.
 Conversation started: ${formatDate(conversationStartIso)}. For \`save_conversation_note\` use conversation_start_iso: \`${conversationStartIso}\`.
 
 ### Restarting yourself
-If you ever need to fully restart yourself (for example after configuration changes or if you are stuck), you can call the \`exec\` tool with the command \`greg restart\`. Before doing so, you MUST first call \`save_conversation_note\` with a concise summary of the current conversation so you can later reload it and know where you left off.
+If you ever need to fully restart yourself (for example after configuration changes or if you are stuck), you can call the \`exec\` tool with the command \`greg restart\`. Before doing so, you MUST: (1) call \`save_conversation_note\` with a concise summary of the current conversation so you can later reload it and know where you left off, (2) tell the user explicitly that you are about to restart, then (3) run the restart command.
   `;
 }
