@@ -5,6 +5,7 @@ import { Command } from 'commander';
 import { name, description, version, scripts } from '../package.json';
 import config from '../.greg';
 import { validate } from '../config';
+import pc from 'picocolors';
 
 if (!scripts.agent) {
   throw new Error('Something is wrong. Agent script not found in package.json');
@@ -52,6 +53,37 @@ program
         cwd: projectRoot,
       });
     }
+  });
+
+program
+  .command('status')
+  .description("Gets Greg's status")
+  .option('-v, --verbose', 'Show verbose output')
+  .action(({ verbose }: { verbose: boolean }) => {
+    const proc = spawn('bun', ['run', 'pm2', 'describe', 'greg'], {
+      stdio: 'pipe',
+      cwd: projectRoot,
+    });
+    let stdout = '';
+    proc.stdout?.on('data', (data) => {
+      stdout += data.toString();
+    });
+    proc.on('exit', (code) => {
+      if (code === 0) {
+        console.log(pc.green('🤖 Greg is running.'));
+        console.log(
+          pc.gray(
+            'Run `greg logs` to see the logs.\nRun `greg status` again with flag `-v` to see the verbose output.'
+          )
+        );
+        if (verbose) {
+          console.log(stdout);
+        }
+      } else {
+        console.log('Greg is not running. Run `greg start` to start.');
+      }
+      process.exit(code ?? 0);
+    });
   });
 
 program
