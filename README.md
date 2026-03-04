@@ -1,4 +1,4 @@
-- [ ] When Greg restarts it should remember the conversation
+- [x] When Greg restarts it should remember the conversation
 
 ---
 
