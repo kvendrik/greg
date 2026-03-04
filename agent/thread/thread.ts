@@ -92,15 +92,25 @@ ${getToolsInstructions(conversationStartIso)}
       const thinkingLevel = parsed.result.thinkingLevel ?? 'medium';
 
       if (parsed.result.statusRequested) {
-        const contextTokens = deriveContextTokens(agent.state.messages);
-        const contextWindow = model.contextWindow;
+        let contextLine: string;
+        try {
+          const contextTokens = deriveContextTokens(agent.state.messages);
+          const contextWindow = model.contextWindow;
+          const percentage =
+            contextWindow > 0
+              ? Math.min(100, (contextTokens / contextWindow) * 100).toFixed(1)
+              : '0.0';
+          contextLine = `📊 Context: ${contextTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tokens (${percentage}%)`;
+        } catch {
+          contextLine = '📊 Context: unknown';
+        }
         onContent(
           [
             'Status:',
             lastModel && `🧠 Last model used: ${lastModel.name}`,
             `🧠 Model for this prompt: ${model.name}`,
             `💭 Thinking: ${thinkingLevel}`,
-            `📊 Context: ${contextTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tokens`,
+            contextLine,
           ]
             .filter(Boolean)
             .join('\n')

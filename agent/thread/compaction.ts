@@ -1,70 +1,45 @@
 import { completeSimple } from '@mariozechner/pi-ai';
-import type { Model } from '@mariozechner/pi-ai';
+import type { Model, Usage } from '@mariozechner/pi-ai';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import config from '../../.greg';
 
 const SUMMARIZE_SYSTEM = `You are a summarizer. Given a conversation history, produce a concise summary that preserves key facts, decisions, topics, and context needed to continue the conversation. Output only the summary, no preamble.`;
 
-/** Fallback when no provider usage is available. Uses ~4 chars/token for English. */
-function estimateTokensFromChars(messages: AgentMessage[]): number {
-  let chars = 0;
-  for (const m of messages) {
-    const content = (m as { content?: string | Array<{ text?: string }> })
-      .content;
-    if (!content) continue;
-    if (typeof content === 'string') {
-      chars += content.length;
-    } else if (Array.isArray(content)) {
-      for (const block of content) {
-        if (
-          block &&
-          typeof block === 'object' &&
-          'text' in block &&
-          typeof block.text === 'string'
-        ) {
-          chars += block.text.length;
-        }
-      }
-    }
-  }
-  return Math.ceil(chars / 4);
-}
-
-type MessageWithUsage = AgentMessage & {
-  role: 'assistant';
-  usage: { input: number; cacheRead?: number; cacheWrite?: number };
-};
+type MessageWithUsage = AgentMessage & (Usage & { role: 'assistant' });
 
 function hasUsage(msg: AgentMessage): msg is MessageWithUsage {
   return (
     (msg as { role?: string }).role === 'assistant' &&
-    typeof (msg as MessageWithUsage).usage?.input === 'number'
+    typeof (msg as { usage?: Usage }).usage?.input === 'number'
   );
 }
 
 /**
- * Context size in tokens. Uses provider-reported usage when available (last
- * assistant message's input + cache tokens). Otherwise
- * falls back to char-based estimate.
+ * Context size in tokens based solely on provider‑reported usage.
+ *
+ * We take the last assistant message that has a `usage` field and interpret
+ * its context size as:
+ *
+ *   input tokens + cache read tokens + cache write tokens
+ *
+ * This matches the tokens the provider actually saw as prompt/cache at the
+ * time of that call. Messages after that point are *not* estimated.
  */
 export function deriveContextTokens(messages: AgentMessage[]): number {
-  if (messages.length === 0) return 0;
-  let lastUsageIndex = -1;
-  let lastInputTokens = 0;
+  if (messages.length === 0) {
+    return 0;
+  }
+
   for (let i = messages.length - 1; i >= 0; i--) {
     if (hasUsage(messages[i])) {
-      lastUsageIndex = i;
-      const u = (messages[i] as MessageWithUsage).usage;
- lastInputTokens = u.input + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
-      break;
+      const u = (messages[i] as { usage: Usage }).usage;
+      return u.input + u.cacheRead + u.cacheWrite;
     }
   }
-  if (lastUsageIndex < 0) {
-    return estimateTokensFromChars(messages);
-  }
-  const messagesAfterUsage = messages.slice(lastUsageIndex + 1);
-  const estimatedNew = estimateTokensFromChars(messagesAfterUsage);
-  return lastInputTokens + estimatedNew;
+
+  throw new Error(
+    'Cannot derive context tokens: no assistant message with provider usage found.'
+  );
 }
 
 function messagesToTranscript(messages: AgentMessage[]): string {
