@@ -97,9 +97,16 @@ const server = http.createServer(async (req, res) => {
   });
 
   req.on('end', async () => {
-    let parsed: { prompt?: string };
+    type Image = {
+      data: string;
+      mimeType: string;
+    };
+
+    type PromptInput = { content: string; images: Image[] };
+
+    let parsed: { prompt?: PromptInput };
     try {
-      parsed = JSON.parse(body) as { prompt?: string };
+      parsed = JSON.parse(body) as { prompt?: PromptInput };
     } catch {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Invalid JSON body' }));
@@ -107,10 +114,36 @@ const server = http.createServer(async (req, res) => {
     }
 
     const userPrompt = parsed?.prompt;
-    if (typeof userPrompt !== 'string' || !userPrompt.trim()) {
+    if (!userPrompt || typeof userPrompt !== 'object') {
       res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Missing or empty "prompt" field' }));
+      res.end(JSON.stringify({ error: 'Missing or invalid "prompt" field' }));
       return;
+    }
+    if (typeof userPrompt.content !== 'string' || !userPrompt.content.trim()) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing or empty prompt content' }));
+      return;
+    }
+    if (!Array.isArray(userPrompt.images)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Prompt "images" must be an array' }));
+      return;
+    }
+    for (let i = 0; i < userPrompt.images.length; i++) {
+      const img = userPrompt.images[i];
+      if (
+        typeof img?.data !== 'string' ||
+        typeof img?.mimeType !== 'string' ||
+        !img.mimeType.trim()
+      ) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            error: `Each image must have "data" and "mimeType" (invalid at index ${i})`,
+          })
+        );
+        return;
+      }
     }
 
     res.writeHead(200, {
@@ -123,7 +156,7 @@ const server = http.createServer(async (req, res) => {
     req.socket.setTimeout(0);
 
     try {
-      await thread.prompt(userPrompt.trim(), {
+      await thread.prompt(userPrompt, {
         onContent(chunk) {
           res.write(JSON.stringify({ type: 'content', chunk }) + '\n');
         },

@@ -1,5 +1,5 @@
 import { Agent } from '@mariozechner/pi-agent-core';
-import type { Model, Api } from '@mariozechner/pi-ai';
+import type { Model, Api, ImageContent } from '@mariozechner/pi-ai';
 import { getInstructions as getToolsInstructions, tools } from '../tools';
 import { formatDate } from '../utilities';
 import { compactContext, deriveContextTokens } from './compaction';
@@ -16,8 +16,15 @@ export type PromptOptions = {
   onError: (err: string) => void;
 };
 
+type Image = {
+  data: string;
+  mimeType: string;
+};
+
+export type PromptInput = { content: string; images: Image[] };
+
 export type Thread = {
-  prompt: (content: string, options: PromptOptions) => Promise<void>;
+  prompt: (content: PromptInput, options: PromptOptions) => Promise<void>;
   abort: () => void;
 };
 
@@ -66,11 +73,11 @@ ${getToolsInstructions(conversationStartIso)}
   return {
     abort: () => abortController.abort(),
     prompt: async (
-      initialContent: string,
+      input: PromptInput,
       { onContent, onThinking, onToolcall, onDone, onError }: PromptOptions
     ) => {
       const parsed = parseCommands({
-        content: initialContent,
+        content: input.content,
         currentModel: agent.state.model ?? primaryModel,
         primaryModel,
         config,
@@ -108,7 +115,9 @@ ${getToolsInstructions(conversationStartIso)}
       agent.setThinkingLevel(thinkingLevel);
 
       const nowIso = new Date().toISOString();
-      const messageWithMeta = `Date and time is ${formatDate(nowIso)}. User sent this prompt: "${parsed.cleanPrompt}"`;
+      const messageWithMeta = `Date and time is ${formatDate(
+        nowIso
+      )}. User sent this prompt: "${parsed.cleanPrompt}"`;
 
       console.info(pc.gray(`\n"${messageWithMeta}"`));
 
@@ -162,8 +171,16 @@ ${getToolsInstructions(conversationStartIso)}
         { once: true }
       );
 
+      const images = input.images ?? [];
+      const imageContents: ImageContent[] = images.map((img) => ({
+        type: 'image' as const,
+        data: img.data,
+        mimeType: img.mimeType,
+      }));
+
       try {
-        await agent.prompt(messageWithMeta);
+        await agent.prompt(messageWithMeta, imageContents);
+
         if (agent.state.error) {
           const isPrimaryModel =
             agent.state.model?.id === primaryModel.id &&

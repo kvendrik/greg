@@ -10,11 +10,16 @@ type PromptCallbacks = {
   onError: (error: string) => void;
 };
 
+export type PromptInput = {
+  content: string;
+  images: { data: string; mimeType: string }[];
+};
+
 export type Thread = {
   id: string;
   abort(): Promise<boolean>;
   destroy(): Promise<boolean>;
-  prompt(promptText: string, callbacks: PromptCallbacks): Promise<void>;
+  prompt(input: PromptInput, callbacks: PromptCallbacks): Promise<void>;
 };
 
 export async function ping() {
@@ -46,8 +51,8 @@ export async function createThread(): Promise<Thread> {
       destroyed = true;
       return destroyThread(id);
     },
-    prompt(promptText, callbacks) {
-      return prompt(id, promptText, callbacks);
+    prompt(input, callbacks) {
+      return prompt(id, input, callbacks);
     },
   };
 }
@@ -68,13 +73,13 @@ async function destroyThread(threadId: string) {
 
 async function prompt(
   threadId: string,
-  promptText: string,
+  input: PromptInput,
   { onThinking, onContent, onToolcall, onDone, onError }: PromptCallbacks
 ) {
   const res = await fetch(`${BASE}/threads/${threadId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: promptText }),
+    body: JSON.stringify({ prompt: input }),
   });
 
   if (!res.ok) {
