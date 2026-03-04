@@ -1,6 +1,11 @@
 import { Bot, type Context } from 'grammy';
 import { FileFlavor, hydrateFiles } from '@grammyjs/files';
-import { ping, createThread, type Thread } from '../agent-sdk';
+import {
+  ping,
+  createThread,
+  type Thread,
+  type PromptInput,
+} from '../agent-sdk';
 import { pipeline } from '@xenova/transformers';
 import ffmpeg from 'fluent-ffmpeg';
 import pc from 'picocolors';
@@ -18,20 +23,14 @@ if (!(await ping())) {
 
 const llmState = { working: false, response: '' };
 const bot = new Bot<BotContext>(botToken);
-
-let thread: Thread | null = null;
-
-async function getOrCreateThread(): Promise<Thread> {
-  if (!thread) thread = await createThread();
-  return thread;
-}
-
-bot.api.config.use(hydrateFiles(bot.token));
-
 const transcriber = await pipeline(
   'automatic-speech-recognition',
   'Xenova/whisper-small'
 );
+
+bot.api.config.use(hydrateFiles(bot.token));
+
+const thread: Thread = await createThread();
 
 bot.on('message:text', async (ctx) => {
   if (ctx.from?.id.toString() !== senderId) {
@@ -54,7 +53,7 @@ bot.on('message:text', async (ctx) => {
     return;
   }
 
-  handoffToAgent(message.text, ctx);
+  handoffToAgent({ content: message.text ?? '', images: [] }, ctx);
 });
 
 bot.on('message:voice', async (ctx) => {
@@ -84,11 +83,51 @@ bot.on('message:voice', async (ctx) => {
     return_timestamps: false,
   })) as { text: string };
 
-  handoffToAgent(result.text.trim(), ctx);
+  handoffToAgent({ content: result.text.trim(), images: [] }, ctx);
 
   fs.unlinkSync('./temp.ogg');
   fs.unlinkSync('./temp.pcm');
 });
+
+const mediaGroupCollector = new Map<
+  string,
+  { contexts: BotContext[]; timer: ReturnType<typeof setTimeout> }
+>();
+
+async function downloadFileToBuffer(
+  file: { getUrl: () => string }
+): Promise<Buffer> {
+  const url = file.getUrl();
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to download file: ${res.status}`);
+  }
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+async function processPhotoMessage(ctx: BotContext) {
+  const photos = ctx.message.photo;
+  const largestPhoto = photos[photos.length - 1];
+  const file = await ctx.api.getFile(largestPhoto.file_id);
+  const imageBuffer = await downloadFileToBuffer(file);
+  const base64 = imageBuffer.toString('base64');
+  return { base64, caption: ctx.message.caption ?? undefined };
+}
+
+async function processPhotoBatch(contexts: BotContext[], replyCtx: BotContext) {
+  const results = await Promise.all(contexts.map(processPhotoMessage));
+  const caption =
+    results.map((r) => r.caption).find(Boolean) ||
+    (contexts.length > 1
+      ? `User sent ${contexts.length} images.`
+      : 'User sent an image.');
+  const images = results.map((r) => ({
+    data: r.base64,
+    mimeType: 'image/jpeg' as const,
+  }));
+  await handoffToAgent({ content: caption, images }, replyCtx);
+}
 
 bot.on('message:photo', async (ctx) => {
   if (ctx.from?.id.toString() !== senderId) {
@@ -103,37 +142,52 @@ bot.on('message:photo', async (ctx) => {
     process.exit(1);
   }
 
-  const photos = ctx.message.photo;
-  const largestPhoto = photos[photos.length - 1];
+  const mediaGroupId = ctx.message.media_group_id;
 
-  console.log('Received photo message:', {
-    width: largestPhoto.width,
-    height: largestPhoto.height,
-    fileSize: largestPhoto.file_size,
-    fileId: largestPhoto.file_id,
-  });
-
-  const file = await ctx.getFile();
-
-  if (!fs.existsSync('./telegram-images')) {
-    fs.mkdirSync('./telegram-images', { recursive: true });
+  if (mediaGroupId) {
+    const existing = mediaGroupCollector.get(mediaGroupId);
+    if (existing) {
+      existing.contexts.push(ctx);
+      clearTimeout(existing.timer);
+      existing.timer = setTimeout(() => {
+        mediaGroupCollector.delete(mediaGroupId);
+        const contexts = existing.contexts;
+        processPhotoBatch(contexts, contexts[0]).catch((err) => {
+          console.error('Error processing photo batch:', err);
+          contexts[0].reply('Failed to process images.').catch(console.error);
+        });
+      }, 400);
+    } else {
+      const timer = setTimeout(() => {
+        mediaGroupCollector.delete(mediaGroupId);
+        processPhotoBatch([ctx], ctx).catch((err) => {
+          console.error('Error processing photo batch:', err);
+          ctx.reply('Failed to process images.').catch(console.error);
+        });
+      }, 400);
+      mediaGroupCollector.set(mediaGroupId, { contexts: [ctx], timer });
+    }
+    return;
   }
 
-  const localPath = `./telegram-images/${file.file_id}.jpg`;
-  await file.download(localPath);
-
-  const caption = ctx.message.caption ?? '';
-  const prompt = [
-    'User sent an image via Telegram.',
-    `Local file path: ${localPath}`,
-    caption ? `Caption: ${caption}` : 'No caption provided.',
-  ].join('\n');
-
-  await handoffToAgent(prompt, ctx);
+  const { base64, caption } = await processPhotoMessage(ctx);
+  await handoffToAgent(
+    {
+      content: caption || 'User sent an image.',
+      images: [{ data: base64, mimeType: 'image/jpeg' }],
+    },
+    ctx
+  );
 });
 
 bot.start();
 console.log('Ready.');
+
+await handoffToAgent({
+  content:
+    '<system_instructions>You just started. Check recent notes for context and greet me. If your recent notes say you were asked to restart then make sure to reference that in the greeting.</system_instructions>',
+  images: [],
+});
 
 function oggToRawPcm(input: string, output: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -163,20 +217,25 @@ async function readAudioAsFloat32(pcmPath: string): Promise<Float32Array> {
   return float32Array;
 }
 
-async function handoffToAgent(message: string, ctx: BotContext) {
-  console.log(`\n\nPrompting: "${message}"`);
+async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
+  const imageSuffix =
+    input.images.length > 0 ? ` [+${input.images.length} image(s)]` : '';
+  const preview = `${input.content}${imageSuffix}`;
+
+  console.log(`\n\nPrompting: "${preview}"`);
+
+  const message = `Sending response to ${ctx ? ctx.from?.username : 'user'}...`;
 
   if (llmState.working) {
-    process.stdout.write(`\n\nSending response to ${ctx.from?.username}...`);
-    await ctx.reply('Working on that request...');
+    process.stdout.write(`\n\n${message}`);
+    await send('Working on that request...');
     process.stdout.write(`done. ${pc.green('✓')}\n`);
     return;
   }
 
   llmState.working = true;
-  const t = await getOrCreateThread();
 
-  await t.prompt(message, {
+  await thread.prompt(input, {
     onThinking: (chunk: string) => {}, //process.stdout.write(pc.gray(chunk)),
     onContent: (chunk: string) => {
       process.stdout.write(pc.green(chunk));
@@ -184,20 +243,16 @@ async function handoffToAgent(message: string, ctx: BotContext) {
     },
     onToolcall: async () => {
       if (llmState.response.trim() !== '') {
-        process.stdout.write(
-          `\n\nSending partial response to ${ctx.from?.username}...`
-        );
+        process.stdout.write(`\n\n${message} (partial response)`);
         const text = llmState.response;
         llmState.response = '';
-        await ctx.reply(text);
+        await send(text);
       }
     },
     onDone: async () => {
       if (llmState.response.trim() !== '') {
-        process.stdout.write(
-          `\n\nSending response to ${ctx.from?.username}...`
-        );
-        await ctx.reply(llmState.response);
+        process.stdout.write(`\n\n${message}`);
+        await send(llmState.response);
       }
       llmState.working = false;
       llmState.response = '';
@@ -206,10 +261,18 @@ async function handoffToAgent(message: string, ctx: BotContext) {
     onError: async (error: string) => {
       if (error) {
         console.error(pc.red(`Error: ${error}`));
-        await ctx.reply(`Error: ${error}`);
+        await send(`Error: ${error}`);
       }
       llmState.working = false;
       llmState.response = '';
     },
   });
+
+  function send(text: string) {
+    if (ctx) {
+      return ctx.reply(text);
+    } else {
+      return bot.api.sendMessage(senderId, text);
+    }
+  }
 }

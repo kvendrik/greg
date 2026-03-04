@@ -1,4 +1,9 @@
-import { ping, createThread, type Thread } from './agent-sdk';
+import {
+  ping,
+  createThread,
+  type Thread,
+  type PromptInput,
+} from './agent-sdk';
 import { text, isCancel, stream } from '@clack/prompts';
 import pc from 'picocolors';
 
@@ -47,7 +52,9 @@ async function promptForInput(
   }
 
   try {
-    await stream.step(streamPrompt(thread, input.toString()));
+    await stream.step(
+      streamPrompt(thread, { content: input.toString(), images: [] })
+    );
   } catch (err) {
     console.error(err instanceof Error ? err.message : err);
     await thread.destroy();
@@ -57,7 +64,7 @@ async function promptForInput(
   promptForInput(thread, 'Reply');
 }
 
-async function* streamPrompt(thread: Thread, input: string) {
+async function* streamPrompt(thread: Thread, input: PromptInput) {
   const chunks: string[] = [];
   let resolver: (() => void) | null = null;
   let thinking = true;

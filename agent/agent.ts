@@ -42,7 +42,14 @@ export function start() {
 }
 
 function execScript(args: string[]) {
-  return spawn(`bun`, ['run', ...args], {
+  const proc = spawn(`bun`, ['run', ...args], {
     stdio: 'inherit',
+  });
+
+  proc.on('exit', (code) => {
+    if (code !== 0) {
+      console.error(pc.red(`Failed to execute script: ${args.join(' ')}`));
+      process.exit(code);
+    }
   });
 }
