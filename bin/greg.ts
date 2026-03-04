@@ -42,12 +42,26 @@ program
   .description('Starts Greg')
   .option('-a, --attach', 'Run using attach to immediately see the logs')
   .action(({ attach }: { attach: boolean }) => {
-    spawnSync('bun', ['run', 'agent'], {
+    const statusResult = spawnSync('bun', ['run', 'pm2', 'describe', 'greg'], {
+      stdio: 'pipe',
+      cwd: projectRoot,
+    });
+
+    const gregStarted = statusResult.status === 0;
+
+    if (gregStarted) {
+      console.log(
+        pc.green('Greg is already running. Run `greg logs` to see the logs.')
+      );
+      process.exit(0);
+    }
+
+    const startResult = spawnSync('bun', ['run', 'agent'], {
       stdio: 'inherit',
       cwd: projectRoot,
     });
 
-    if (attach) {
+    if (attach && startResult.status === 0) {
       spawnSync('bun', ['run', 'agent:logs'], {
         stdio: 'inherit',
         cwd: projectRoot,
