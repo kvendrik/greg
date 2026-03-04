@@ -1,3 +1,9 @@
+- [ ] Add Google Maps CLI for location lookups
+- [ ] Give Greg a way to make calls
+- [ ] Add CLIs for WhatsApp, Telegram, and iMessage to include messaging in morning updates
+
+---
+
 # 🤖 Greg
 
 An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ less lines of code and therefore easier to understand, customize, and be used with confidence.

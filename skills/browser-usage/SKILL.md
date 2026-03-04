@@ -14,6 +14,10 @@ description: "Instructions for using the `run_browser_task` tool"
 
 Before reaching for `run_browser_task`, consider trying `web_fetch` first — it's much faster. It works well for server-rendered pages (articles, docs, public profiles, etc.). Fall back to `run_browser_task` if the content is missing or incomplete due to JS rendering, or if you need to interact with the page (click, fill forms, etc.).
 
+## Transparency about tool fallbacks
+
+If a tool fails (e.g. `web_search` returns a 503, or `web_fetch` returns incomplete content) and you decide to switch to `run_browser_task`, tell the user before doing so. Explain briefly what failed and what you're doing instead. Don't silently switch tools.
+
 ## Example: booking a flight
 
 User prompt: "Book me a flight from AMS to NYC for tomorrow"
@@ -53,3 +57,14 @@ User prompt: "Is the Sony WH-1000XM5 cheaper on bol.com or on Amazon.nl?"
 11. User update before: "Update: Checking the Amazon price."
 12. Run: `run_browser_task({task: 'Get the current price of the first Sony WH-1000XM5 result'})`
 13. User update before: "Done: On bol.com it's €X, on Amazon.nl it's €Y. The cheaper option is ..."
+
+## Example: finding events at a venue
+
+User prompt: "Find me concerts at Paradiso this weekend"
+
+1. Try `web_search` for "Paradiso Amsterdam concerts this weekend [dates]".
+2. If `web_search` fails (e.g. 503): tell the user — "web_search failed, trying web_fetch instead."
+3. Try `web_fetch` on the venue's website (e.g. `https://www.paradiso.nl`).
+4. If `web_fetch` returns incomplete results (e.g. no weekend-specific events): tell the user — "The page didn't have the full agenda, switching to the browser."
+5. Run: `run_browser_task({task: 'Go to paradiso.nl and find all events on [dates]. List each event with name, date, time, and venue.'})`
+6. Present results to the user grouped by day.
