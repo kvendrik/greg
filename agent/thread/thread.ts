@@ -136,7 +136,7 @@ ${getToolsInstructions(conversationStartIso)}
             `🧠 Model: ${lastModel ? lastModel.name : 'nothing sent yet'}`,
             `💭 Thinking: ${thinkingLevel}`,
             contextLine,
-            `💪 Working: ${isWorking ? 'yes (send /stop to stop)' : 'no'}`,
+            `🕵️‍♂️ Busy: ${isWorking ? 'Yes (send /stop to stop)' : 'No. Ready for a new task.'}`,
             `\nOptions given for this prompt:`,
             `- Model: ${model.name}`,
             `- Thinking: ${thinkingLevel}`,

@@ -221,10 +221,10 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
 
   await thread.prompt(input, {
     onThinking: (chunk: string) => {
-      ctx.api.sendChatAction(ctx.chat.id, 'typing');
+      ctx?.api.sendChatAction(ctx.chat.id, 'typing');
     },
     onContent: (chunk: string) => {
-      ctx.api.sendChatAction(ctx.chat.id, 'typing');
+      ctx?.api.sendChatAction(ctx.chat.id, 'typing');
       response += chunk;
     },
     onToolcall: async () => {
