@@ -210,7 +210,7 @@ async function readAudioAsFloat32(pcmPath: string): Promise<Float32Array> {
 }
 
 async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
-  const sendTypingAction = ctx ? createSendTypingAction(ctx) : null;
+  const typing = ctx ? createSendTypingAction(ctx) : null;
 
   const imageSuffix =
     input.images.length > 0 ? ` [+${input.images.length} image(s)]` : '';
@@ -221,12 +221,11 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
   const message = `Sending response to ${ctx ? ctx.from?.username : 'user'}...`;
   let response = '';
 
+  typing?.start();
+
   await thread.prompt(input, {
-    onThinking: (chunk: string) => {
-      sendTypingAction?.();
-    },
+    onThinking: (chunk: string) => {},
     onContent: (chunk: string) => {
-      sendTypingAction?.();
       response += chunk;
     },
     onToolcall: async () => {
@@ -241,6 +240,7 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
       if (response.trim() !== '') {
         console.log(`\n\n${message}`);
         console.log(`"${response}"`);
+        typing?.stop();
         await send(response);
       }
       response = '';
@@ -249,6 +249,7 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
     onError: async (error: string) => {
       if (error) {
         console.error(pc.red(`Error: ${error}`));
+        typing?.stop();
         await send(error);
       }
       response = '';
@@ -266,19 +267,37 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
 
 function createSendTypingAction(ctx: BotContext) {
   const typingIntervalMs = 5000;
-  let lastTypingAt = 0;
+  const chatId = ctx.chat.id;
+  let stopped = false;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  return sendTypingAction;
-
-  function sendTypingAction() {
-    const chatId = ctx.chat.id;
-    const now = Date.now();
-
-    if (now - lastTypingAt < typingIntervalMs) {
+  const loop = async () => {
+    if (stopped) {
       return;
     }
 
-    lastTypingAt = now;
-    void ctx.api.sendChatAction(chatId, 'typing').catch(console.error);
-  }
+    try {
+      await ctx.api.sendChatAction(chatId, 'typing');
+    } catch (error) {
+      console.error(error);
+    }
+
+    if (stopped) {
+      return;
+    }
+
+    timeoutId = setTimeout(loop, typingIntervalMs);
+  };
+
+  return {
+    start() {
+      void loop();
+    },
+    stop() {
+      stopped = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    },
+  };
 }
