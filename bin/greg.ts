@@ -71,6 +71,7 @@ program
 
 program
   .command('status')
+  .alias('s')
   .description("Gets Greg's status")
   .option('-v, --verbose', 'Show verbose output')
   .action(({ verbose }: { verbose: boolean }) => {
@@ -122,6 +123,7 @@ program
 
 program
   .command('logs')
+  .alias('l')
   .description("Shows Greg's logs")
   .action(() => {
     spawn('bun', ['run', 'agent:logs'], {
