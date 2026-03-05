@@ -46,14 +46,7 @@ bot.on('message:text', async (ctx) => {
   }
 
   const message = ctx.message;
-
-  if (message.text === '/stop') {
-    const success = thread ? await thread.abort() : true;
-    await ctx.reply(success ? 'Okay. Stopping.' : 'Failed to stop.');
-    return;
-  }
-
-  handoffToAgent({ content: message.text ?? '', images: [] }, ctx);
+  handoffToAgent({ content: message.text, images: [] }, ctx);
 });
 
 bot.on('message:voice', async (ctx) => {
@@ -185,7 +178,7 @@ console.log('Ready.');
 
 await handoffToAgent({
   content:
-    '<system_instructions>You just started. Check recent notes for context and greet me. If your recent notes say you were asked to restart then make sure to reference that in the greeting.</system_instructions>',
+    '<system_instructions>You just started. Check recent notes for context and greet me.</system_instructions>',
   images: [],
 });
 
@@ -225,16 +218,10 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
   console.log(`\n\nPrompting: "${preview}"`);
 
   const message = `Sending response to ${ctx ? ctx.from?.username : 'user'}...`;
-
-  if (llmState.working) {
-    process.stdout.write(`\n\n${message}`);
-    await send('Working on that request...');
-    process.stdout.write(`done. ${pc.green('✓')}\n`);
-    return;
-  }
+  const typingIndicator = ctx ? createTypingIndicator(ctx) : null;
 
   llmState.working = true;
-  console.log('Working...');
+  typingIndicator?.start();
 
   await thread.prompt(input, {
     onThinking: (chunk: string) => {}, //process.stdout.write(pc.gray(chunk)),
@@ -255,25 +242,56 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
         console.log(`"${llmState.response}"`);
         await send(llmState.response);
       }
-      llmState.working = false;
-      llmState.response = '';
+      reset();
       process.stdout.write(`done. ${pc.green('✓')}\n`);
     },
     onError: async (error: string) => {
       if (error) {
         console.error(pc.red(`Error: ${error}`));
-        await send(`Error: ${error}`);
+        await send(error);
       }
-      llmState.working = false;
-      llmState.response = '';
+      reset();
     },
   });
+
+  function reset() {
+    llmState.working = false;
+    llmState.response = '';
+    typingIndicator?.stop();
+  }
 
   function send(text: string) {
     if (ctx) {
       return ctx.reply(text);
     } else {
       return bot.api.sendMessage(senderId, text);
+    }
+  }
+}
+
+function createTypingIndicator(ctx: BotContext) {
+  let typingInterval: ReturnType<typeof setInterval> | null = null;
+
+  return {
+    start: startTyping,
+    stop: stopTyping,
+  };
+
+  function startTyping() {
+    if (typingInterval) return;
+
+    void ctx.api.sendChatAction(ctx.chat.id, 'typing').catch(() => {});
+
+    typingInterval = setInterval(() => {
+      if (!llmState.working || !ctx.chat) return;
+      void ctx.api.sendChatAction(ctx.chat.id, 'typing').catch(() => {});
+    }, 4000);
+  }
+
+  function stopTyping() {
+    if (typingInterval) {
+      clearInterval(typingInterval);
+      typingInterval = null;
     }
   }
 }

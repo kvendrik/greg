@@ -14,6 +14,8 @@ export type ParseCommandsResult = {
   model: ConfigModel | null;
   thinkingLevel: ThinkingLevel | null;
   statusRequested: boolean;
+  stopRequested: boolean;
+  helpRequested: boolean;
 };
 
 export type ParseCommandsOutput =
@@ -28,11 +30,32 @@ export type ParseCommandsOutput =
 const COMMAND_REGEX = /^\/([^\s:]+)\s*/;
 const THINK_LEVEL_REGEX = /^(off|low|medium|high)\s*/i;
 
+export function listCommands(config: Config): string[] {
+  const modelCommands = config.models
+    .filter(
+      (m): m is Config['models'][number] & { command: string } => 'command' in m
+    )
+    .map((m) => `/${m.command}`);
+
+  return [
+    ...modelCommands,
+    '/status',
+    '/think off',
+    '/think low',
+    '/think medium',
+    '/think high',
+    '/stop',
+    '/help',
+  ];
+}
+
 export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
   let content = input.content.trim();
   let model: ConfigModel | null = null;
   let thinkingLevel: ThinkingLevel | null = null;
   let statusRequested: boolean = false;
+  let stopRequested: boolean = false;
+  let helpRequested: boolean = false;
 
   if (!content.startsWith('/')) {
     return {
@@ -41,6 +64,8 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
         model: null,
         thinkingLevel: null,
         statusRequested: false,
+        stopRequested: false,
+        helpRequested: false,
       },
       cleanPrompt: content,
     };
@@ -57,6 +82,14 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
     switch (cmd) {
       case 'status': {
         statusRequested = true;
+        break;
+      }
+      case 'stop': {
+        stopRequested = true;
+        break;
+      }
+      case 'help': {
+        helpRequested = true;
         break;
       }
       case 'think': {
@@ -78,16 +111,10 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
               'command' in m && m.command === cmd
           )?.model ?? null;
         if (!modelFromCommand) {
-          const modelCommands = input.config.models
-            .filter(
-              (m): m is Config['models'][number] & { command: string } =>
-                'command' in m
-            )
-            .map((m) => `/${m.command}`)
-            .join(', ');
+          const available = listCommands(input.config).join(', ');
           return {
             status: 'error',
-            message: `Unknown command: "${cmd}". Available: ${modelCommands}, /status, /think off, /think low, /think medium, /think high, /stop`,
+            message: `Unknown command: "${cmd}". Available: ${available}`,
           };
         }
         model = modelFromCommand;
@@ -102,6 +129,8 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
       model,
       thinkingLevel,
       statusRequested,
+      stopRequested,
+      helpRequested,
     },
     cleanPrompt: content,
   };

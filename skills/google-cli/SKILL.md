@@ -12,6 +12,21 @@ Use the **gog** CLI from [gogcli](https://github.com/steipete/gogcli) for Gmail,
 - **Account**: `--account <email>` or `GOG_ACCOUNT`. Use `--json` for script/LLM-friendly output.
 - **Help**: `gog --help`, `gog calendar --help`, `gog gmail --help`, `gog tasks --help`.
 
+## When to use this skill
+
+Use this skill when the user:
+
+- Wants to **read or manage Google Calendar events** (today, tomorrow, this week, a specific range).
+- Wants to **read or manage Gmail emails** (search, summarize, inspect threads/messages, create or update drafts).
+- Wants to **read Google Tasks** (task lists and tasks).
+
+Do **not** use this skill when:
+
+- The user is asking about Google services in general (settings, quotas, product comparisons) without needing their own data.
+- Authentication is not set up yet; first explain the setup steps.
+
+Always prefer `--json` output, then parse and return a **clear human summary** instead of dumping raw JSON, unless the user explicitly asks for it.
+
 ## 1. Read calendar events
 
 List calendars, then list or get events.
@@ -43,6 +58,20 @@ Search by text:
 gog calendar search "meeting" --today --json
 gog calendar search "meeting" --days 30 --max 50 --json
 ```
+
+**Typical flows (Calendar):**
+
+- **"What’s on my calendar today/tomorrow/this week?"**
+  1. Use `events primary --today/--tomorrow/--week --json`.
+  2. Summarize as a list of events with:
+     - Start time (with timezone if ambiguous)
+     - Title
+     - Location (if present)
+  3. If there are many events, highlight the most important ones based on titles and time.
+
+- **"Find meetings with X in the next 30 days"**
+  1. Use `calendar search "X" --days 30 --max 50 --json`.
+  2. Return a concise table (time, title, calendar).
 
 ## 2. Create calendar events
 
@@ -78,6 +107,12 @@ Key flags:
 - `--rrule` — recurrence rule
 - `--send-updates` — `all`, `externalOnly`, `none` (default: none)
 
+**Safety:**
+
+- Always repeat back the **event details** (summary, date/time, attendees) before creating.
+- For events with external attendees or `--send-updates`, explicitly tell the user that invitations/updates may be emailed.
+- Do not create or modify events without clear user confirmation.
+
 ## 3. Update and delete calendar events
 
 ```bash
@@ -87,6 +122,12 @@ gog calendar update primary <eventId> --summary "New title" --from "2026-03-04T1
 # Delete an event
 gog calendar delete primary <eventId> --json
 ```
+
+For updates and deletions:
+
+- First fetch the event and **show a short summary** (title, time) so the user can confirm it’s the right one.
+- Ask explicitly before deleting or significantly changing time/attendees.
+- After success, confirm what changed or that the event was deleted.
 
 ## 4. Read Gmail emails
 
@@ -108,6 +149,19 @@ gog gmail thread get <threadId> --json
 gog gmail get <messageId> --json
 gog gmail get <messageId> --format metadata --json
 ```
+
+**Typical flows (Gmail):**
+
+- **"Summarize my important emails from the last week"**
+  1. Use `messages search 'newer_than:7d' --max 20 --include-body --json` with an appropriate filter (`label:IMPORTANT` if desired).
+  2. Summarize each email as:
+     - From, subject, date
+     - 1–2 sentence summary of the body.
+  3. Present as a numbered list, highlighting actions or deadlines if visible.
+
+- **"Show me the full thread for this email"**
+  1. Use `gmail thread get <threadId> --json`.
+  2. Present messages in chronological order with sender, timestamp, and short body excerpts.
 
 ## 5. Write Gmail drafts
 
@@ -136,6 +190,15 @@ gog gmail drafts update <draftId> --to a@b.com --subject "Subject" --body "Body"
 gog gmail drafts send <draftId>
 ```
 
+**Safety & confirmation:**
+
+- Use drafts for composing; **never send** an email without explicit user confirmation.
+- Before calling `drafts send`, repeat back:
+  - Recipients
+  - Subject
+  - A short preview of the body
+- If the user only asked to “write” or “draft” an email, **stop after creating/updating the draft** and tell them how to send it themselves.
+
 ## 6. Read Google Tasks
 
 List task lists, then list tasks or get one task.
@@ -156,3 +219,9 @@ gog tasks get <tasklistId> <taskId> --json
 - **Auth**: If multiple accounts exist, pass `--account <email>` or set `GOG_ACCOUNT`.
 - **JSON**: Prefer `--json` (or `GOG_JSON=1`) when feeding output to the LLM or scripts.
 - **Scopes**: User must have authorized with services that include `gmail`, `calendar`, and `tasks` (e.g. `gog auth add <email>` with default user services, or `--services gmail,calendar,tasks`).
+
+If `gog` is missing, credentials are not configured, or scopes are insufficient:
+
+- Explain the problem in plain language.
+- Point the user to the `gog` GitHub page and the required `gog auth` commands.
+- Do not keep retrying failing `gog` commands.
