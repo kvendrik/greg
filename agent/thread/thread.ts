@@ -149,9 +149,7 @@ ${getToolsInstructions(conversationStartIso)}
       }
 
       if (isWorking) {
-        onError(
-          'Agent is already processing a previous request. Please wait or send /stop.'
-        );
+        onError('Working on your previous request. Send /stop to abort.');
         return;
       }
 
