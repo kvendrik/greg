@@ -3,7 +3,7 @@ import type { Model, Api, ImageContent } from '@mariozechner/pi-ai';
 import { getInstructions as getToolsInstructions, tools } from '../tools';
 import { formatDate } from '../utilities';
 import { compactContext, deriveContextTokens } from './compaction';
-import { parseCommands } from './commands';
+import { listCommands, parseCommands } from './commands';
 import { getWorkspacePath } from '../utilities';
 import config from '../../.greg';
 import pc from 'picocolors';
@@ -24,6 +24,7 @@ type Image = {
 export type PromptInput = { content: string; images: Image[] };
 
 export type Thread = {
+  working: boolean;
   prompt: (content: PromptInput, options: PromptOptions) => Promise<void>;
   abort: () => void;
 };
@@ -33,8 +34,10 @@ export async function thread(): Promise<Thread> {
   const conversationStartIso = new Date().toISOString();
   const system = `
 You are a helpful personal assistant that runs on my personal computer and talks to me through a chat interface.
-Answer with short and conversational answers. 
+Answer with short and conversational answers.
 You have control over my computer through several tools and skills.
+
+You must never make up or assume facts, behaviors, or code. If you are missing information, unsure, or something is ambiguous, either ask me a concise clarifying question or explicitly say that you do not know or cannot determine the answer. Prefer using your tools and reading from the actual environment over guessing, and do not rely on later corrections from me.
 
 ${getToolsInstructions(conversationStartIso)}
 
@@ -70,7 +73,10 @@ ${getToolsInstructions(conversationStartIso)}
     (model) => model.role === 'primary'
   )!.model;
 
+  let isWorking = false;
+
   return {
+    working: isWorking,
     abort: () => abortController.abort(),
     prompt: async (
       input: PromptInput,
@@ -88,6 +94,26 @@ ${getToolsInstructions(conversationStartIso)}
         return;
       }
 
+      if (parsed.result.stopRequested) {
+        if (!isWorking) {
+          onContent('Nothing to stop.');
+          onDone();
+          return;
+        }
+        abortController.abort();
+        isWorking = false;
+        onContent('Okay. Stopping.');
+        onDone();
+        return;
+      }
+
+      if (parsed.result.helpRequested) {
+        const commands = listCommands(config);
+        onContent(['Available commands:', '', ...commands].join('\n'));
+        onDone();
+        return;
+      }
+
       const model = parsed.result.model ?? primaryModel;
       const thinkingLevel = parsed.result.thinkingLevel ?? 'medium';
 
@@ -95,22 +121,25 @@ ${getToolsInstructions(conversationStartIso)}
         let contextLine: string;
         try {
           const contextTokens = deriveContextTokens(agent.state.messages);
-          const contextWindow = model.contextWindow;
+          const contextWindow = lastModel?.contextWindow ?? 0;
           const percentage =
             contextWindow > 0
               ? Math.min(100, (contextTokens / contextWindow) * 100).toFixed(1)
               : '0.0';
-          contextLine = `📊 Context: ${contextTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tokens (${percentage}%)`;
+          contextLine = `📊 ${contextTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tokens (${percentage}%)`;
         } catch {
-          contextLine = '📊 Context: unknown';
+          contextLine = '📊 Tokens: unknown';
         }
         onContent(
           [
             'Status:',
-            lastModel && `🧠 Last model used: ${lastModel.name}`,
-            `🧠 Model for this prompt: ${model.name}`,
+            `🧠 Model: ${lastModel ? lastModel.name : 'nothing sent yet'}`,
             `💭 Thinking: ${thinkingLevel}`,
             contextLine,
+            `💪 Working: ${isWorking ? 'yes (send /stop to stop)' : 'no'}`,
+            `\nOptions given for this prompt:`,
+            `- Model: ${model.name}`,
+            `- Thinking: ${thinkingLevel}`,
           ]
             .filter(Boolean)
             .join('\n')
@@ -118,6 +147,15 @@ ${getToolsInstructions(conversationStartIso)}
         onDone();
         return;
       }
+
+      if (isWorking) {
+        onError(
+          'Agent is already processing a previous request. Please wait or send /stop.'
+        );
+        return;
+      }
+
+      isWorking = true;
 
       agent.setModel(model);
       lastModel = model;
@@ -162,6 +200,7 @@ ${getToolsInstructions(conversationStartIso)}
             break;
           case 'agent_end':
             console.info(pc.green('Done.\n'));
+            isWorking = false;
             onDone();
             break;
           default:
@@ -206,6 +245,7 @@ ${getToolsInstructions(conversationStartIso)}
               null;
             if (!fallbackModel) {
               onError(`No fallback model found in config.models.`);
+              isWorking = false;
               return;
             }
             console.info(
@@ -224,6 +264,7 @@ ${getToolsInstructions(conversationStartIso)}
         const msg = err instanceof Error ? err.message : String(err);
         onError(msg);
       } finally {
+        isWorking = false;
         unsubscribe();
       }
     },

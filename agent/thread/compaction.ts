@@ -26,7 +26,7 @@ function hasUsage(msg: AgentMessage): msg is MessageWithUsage {
  * time of that call. Messages after that point are *not* estimated.
  */
 export function deriveContextTokens(messages: AgentMessage[]): number {
-  if (messages.length === 0) {
+  if (messages.filter(({ role }) => role === 'assistant').length === 0) {
     return 0;
   }
 
