@@ -61,7 +61,11 @@ const getRecentConversationNotesTool: AgentTool = {
       })
     ),
   }),
-  execute: async (_id, params) => {
+  execute: async (_id, params, signal) => {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
     const max_notes = (params as { max_notes?: number }).max_notes ?? 3;
     await ensureWorkspaceExists();
     const limit = Math.max(1, Math.min(50, max_notes));
@@ -105,7 +109,11 @@ const searchConversationNotesTool: AgentTool = {
   parameters: Type.Object({
     search_query: Type.String({ description: 'The query to search for' }),
   }),
-  execute: async (_id, params) => {
+  execute: async (_id, params, signal) => {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
     const { search_query } = params as { search_query: string };
     await ensureWorkspaceExists();
     let text: string;
@@ -138,7 +146,11 @@ const getConversationNoteTool: AgentTool = {
       Type.Number({ description: 'Max number of lines to return' })
     ),
   }),
-  execute: async (_id, params) => {
+  execute: async (_id, params, signal) => {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
     const { docid, start_line, max_lines } = params as {
       docid: string;
       start_line?: number;
@@ -170,7 +182,11 @@ const updateUserMemoryTool: AgentTool = {
         'The full content for USER.md (include all existing facts plus updates)',
     }),
   }),
-  execute: async (_id, params) => {
+  execute: async (_id, params, signal) => {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
     const { content } = params as { content: string };
     await ensureWorkspaceExists();
     fs.writeFileSync(getUserPath(), content, 'utf8');
@@ -191,7 +207,11 @@ const updateIdentityTool: AgentTool = {
         'The full content for IDENTITY.md (include all existing identity info plus updates)',
     }),
   }),
-  execute: async (_id, params) => {
+  execute: async (_id, params, signal) => {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
     const { content } = params as { content: string };
     await ensureWorkspaceExists();
     fs.writeFileSync(getIdentityPath(), content, 'utf8');
@@ -279,7 +299,11 @@ const saveConversationNoteTool: AgentTool = {
         'ISO timestamp when this conversation started (use the value from the system prompt)',
     }),
   }),
-  execute: async (_id, params) => {
+  execute: async (_id, params, signal) => {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
     const { note, conversation_start_iso } = params as {
       note: string;
       conversation_start_iso: string;
@@ -346,8 +370,5 @@ Memory files and workspace: ${getWorkspacePath()}.
 
 ### Conversation start
 Conversation started: ${formatDate(conversationStartIso)}. For \`save_conversation_note\` use conversation_start_iso: \`${conversationStartIso}\`.
-
-### Restarting yourself
-If you ever need to fully restart yourself (for example after configuration changes or if you are stuck), you can call the \`exec\` tool with the command \`greg restart\`. Before doing so, you MUST: (1) call \`save_conversation_note\` with a concise summary of the current conversation so you can later reload it and know where you left off, (2) tell the user explicitly that you are about to restart, then (3) run the restart command.
   `;
 }

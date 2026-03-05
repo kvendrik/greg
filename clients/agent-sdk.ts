@@ -7,6 +7,7 @@ type PromptCallbacks = {
   onContent: (chunk: string) => void;
   onToolcall: (name: string, args: Record<string, unknown>) => void;
   onDone: () => void;
+  onStop: () => void;
   onError: (error: string) => void;
 };
 
@@ -17,7 +18,6 @@ export type PromptInput = {
 
 export type Thread = {
   id: string;
-  abort(): Promise<boolean>;
   destroy(): Promise<boolean>;
   prompt(input: PromptInput, callbacks: PromptCallbacks): Promise<void>;
 };
@@ -43,9 +43,6 @@ export async function createThread(): Promise<Thread> {
 
   return {
     id,
-    abort() {
-      return abort(id);
-    },
     async destroy() {
       if (destroyed) return true;
       destroyed = true;
@@ -55,13 +52,6 @@ export async function createThread(): Promise<Thread> {
       return prompt(id, input, callbacks);
     },
   };
-}
-
-async function abort(threadId: string) {
-  const res = await fetch(`${BASE}/threads/${threadId}/abort`, {
-    method: 'POST',
-  });
-  return res.ok;
 }
 
 async function destroyThread(threadId: string) {
@@ -74,7 +64,14 @@ async function destroyThread(threadId: string) {
 async function prompt(
   threadId: string,
   input: PromptInput,
-  { onThinking, onContent, onToolcall, onDone, onError }: PromptCallbacks
+  {
+    onThinking,
+    onContent,
+    onToolcall,
+    onDone,
+    onStop,
+    onError,
+  }: PromptCallbacks
 ) {
   const res = await fetch(`${BASE}/threads/${threadId}`, {
     method: 'POST',
@@ -117,7 +114,9 @@ async function prompt(
           onToolcall(data.name ?? '', JSON.parse(data.args ?? '{}'));
         } else if (data.type === 'error') {
           onError?.(data.error ?? String(data));
-        }
+        } else if (data.type === 'stopped') {
+          onStop();
+        } else if (data.type === 'done') onDone();
       } catch {
         // Skip malformed lines; don't mix parse errors into content
       }
@@ -133,6 +132,8 @@ async function prompt(
           else if (data.type === 'toolcall')
             onToolcall(data.name ?? '', JSON.parse(data.args ?? '{}'));
           else if (data.type === 'error') onError?.(data.error ?? String(data));
+          else if (data.type === 'stopped') onStop();
+          else if (data.type === 'done') onDone();
         } catch {
           // ignore
         }
@@ -140,5 +141,4 @@ async function prompt(
       break;
     }
   }
-  onDone();
 }

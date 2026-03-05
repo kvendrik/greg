@@ -39,7 +39,11 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
     }),
   }),
 
-  async execute(_id, params, _signal) {
+  async execute(_id, params, signal) {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
     const { url: urlInput } = params as { url: string };
 
     let url: string;
@@ -49,12 +53,16 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
       throw new Error(`Invalid URL: ${urlInput}`);
     }
 
-    const response = await guardedFetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; web-fetch/1.0)',
-        Accept: 'text/html,application/xhtml+xml',
+    const response = await guardedFetch(
+      url,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; web-fetch/1.0)',
+          Accept: 'text/html,application/xhtml+xml',
+        },
       },
-    });
+      signal
+    );
 
     if (!response.ok) {
       throw new Error(
@@ -154,7 +162,7 @@ Returns { answer: string, citations: { title: string, url: string }[] }`,
       }),
     }),
 
-    async execute(_id, params) {
+    async execute(_id, params, signal) {
       const { query } = params as { query: string };
 
       const response = await ai.models.generateContent({
@@ -162,6 +170,7 @@ Returns { answer: string, citations: { title: string, url: string }[] }`,
         contents: query,
         config: {
           tools: [{ googleSearch: {} }],
+          abortSignal: signal,
         },
       });
 
@@ -266,33 +275,56 @@ async function checkSsrf(url: URL): Promise<void> {
 async function guardedFetch(
   urlString: string,
   options: RequestInit = {},
+  signal?: AbortSignal,
   maxRedirects = 5
 ): Promise<Response> {
   let current = urlString;
   let hops = 0;
 
-  while (hops <= maxRedirects) {
-    const url = new URL(current);
-    await checkSsrf(url);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(new DOMException('Timeout', 'AbortError')),
+    FETCH_TIMEOUT_MS
+  );
 
-    const response = await fetch(current, {
-      ...options,
-      redirect: 'manual',
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+  const onAbort = () => {
+    controller.abort(new DOMException('Aborted', 'AbortError'));
+  };
 
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('location');
-      if (!location) throw new Error('Redirect with no Location header');
-      current = new URL(location, current).toString();
-      hops++;
-      continue;
-    }
-
-    return response;
+  if (signal?.aborted) {
+    clearTimeout(timeoutId);
+    throw new DOMException('Aborted', 'AbortError');
   }
 
-  throw new Error(`Too many redirects (max ${maxRedirects})`);
+  signal?.addEventListener('abort', onAbort, { once: true });
+
+  try {
+    while (hops <= maxRedirects) {
+      const url = new URL(current);
+      await checkSsrf(url);
+
+      const response = await fetch(current, {
+        ...options,
+        redirect: 'manual',
+        signal: controller.signal,
+      });
+
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location');
+        if (!location) throw new Error('Redirect with no Location header');
+        current = new URL(location, current).toString();
+        hops++;
+        continue;
+      }
+
+      return response;
+    }
+
+    throw new Error(`Too many redirects (max ${maxRedirects})`);
+  } finally {
+    clearTimeout(timeoutId);
+    signal?.removeEventListener('abort', onAbort);
+  }
 }
 
 const FETCH_TIMEOUT_MS = 15_000;

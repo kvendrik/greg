@@ -203,7 +203,11 @@ const saveSkillTool: AgentTool = {
       })
     ),
   }),
-  execute: async (_id, params) => {
+  execute: async (_id, params, signal) => {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
     const { name, description, content, path } = params as {
       name: string;
       description: string;

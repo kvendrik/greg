@@ -68,6 +68,7 @@ async function runJob(job: JobEntry): Promise<void> {
       onContent: (chunk) => process.stdout.write(chunk),
       onToolcall: () => {},
       onDone: () => {},
+      onStop: () => {},
       onError: (err) => console.error(pc.red(`Job ${job.id} error: ${err}`)),
     });
     await thread.destroy();

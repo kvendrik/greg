@@ -37,26 +37,6 @@ const server = http.createServer(async (req, res) => {
   if (
     path[0] === 'threads' &&
     path[1] &&
-    path[2] === 'abort' &&
-    path.length === 3 &&
-    method === 'POST'
-  ) {
-    const id = path[1];
-    const thread = getThread(id);
-    if (!thread) {
-      res.writeHead(404);
-      res.end(JSON.stringify({ error: 'Thread not found' }));
-      return;
-    }
-    thread.abort();
-    res.writeHead(202, { 'Content-Type': 'application/json' });
-    res.end();
-    return;
-  }
-
-  if (
-    path[0] === 'threads' &&
-    path[1] &&
     path.length === 2 &&
     method === 'DELETE'
   ) {
@@ -173,12 +153,14 @@ const server = http.createServer(async (req, res) => {
           );
         },
         onDone() {
-          res.end();
+          res.end(JSON.stringify({ type: 'done' }) + '\n');
+        },
+        onStop() {
+          res.end(JSON.stringify({ type: 'stopped' }) + '\n');
         },
         onError(err) {
           if (!res.writableEnded) {
-            res.write(JSON.stringify({ type: 'error', error: err }) + '\n');
-            res.end();
+            res.end(JSON.stringify({ type: 'error', error: err }) + '\n');
           }
         },
       });
