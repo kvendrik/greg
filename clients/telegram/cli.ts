@@ -210,6 +210,8 @@ async function readAudioAsFloat32(pcmPath: string): Promise<Float32Array> {
 }
 
 async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
+  const sendTypingAction = ctx ? createSendTypingAction(ctx) : null;
+
   const imageSuffix =
     input.images.length > 0 ? ` [+${input.images.length} image(s)]` : '';
   const preview = `${input.content}${imageSuffix}`;
@@ -221,10 +223,10 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
 
   await thread.prompt(input, {
     onThinking: (chunk: string) => {
-      ctx?.api.sendChatAction(ctx.chat.id, 'typing');
+      sendTypingAction?.();
     },
     onContent: (chunk: string) => {
-      ctx?.api.sendChatAction(ctx.chat.id, 'typing');
+      sendTypingAction?.();
       response += chunk;
     },
     onToolcall: async () => {
@@ -259,5 +261,24 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
     } else {
       return bot.api.sendMessage(senderId, text);
     }
+  }
+}
+
+function createSendTypingAction(ctx: BotContext) {
+  const typingIntervalMs = 5000;
+  let lastTypingAt = 0;
+
+  return sendTypingAction;
+
+  function sendTypingAction() {
+    const chatId = ctx.chat.id;
+    const now = Date.now();
+
+    if (now - lastTypingAt < typingIntervalMs) {
+      return;
+    }
+
+    lastTypingAt = now;
+    void ctx.api.sendChatAction(chatId, 'typing').catch(console.error);
   }
 }
