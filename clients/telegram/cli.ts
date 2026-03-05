@@ -21,7 +21,6 @@ if (!(await ping())) {
   process.exit(1);
 }
 
-const llmState = { working: false, response: '' };
 const bot = new Bot<BotContext>(botToken);
 const transcriber = await pipeline(
   'automatic-speech-recognition',
@@ -218,31 +217,31 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
   console.log(`\n\nPrompting: "${preview}"`);
 
   const message = `Sending response to ${ctx ? ctx.from?.username : 'user'}...`;
-  const typingIndicator = ctx ? createTypingIndicator(ctx) : null;
-
-  llmState.working = true;
-  typingIndicator?.start();
+  let response = '';
 
   await thread.prompt(input, {
-    onThinking: (chunk: string) => {}, //process.stdout.write(pc.gray(chunk)),
+    onThinking: (chunk: string) => {
+      ctx.api.sendChatAction(ctx.chat.id, 'typing');
+    },
     onContent: (chunk: string) => {
-      llmState.response += chunk;
+      ctx.api.sendChatAction(ctx.chat.id, 'typing');
+      response += chunk;
     },
     onToolcall: async () => {
-      if (llmState.response.trim() !== '') {
+      if (response.trim() !== '') {
         process.stdout.write(`\n\n${message} (partial response)`);
-        const text = llmState.response;
-        llmState.response = '';
+        const text = response;
+        response = '';
         await send(text);
       }
     },
     onDone: async () => {
-      if (llmState.response.trim() !== '') {
+      if (response.trim() !== '') {
         console.log(`\n\n${message}`);
-        console.log(`"${llmState.response}"`);
-        await send(llmState.response);
+        console.log(`"${response}"`);
+        await send(response);
       }
-      reset();
+      response = '';
       process.stdout.write(`done. ${pc.green('✓')}\n`);
     },
     onError: async (error: string) => {
@@ -250,48 +249,15 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
         console.error(pc.red(`Error: ${error}`));
         await send(error);
       }
-      reset();
+      response = '';
     },
   });
-
-  function reset() {
-    llmState.working = false;
-    llmState.response = '';
-    typingIndicator?.stop();
-  }
 
   function send(text: string) {
     if (ctx) {
       return ctx.reply(text);
     } else {
       return bot.api.sendMessage(senderId, text);
-    }
-  }
-}
-
-function createTypingIndicator(ctx: BotContext) {
-  let typingInterval: ReturnType<typeof setInterval> | null = null;
-
-  return {
-    start: startTyping,
-    stop: stopTyping,
-  };
-
-  function startTyping() {
-    if (typingInterval) return;
-
-    void ctx.api.sendChatAction(ctx.chat.id, 'typing').catch(() => {});
-
-    typingInterval = setInterval(() => {
-      if (!llmState.working || !ctx.chat) return;
-      void ctx.api.sendChatAction(ctx.chat.id, 'typing').catch(() => {});
-    }, 4000);
-  }
-
-  function stopTyping() {
-    if (typingInterval) {
-      clearInterval(typingInterval);
-      typingInterval = null;
     }
   }
 }

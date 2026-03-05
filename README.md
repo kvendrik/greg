@@ -1,6 +1,5 @@
-- [ ] Add Google Maps CLI for location lookups
-- [ ] Give Greg a way to make calls
 - [ ] Add CLIs for WhatsApp, Telegram, and iMessage to include messaging in morning updates
+- [ ] Give Greg a way to make calls
 
 ---
 
