@@ -14,6 +14,7 @@ export type PromptOptions = {
   onDone: () => void;
   onToolcall: (name: string, args: Record<string, unknown>) => void;
   onError: (err: string) => void;
+  onStop: () => void;
 };
 
 type Image = {
@@ -25,12 +26,12 @@ export type PromptInput = { content: string; images: Image[] };
 
 export type Thread = {
   working: boolean;
+  abort(): void;
   prompt: (content: PromptInput, options: PromptOptions) => Promise<void>;
-  abort: () => void;
 };
 
 export async function thread(): Promise<Thread> {
-  const abortController = new AbortController();
+  let abortController: AbortController | null = null;
   const conversationStartIso = new Date().toISOString();
   const system = `
 You are a helpful personal assistant that runs on my personal computer and talks to me through a chat interface.
@@ -44,6 +45,19 @@ ${getToolsInstructions(conversationStartIso)}
 ## Environment
 - The code you're running on is at: ${process.cwd()}.
 - Your workspace is at: ${getWorkspacePath()}. This is where you store your memory and notes.
+
+### Error reporting
+If any tool call returns an error, always explicitly tell the user:
+- What tool/command failed
+- What the error was
+
+Do not silently skip, retry without mentioning it, or paper over failures.
+
+### Restarting yourself
+If you ever need to fully restart yourself (for example after configuration changes or if you are stuck), you can call the \`exec\` tool with the command \`greg restart\`. Before doing so, you MUST: (1) call \`save_conversation_note\` with a concise summary of the current conversation so you can later reload it and know where you left off, (2) tell the user explicitly that you are about to restart, then (3) run the restart command.
+
+### Logs
+Your logs are available through \`greg logs\`. Run \`greg logs --lines <number>\` to see the last <number> lines.
 `;
 
   const agent = new Agent({
@@ -73,14 +87,22 @@ ${getToolsInstructions(conversationStartIso)}
     (model) => model.role === 'primary'
   )!.model;
 
-  let isWorking = false;
-
   return {
-    working: isWorking,
-    abort: () => abortController.abort(),
+    working: abortController !== null,
+    abort: () => {
+      abortController?.abort();
+      abortController = null;
+    },
     prompt: async (
       input: PromptInput,
-      { onContent, onThinking, onToolcall, onDone, onError }: PromptOptions
+      {
+        onContent,
+        onThinking,
+        onToolcall,
+        onDone,
+        onError,
+        onStop,
+      }: PromptOptions
     ) => {
       const parsed = parseCommands({
         content: input.content,
@@ -95,15 +117,12 @@ ${getToolsInstructions(conversationStartIso)}
       }
 
       if (parsed.result.stopRequested) {
-        if (!isWorking) {
+        if (abortController === null) {
           onContent('Nothing to stop.');
           onDone();
           return;
         }
-        abortController.abort();
-        isWorking = false;
-        onContent('Okay. Stopping.');
-        onDone();
+        abortController?.abort();
         return;
       }
 
@@ -136,7 +155,7 @@ ${getToolsInstructions(conversationStartIso)}
             `🧠 Model: ${lastModel ? lastModel.name : 'nothing sent yet'}`,
             `💭 Thinking: ${thinkingLevel}`,
             contextLine,
-            `🕵️‍♂️ Busy: ${isWorking ? 'Yes (send /stop to stop)' : 'No. Ready for a new task.'}`,
+            `🕵️‍♂️ Busy: ${abortController !== null ? 'Yes (send /stop to stop)' : 'No. Ready for a new task.'}`,
             `\nOptions given for this prompt:`,
             `- Model: ${model.name}`,
             `- Thinking: ${thinkingLevel}`,
@@ -148,12 +167,12 @@ ${getToolsInstructions(conversationStartIso)}
         return;
       }
 
-      if (isWorking) {
+      if (abortController !== null) {
         onError('Working on your previous request. Send /stop to abort.');
         return;
       }
 
-      isWorking = true;
+      abortController = new AbortController();
 
       agent.setModel(model);
       lastModel = model;
@@ -198,7 +217,6 @@ ${getToolsInstructions(conversationStartIso)}
             break;
           case 'agent_end':
             console.info(pc.green('Done.\n'));
-            isWorking = false;
             onDone();
             break;
           default:
@@ -206,14 +224,23 @@ ${getToolsInstructions(conversationStartIso)}
         }
       });
 
-      if (abortController.signal?.aborted) {
+      const signal = abortController.signal;
+      const startMessageCount = agent.state.messages.length;
+      let aborted = false;
+
+      if (signal?.aborted) {
+        aborted = true;
         agent.abort();
+        onStop();
+        return;
       }
 
-      abortController.signal?.addEventListener(
+      signal?.addEventListener(
         'abort',
         () => {
+          aborted = true;
           agent.abort();
+          onStop();
         },
         { once: true }
       );
@@ -243,7 +270,6 @@ ${getToolsInstructions(conversationStartIso)}
               null;
             if (!fallbackModel) {
               onError(`No fallback model found in config.models.`);
-              isWorking = false;
               return;
             }
             console.info(
@@ -259,10 +285,23 @@ ${getToolsInstructions(conversationStartIso)}
           }
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        onError(msg);
+        const message = err instanceof Error ? err.message : String(err);
+        const isAbortError =
+          err instanceof Error &&
+          (err.name === 'AbortError' ||
+            message.toLowerCase().includes('aborted') ||
+            message.toLowerCase().includes('canceled'));
+
+        if (isAbortError) {
+          aborted = true;
+        } else {
+          onError(message);
+        }
       } finally {
-        isWorking = false;
+        if (aborted) {
+          agent.replaceMessages(agent.state.messages.slice(0, startMessageCount));
+        }
+        abortController = null;
         unsubscribe();
       }
     },

@@ -40,7 +40,6 @@ program
 program
   .command('start')
   .description('Starts Greg')
-  .option('-a, --attach', 'Run using attach to immediately see the logs')
   .action(({ attach }: { attach: boolean }) => {
     const statusResult = spawnSync('bun', ['run', 'pm2', 'describe', 'greg'], {
       stdio: 'pipe',
@@ -60,13 +59,6 @@ program
       stdio: 'inherit',
       cwd: projectRoot,
     });
-
-    if (attach && startResult.status === 0) {
-      spawnSync('bun', ['run', 'agent:logs'], {
-        stdio: 'inherit',
-        cwd: projectRoot,
-      });
-    }
   });
 
 program
@@ -125,12 +117,29 @@ program
   .command('logs')
   .alias('l')
   .description("Shows Greg's logs")
-  .action(() => {
-    spawn('bun', ['run', 'agent:logs'], {
-      stdio: 'inherit',
-      cwd: projectRoot,
-    });
-  });
+  .option('-n, --lines <number>', 'Number of lines to show')
+  .option('-s, --stream', 'Stream the logs')
+  .action(
+    ({
+      lines = '50',
+      stream = false,
+    }: {
+      lines?: string;
+      stream?: boolean;
+    }) => {
+      const options = [];
+      if (lines) {
+        options.push('--lines', lines);
+      }
+      if (!stream) {
+        options.push('--nostream');
+      }
+      spawnSync('bun', ['run', 'agent:logs', ...options], {
+        stdio: 'inherit',
+        cwd: projectRoot,
+      });
+    }
+  );
 
 program
   .command('memory')
@@ -193,7 +202,7 @@ program
   .description('Use Greg’s tools directly from the command line')
   .allowUnknownOption()
   .action(() => {
-    const args = program.args.slice(2);
+    const args = program.args.slice(1);
     const proc = spawn('bun', ['run', 'agent:tools', ...args], {
       stdio: 'inherit',
       cwd: projectRoot,

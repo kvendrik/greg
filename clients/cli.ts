@@ -1,9 +1,4 @@
-import {
-  ping,
-  createThread,
-  type Thread,
-  type PromptInput,
-} from './agent-sdk';
+import { ping, createThread, type Thread, type PromptInput } from './agent-sdk';
 import { text, isCancel, stream } from '@clack/prompts';
 import pc from 'picocolors';
 
@@ -83,6 +78,10 @@ async function* streamPrompt(thread: Thread, input: PromptInput) {
       resolver?.();
     },
     onToolcall: (name, args) => {},
+    onStop: () => {
+      done = true;
+      resolver?.();
+    },
     onDone: () => {
       done = true;
       resolver?.();

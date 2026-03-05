@@ -65,6 +65,8 @@ bot.on('message:voice', async (ctx) => {
     fileId: voice.file_id,
   });
 
+  await ctx.api.sendChatAction(ctx.chat.id, 'upload_voice');
+
   const file = await ctx.getFile();
   await file.download('./temp.ogg');
 
@@ -133,6 +135,8 @@ bot.on('message:photo', async (ctx) => {
     await ctx.reply('Agent is not running');
     process.exit(1);
   }
+
+  ctx.api.sendChatAction(ctx.chat.id, 'upload_photo');
 
   const mediaGroupId = ctx.message.media_group_id;
 
@@ -237,14 +241,20 @@ async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
       }
     },
     onDone: async () => {
+      typing?.stop();
       if (response.trim() !== '') {
         console.log(`\n\n${message}`);
         console.log(`"${response}"`);
-        typing?.stop();
         await send(response);
       }
       response = '';
       process.stdout.write(`done. ${pc.green('✓')}\n`);
+    },
+    onStop: async () => {
+      typing?.stop();
+      await send('Stopped.');
+      response = '';
+      process.stdout.write(`stopped.\n`);
     },
     onError: async (error: string) => {
       if (error) {
