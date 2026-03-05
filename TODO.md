@@ -5,7 +5,7 @@
 
 ## Bugs
 
-- [ ] After a `/stop` call and a new prompt the agent continues where it left off
+- [x] After a `/stop` call and a new prompt the agent continues where it left off
 - [ ] Sometimes number don't have spaces before them in messages
 - [ ] `search_past_conversations` throws errors
 

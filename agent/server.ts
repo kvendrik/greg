@@ -1,5 +1,4 @@
 import http from 'node:http';
-import { randomUUID } from 'node:crypto';
 import { APIUserAbortError } from '@anthropic-ai/sdk';
 import { createThread, getThread } from './agent';
 import pc from 'picocolors';
@@ -189,7 +188,7 @@ export function startServer() {
   server.listen(Number(config.port), () => {
     console.log('Running...');
     console.log(
-      'Endpoints: GET /ping, POST /threads/new, POST /threads/:id, POST /threads/:id/abort, DELETE /threads/:id'
+      'Endpoints: GET /ping, POST /threads/new, POST /threads/:id, DELETE /threads/:id'
     );
     console.log(
       'Use a client to interact. E.g. `bun run clients:cli "How are you today?"`'

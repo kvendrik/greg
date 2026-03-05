@@ -122,7 +122,14 @@ Your logs are available through \`greg logs\`. Run \`greg logs --lines <number>\
           onDone();
           return;
         }
-        abortController?.abort();
+
+        abortController.abort();
+        abortController = null;
+
+        // we call onDone here because the /stop
+        // command was processed successfully. It's
+        // the original request on which we will call onStop()
+        onDone();
         return;
       }
 
@@ -225,7 +232,7 @@ Your logs are available through \`greg logs\`. Run \`greg logs --lines <number>\
       });
 
       const signal = abortController.signal;
-      const startMessageCount = agent.state.messages.length;
+      const previousMessages = agent.state.messages.slice();
       let aborted = false;
 
       if (signal?.aborted) {
@@ -286,20 +293,24 @@ Your logs are available through \`greg logs\`. Run \`greg logs --lines <number>\
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        const isAbortError =
-          err instanceof Error &&
-          (err.name === 'AbortError' ||
-            message.toLowerCase().includes('aborted') ||
-            message.toLowerCase().includes('canceled'));
+        const lowerMessage = message.toLowerCase();
+        const isAbortLikeError =
+          aborted ||
+          (err instanceof Error &&
+            (err.name === 'AbortError' ||
+              err.name === 'TimeoutError' ||
+              lowerMessage.includes('aborted') ||
+              lowerMessage.includes('canceled') ||
+              (signal?.aborted && lowerMessage.includes('timed out'))));
 
-        if (isAbortError) {
+        if (isAbortLikeError) {
           aborted = true;
         } else {
           onError(message);
         }
       } finally {
         if (aborted) {
-          agent.replaceMessages(agent.state.messages.slice(0, startMessageCount));
+          agent.replaceMessages(previousMessages);
         }
         abortController = null;
         unsubscribe();
