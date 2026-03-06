@@ -39,6 +39,11 @@ export function start() {
   } else {
     console.log(pc.green('✉️  Ready to chat. Run \`greg cli\` to interact...'));
   }
+
+  if (config.tools.guard?.enabled) {
+    console.log(pc.green('📮 Starting guard...'));
+    execScript(['guard:start']);
+  }
 }
 
 function execScript(args: string[]) {
