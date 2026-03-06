@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "types": ["node"],
+    "types": ["node", "bun"],
     "module": "ESNext",
     "target": "ES2022",
     "moduleResolution": "bundler"

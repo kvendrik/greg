@@ -1,4 +1,5 @@
 import type { Model, Api } from '@mariozechner/pi-ai';
+import type { GuardMethods } from '../agent/tools/utilities/guard/guard';
 
 export interface Config {
   /**
@@ -54,6 +55,37 @@ export interface Config {
       }
   )[];
   tools: {
+    guard?: {
+      /**
+       * Enables the guard tool.
+       * This means that the agent will run all output from
+       * the browser, web, and exec tools through a guard to attempt to detect malicious content.
+       */
+      enabled: boolean;
+      /**
+       * The method to use for the guard.
+       * `patterns` means that the guard will use a set of Regex patterns to detect malicious content.
+       * `classifier` means that the guard will use a LLama-Prompt-Guard-2-22M classifier to detect malicious content.
+       * `all` means that the guard will use both patterns and classifier to detect malicious content.
+       */
+      use: GuardMethods;
+      /**
+       * Allowlist of commands and URLs that are trusted.
+       * These will either not be ran through the guard or with a specific `use` setting.
+       */
+      allowlist?: {
+        exec?: {
+          [command: string]:
+            | { trusted: false; use: GuardMethods }
+            | { trusted: true };
+        };
+        webSearch?: {
+          [domain: string]:
+            | { trusted: false; use: GuardMethods }
+            | { trusted: true };
+        };
+      };
+    };
     browser?: {
       /**
        * Enables the browser automation tool using Browser Use

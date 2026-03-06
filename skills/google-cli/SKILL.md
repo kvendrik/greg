@@ -139,8 +139,6 @@ gog gmail search 'newer_than:7d' --max 20 --json
 
 # Message-level search (one row per email)
 gog gmail messages search 'newer_than:7d' --max 20 --json
-# Include body text
-gog gmail messages search 'newer_than:7d' --max 5 --include-body --json
 
 # Get one thread (messages in thread)
 gog gmail thread get <threadId> --json
@@ -153,7 +151,7 @@ gog gmail get <messageId> --format metadata --json
 **Typical flows (Gmail):**
 
 - **"Summarize my important emails from the last week"**
-  1. Use `messages search 'newer_than:7d' --max 20 --include-body --json` with an appropriate filter (`label:IMPORTANT` if desired).
+  1. Use `messages search 'newer_than:7d' --max 20 --json` with an appropriate filter (`label:IMPORTANT` if desired).
   2. Summarize each email as:
      - From, subject, date
      - 1–2 sentence summary of the body.

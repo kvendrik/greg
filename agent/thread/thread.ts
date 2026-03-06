@@ -1,6 +1,6 @@
 import { Agent } from '@mariozechner/pi-agent-core';
 import type { Model, Api, ImageContent } from '@mariozechner/pi-ai';
-import { getInstructions as getToolsInstructions, tools } from '../tools';
+import { get as getTools } from '../tools';
 import { formatDate } from '../utilities';
 import { compactContext, deriveContextTokens } from './compaction';
 import { listCommands, parseCommands } from './commands';
@@ -31,8 +31,8 @@ export type Thread = {
 };
 
 export async function thread(): Promise<Thread> {
-  let abortController: AbortController | null = null;
   const conversationStartIso = new Date().toISOString();
+  const tools = await getTools(conversationStartIso);
   const system = `
 You are a helpful personal assistant that runs on my personal computer and talks to me through a chat interface.
 Answer with short and conversational answers.
@@ -40,7 +40,7 @@ You have control over my computer through several tools and skills.
 
 You must never make up or assume facts, behaviors, or code. If you are missing information, unsure, or something is ambiguous, either ask me a concise clarifying question or explicitly say that you do not know or cannot determine the answer. Prefer using your tools and reading from the actual environment over guessing, and do not rely on later corrections from me.
 
-${getToolsInstructions(conversationStartIso)}
+${tools.instructions}
 
 ## Environment
 - The code you're running on is at: ${process.cwd()}.
@@ -60,12 +60,14 @@ If you ever need to fully restart yourself (for example after configuration chan
 Your logs are available through \`greg logs\`. Run \`greg logs --lines <number>\` to see the last <number> lines.
 `;
 
+  let abortController: AbortController | null = null;
+
   const agent = new Agent({
     initialState: {
       systemPrompt: system,
       model: config.models.find((model) => model.role === 'primary')!.model,
       thinkingLevel: 'medium',
-      tools,
+      tools: tools.tools,
       messages: [],
     },
     getApiKey(provider) {
