@@ -76,6 +76,7 @@ const ALLOWED_COMMANDS: Record<string, true | Set<string>> = {
   id: true,
   env: true,
   which: true,
+  greg: true,
 
   // Git - subcommands only, no network ops
   git: new Set([
