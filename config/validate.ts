@@ -4,7 +4,14 @@ import { GoogleGenAI } from '@google/genai';
 import { Bot } from 'grammy';
 import pc from 'picocolors';
 
+import {
+  load as loadGuard,
+  isSafe as isGuardSafe,
+} from '../agent/tools/utilities/guard/guard';
 import type { Config } from './types';
+import type { GuardMethods } from '../agent/tools/utilities/guard/guard';
+
+const GUARD_METHODS: GuardMethods[] = ['patterns', 'classifier', 'all'];
 
 function assertModelsStructure(config: Config): void {
   const primaryCount = config.models.filter((m) => m.role === 'primary').length;
@@ -21,6 +28,64 @@ function assertModelsStructure(config: Config): void {
     throw new Error(
       `Config models must have exactly one fallback entry, got ${fallbackCount}`
     );
+  }
+}
+
+function configUsesClassifier(config: Config): boolean {
+  const guard = config.tools.guard;
+  if (!guard?.enabled) {
+    return false;
+  }
+  if (guard.use === 'classifier' || guard.use === 'all') {
+    return true;
+  }
+  const allowlist = guard.allowlist ?? {};
+  const allEntries = Object.values(allowlist).flatMap((group) =>
+    Object.values(group ?? {})
+  );
+  return allEntries.some(
+    (entry) =>
+      typeof entry === 'object' &&
+      entry !== null &&
+      'use' in entry &&
+      (entry as { use: string }).use === 'classifier'
+  );
+}
+
+function assertGuardOptions(config: Config): void {
+  const guard = config.tools.guard;
+  if (!guard) {
+    return;
+  }
+
+  if (!GUARD_METHODS.includes(guard.use)) {
+    throw new Error(
+      `Config tools.guard.use must be one of ${GUARD_METHODS.join(', ')}, got "${guard.use}"`
+    );
+  }
+
+  const allowlist = guard.allowlist ?? {};
+  for (const group of Object.values(allowlist)) {
+    for (const entry of Object.values(group ?? {})) {
+      if (
+        typeof entry === 'object' &&
+        entry !== null &&
+        'use' in entry &&
+        !GUARD_METHODS.includes(entry.use as GuardMethods)
+      ) {
+        throw new Error(
+          `Config tools.guard.allowlist entry use must be one of ${GUARD_METHODS.join(', ')}, got "${(entry as { use: string }).use}"`
+        );
+      }
+    }
+  }
+}
+
+async function validateGuardLoad(): Promise<void> {
+  await loadGuard({ logging: 'off' });
+  const result = await isGuardSafe('x', { use: 'all' });
+  if (result.safe === false) {
+    throw new Error(result.message);
   }
 }
 
@@ -68,6 +133,7 @@ async function validateBrowserUseKey(key: string): Promise<void> {
 
 export async function validate(config: Config): Promise<void> {
   assertModelsStructure(config);
+  assertGuardOptions(config);
   console.info(pc.green('Config structure is valid ✓'));
 
   const providersToKeys = new Map<string, string>();
@@ -108,6 +174,13 @@ export async function validate(config: Config): Promise<void> {
     checks.push({
       name: 'Telegram',
       run: () => validateTelegramBotToken(config.clients!.telegram!.botToken),
+    });
+  }
+
+  if (configUsesClassifier(config)) {
+    checks.push({
+      name: 'Guard',
+      run: () => validateGuardLoad(),
     });
   }
 

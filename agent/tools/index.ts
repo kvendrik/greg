@@ -13,21 +13,38 @@ import {
 } from './skills';
 import { tools as execTools } from './exec';
 import { tools as webTools } from './web';
+import { load as loadGuard } from './utilities/guard/guard';
+import config from '../../.greg';
 
-export const tools: AgentTool[] = [
-  ...execTools,
-  ...browserTools,
-  ...webTools,
-  ...memoryTools,
-  ...skillTools,
-];
+export async function get(conversationStartIso: string): Promise<{
+  tools: AgentTool[];
+  instructions: string;
+}> {
+  if (config.tools.guard?.enabled) {
+    /**
+     * We're loading the guard here so it can be used inside the tools.
+     */
+    await loadGuard();
+  }
 
-export function getInstructions(conversationStartIso: string): string {
-  return `
-${getMemoryInstructions(conversationStartIso)}
+  const tools: AgentTool[] = [
+    ...execTools,
+    ...browserTools,
+    ...webTools,
+    ...memoryTools,
+    ...skillTools,
+  ];
 
-${getSkillsInstructions()}
+  const instructions = `
+  ${getMemoryInstructions(conversationStartIso)}
+  
+  ${getSkillsInstructions()}
+  
+  ${browserInstructions}
+  `;
 
-${browserInstructions}
-`;
+  return {
+    tools,
+    instructions,
+  };
 }

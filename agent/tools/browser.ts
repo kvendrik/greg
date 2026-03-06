@@ -84,7 +84,10 @@ export function runBrowserTask(
     const onAbort = () => {
       removeListeners();
       try {
-        child.stdin!.write(JSON.stringify({ action: 'abort' }) + '\n', () => {});
+        child.stdin!.write(
+          JSON.stringify({ action: 'abort' }) + '\n',
+          () => {}
+        );
       } catch {
         // stdin may already be closed
       }
@@ -139,12 +142,14 @@ export const tools: AgentTool[] = config.tools.browser
         execute: async (_id, params, signal, _onUpdate) => {
           const { task } = params as { task: string };
           try {
-            const text = await runBrowserTask(task, signal);
+            let text = await runBrowserTask(task, signal);
             return { content: [{ type: 'text' as const, text }], details: {} };
           } catch (err) {
             if (err instanceof DOMException && err.name === 'AbortError') {
               return {
-                content: [{ type: 'text' as const, text: '(Task was aborted.)' }],
+                content: [
+                  { type: 'text' as const, text: '(Task was aborted.)' },
+                ],
                 details: {},
               };
             }

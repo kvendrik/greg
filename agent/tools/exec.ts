@@ -1,6 +1,9 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import { spawn } from 'child_process';
+import { isSafe } from './utilities/guard/guard';
+import config from '../../.greg';
+import { isCommandAllowed } from './utilities/safe-commands';
 import pc from 'picocolors';
 
 export async function runExec(
@@ -64,17 +67,43 @@ export async function runExec(
       errorOutput.push(text);
     });
 
-    child.on('close', (code) => {
+    child.on('close', async (code) => {
       if (settled) return;
       settled = true;
       const fullOutput = output.join('');
       const fullError = errorOutput.join('');
-      const combined =
-        fullOutput + (fullError ? `\n[stderr]\n${fullError}` : '');
+      let combined = fullOutput + (fullError ? `\n[stderr]\n${fullError}` : '');
 
       if (code !== 0) {
         resolve(`Command exited with code ${code}\n${combined}`);
       } else {
+        const isAllowed = isCommandAllowed(command);
+        const commandOptions =
+          config.tools.guard?.allowlist?.exec?.[cmd] ?? null;
+
+        if (
+          config.tools.guard?.enabled &&
+          !commandOptions?.trusted &&
+          !isAllowed
+        ) {
+          console.log(`[Guard] Running guard on output for "${cmd}".`);
+
+          const result = await isSafe(combined, {
+            use:
+              commandOptions?.trusted === false
+                ? commandOptions?.use
+                : config.tools.guard?.use,
+          });
+
+          console.log(
+            `[Guard] Done running guard on output for "${cmd}" (took ${result.performance}). Flagged as ${result.safe ? 'safe' : `unsafe. Reason: ${result.reason}`}.`
+          );
+
+          if (result.safe === false) {
+            combined = result.message;
+          }
+        }
+
         resolve(combined || '(no output)');
       }
     });

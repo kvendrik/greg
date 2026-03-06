@@ -2,3 +2,7 @@ node_modules/
 .greg.ts
 memory/.data/
 .DS_Store
+**/.cache
+
+# Guard ONNX models (too large for GitHub; fetch from Hugging Face or copy locally)
+agent/tools/utilities/guard/models/

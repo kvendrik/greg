@@ -16,7 +16,8 @@
     "clients:cli": "bun run clients/cli.ts",
     "clients:telegram": "bun run clients/telegram/cli.ts",
     "clients:telegram:send-message": "bun run clients/telegram/send-message.ts",
-    "jobs": "bun run scripts/jobs.ts"
+    "jobs": "bun run scripts/jobs.ts",
+    "test:guard": "bun run agent/tools/utilities/guard/tests/guard.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.76.0",
@@ -43,9 +44,11 @@
     "node-llama-cpp": "^3.16.2",
     "openai": "^6.25.0",
     "picocolors": "^1.1.1",
-    "pm2": "^6.0.14"
+    "pm2": "^6.0.14",
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
+    "@types/bun": "^1.1.14",
     "@types/jsdom": "^21.1.7",
     "@types/chrome-remote-interface": "^0.31.14",
     "@types/node": "^25.2.3",
