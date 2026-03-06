@@ -92,13 +92,13 @@ greg cli
 When used to the agent you can start using Telegram to communicate. Running
 the `greg telegram` command will tell you how to set it up.
 
-## Skills
+## 🔨 Skills
 
 Greg can be taught how to do anything by simply telling him to read an AgentSkill and to save it for later use. Doing so will cause Greg to save a new skill to your workspace
 
 Greg also ships with a couple of CLI's that I couldn't find good versions of elsewhere. These are available in `/hub`. Greg already knows how to use them but they require auth tokens. When Greg tries to use them at the start he'll come back to you saying he needs access.
 
-## Scheduled Jobs
+## 📆 Scheduled Jobs
 
 Greg comes with the ability to schedule jobs. You can do this directly from the CLI or by simply talking to Greg.
 
@@ -108,7 +108,7 @@ greg jobs add "Every day at 6am send me a list of my unread emails"
 
 These jobs only work however if you keep an instance of the scheduler running: `greg jobs schedule`. The scheduler prompts Greg at the given time in a new thread so that it doesn't conflict with whatever other work Greg might be doing at that time.
 
-## Safety
+## 💂 Safety
 
 Firstly, a tool with this level of access will never be as safe as you’d want from a LLM. Prompt injection is in a lot of ways still an unsolved problem and giving an LLM command line access in combination with web access therefor poses a serious threat. To better understand this I'd recommend reading [Anthropic’s article on browser use safety](https://www.anthropic.com/research/prompt-injection-defenses).
 
