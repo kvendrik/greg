@@ -1,4 +1,4 @@
-import { load, isSafe } from '../guard';
+import { isSafe } from '../guard';
 import { tests } from './tests';
 import pc from 'picocolors';
 
@@ -49,8 +49,6 @@ async function runTests(): Promise<{
     durationsMs.reduce((sum, d) => sum + d, 0) / durationsMs.length;
   return { passed, failed, total, averageMs };
 }
-
-await load();
 
 runTests()
   .then((stats) => {

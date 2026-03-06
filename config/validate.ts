@@ -4,10 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { Bot } from 'grammy';
 import pc from 'picocolors';
 
-import {
-  load as loadGuard,
-  isSafe as isGuardSafe,
-} from '../agent/tools/utilities/guard/guard';
+import { isSafe as isGuardSafe } from '../agent/tools/utilities/guard/guard';
 import type { Config } from './types';
 import type { GuardMethods } from '../agent/tools/utilities/guard/guard';
 

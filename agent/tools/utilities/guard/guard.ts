@@ -1,77 +1,10 @@
-import { pipeline } from '@huggingface/transformers';
 import patterns from './patterns.json' assert { type: 'json' };
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import config from '../../../../.greg';
 
 const CLASSIFIER_TIMEOUT_MS = config.tools.guard?.timeout ?? 15_000;
-const ONNX_MODEL_FILE = 'model';
-const guardDir = path.dirname(fileURLToPath(import.meta.url));
-const LOCAL_MODEL_PATH = path.join(
-  guardDir,
-  'models',
-  'Llama-Prompt-Guard-2-22M-onnx'
-);
-
-type ClassificationResult = {
-  label: 'BENIGN' | 'MALICIOUS';
-  score: number;
-}[];
-
-type Classifier = (
-  texts: string | string[],
-  options?: { top_k?: number }
-) => Promise<ClassificationResult>;
+const CLASSIFIER_URL = 'http://127.0.0.1:7234';
 
 export type GuardMethods = 'patterns' | 'classifier' | 'all';
-let classifier: Classifier | null = null;
-
-function configUsesClassifier(): boolean {
-  if (!config.tools.guard) {
-    return false;
-  }
-
-  if (
-    config.tools.guard?.use === 'classifier' ||
-    config.tools.guard?.use === 'all'
-  ) {
-    return true;
-  }
-  const allowlist = config.tools.guard.allowlist ?? {};
-  const allEntries = Object.values(allowlist).flatMap((group) =>
-    Object.values(group ?? {})
-  );
-  return allEntries.some(
-    (entry) => 'use' in entry && entry.use === 'classifier'
-  );
-}
-
-export async function load(
-  options: { logging: 'on' | 'off' } = { logging: 'on' }
-): Promise<void> {
-  if (!configUsesClassifier()) {
-    return;
-  }
-
-  if (options.logging === 'on') {
-    console.log('[Guard] Loading...');
-  }
-  const loadStart = performance.now();
-
-  classifier = (await pipeline('text-classification', LOCAL_MODEL_PATH, {
-    model_file_name: ONNX_MODEL_FILE,
-    local_files_only: true,
-    dtype: 'fp32',
-  })) as unknown as Classifier;
-
-  await classifier('warmup', {});
-
-  const loadEnd = performance.now();
-
-  if (options.logging === 'on') {
-    console.log(`[Guard] Loaded in ${Math.round(loadEnd - loadStart)}ms`);
-  }
-}
 
 export async function isSafe(
   text: string,
@@ -116,33 +49,29 @@ export async function isSafe(
     };
   }
 
-  if (!classifier) {
-    throw new Error('Classifier not loaded');
-  }
-
   const start = performance.now();
-  let classification: ClassificationResult;
+  let response: { injection: boolean; score: number; label: string };
 
   try {
-    classification = await new Promise<ClassificationResult>(
-      (resolve, reject) => {
-        const timer = setTimeout(
-          () => reject(new Error('TIMEOUT')),
-          CLASSIFIER_TIMEOUT_MS
-        );
-        classifier!(text, {})
-          .then((result) => {
-            clearTimeout(timer);
-            resolve(result);
-          })
-          .catch((err) => {
-            clearTimeout(timer);
-            reject(err);
-          });
-      }
-    );
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), CLASSIFIER_TIMEOUT_MS);
+    const res = await fetch(`${CLASSIFIER_URL}/classify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text.slice(0, 4096) }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error ?? `Classifier returned ${res.status}`);
+    }
+
+    response = data;
   } catch (err) {
-    const isTimeout = err instanceof Error && err.message === 'TIMEOUT';
+    const isTimeout = err instanceof Error && err.name === 'AbortError';
 
     if (isTimeout) {
       return {
@@ -160,8 +89,7 @@ export async function isSafe(
   const end = performance.now();
   const performanceMs = `${Math.round(end - start)}ms`;
 
-  const safe =
-    classification[0].label === 'BENIGN' && classification[0].score > 0.85;
+  const safe = response.label === 'LEGITIMATE';
 
   if (safe) {
     return {

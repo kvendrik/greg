@@ -65,7 +65,7 @@ export interface Config {
       /**
        * The method to use for the guard.
        * `patterns` means that the guard will use a set of Regex patterns to detect malicious content.
-       * `classifier` means that the guard will use a LLama-Prompt-Guard-2-22M classifier to detect malicious content.
+       * `classifier` means that the guard will use the classifier HTTP service (ModernBERT) to detect malicious content.
        * `all` means that the guard will use both patterns and classifier to detect malicious content.
        */
       use: GuardMethods;
