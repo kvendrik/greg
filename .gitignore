@@ -6,3 +6,7 @@ memory/.data/
 
 # Guard ONNX models (too large for GitHub; fetch from Hugging Face or copy locally)
 agent/tools/utilities/guard/models/
+
+# Classifier binary and model
+classifier/classifier
+classifier/models/

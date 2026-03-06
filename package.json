@@ -24,7 +24,6 @@
     "@clack/prompts": "^1.0.1",
     "@google/genai": "^1.43.0",
     "@grammyjs/files": "^1.2.0",
-    "@huggingface/transformers": "^3.8.1",
     "@mariozechner/pi-agent-core": "^0.55.3",
     "@mariozechner/pi-ai": "^0.55.3",
     "@mozilla/readability": "^0.6.0",
