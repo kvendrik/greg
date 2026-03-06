@@ -17,7 +17,10 @@
     "clients:telegram": "bun run clients/telegram/cli.ts",
     "clients:telegram:send-message": "bun run clients/telegram/send-message.ts",
     "jobs": "bun run scripts/jobs.ts",
-    "test:guard": "bun run agent/tools/utilities/guard/tests/guard.test.ts"
+    "guard:start": "pm2 start ./classifier/classifier --name greg:guard --instances 1",
+    "guard:stop": "pm2 delete greg:guard",
+    "guard:logs": "pm2 logs greg:guard",
+    "guard:test": "bun run agent/tools/utilities/guard/tests/guard.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.76.0",
