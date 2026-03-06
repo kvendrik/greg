@@ -137,7 +137,8 @@ export function saveSkill(
   name: string,
   description: string,
   content: string,
-  filePath?: string
+  filePath?: string,
+  scope?: 'global' | 'workspace'
 ): { name: string; path: string } {
   const skillName = normalizeAndValidateSkillName(name);
 
@@ -165,14 +166,31 @@ description: "${safeDescription}"
 ---
 
 `;
-  const finalPath = filePath ? filePath : filePathForSkillName(skillName);
+  if (!filePath && !scope) {
+    throw new Error(
+      'Scope is required when creating a new skill without a known path. Ask the user whether the skill should be "global" (for all agents/users) or "workspace" (only for this agent/user).'
+    );
+  }
+
+  const finalPath = filePath ? filePath : filePathForSkillName(skillName, scope!);
   fs.writeFileSync(finalPath, frontmatter + content, 'utf8');
   return { name: skillName, path: finalPath };
 
-  function filePathForSkillName(name: string): string {
+  function filePathForSkillName(
+    name: string,
+    scope: 'global' | 'workspace'
+  ): string {
+    if (scope === 'global') {
+      const globalSkillsDir = path.resolve(SKILLS_DIR);
+      fs.mkdirSync(globalSkillsDir, { recursive: true });
+      const skillDir = path.join(globalSkillsDir, name);
+      fs.mkdirSync(skillDir, { recursive: true });
+      return path.join(skillDir, SKILL_FILENAME);
+    }
+
     const workspaceSkillsDir = path.resolve(WORKSPACE_SKILLS_DIR);
     fs.mkdirSync(workspaceSkillsDir, { recursive: true });
-    const skillDir = path.join(workspaceSkillsDir, skillName);
+    const skillDir = path.join(workspaceSkillsDir, name);
     fs.mkdirSync(skillDir, { recursive: true });
     return path.join(skillDir, SKILL_FILENAME);
   }
@@ -202,20 +220,33 @@ const saveSkillTool: AgentTool = {
           'Path to the skill file to save to in case the skill already exists.',
       })
     ),
+    scope: Type.Optional(
+      Type.Union([
+        Type.Literal('global', {
+          description:
+            'Save the skill globally so it is available to all agents/users and becomes part of Greg’s shared repository.',
+        }),
+        Type.Literal('workspace', {
+          description:
+            'Save the skill only for this agent/user in the current workspace.',
+        }),
+      ])
+    ),
   }),
   execute: async (_id, params, signal) => {
     if (signal?.aborted) {
       throw new DOMException('Aborted', 'AbortError');
     }
 
-    const { name, description, content, path } = params as {
+    const { name, description, content, path, scope } = params as {
       name: string;
       description: string;
       content: string;
       path?: string;
+      scope?: 'global' | 'workspace';
     };
     try {
-      const result = saveSkill(name, description, content, path);
+      const result = saveSkill(name, description, content, path, scope);
       const text = `Skill "${result.name}" saved to ${result.path}.`;
       return { content: [{ type: 'text' as const, text }], details: {} };
     } catch (err) {
