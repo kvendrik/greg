@@ -96,7 +96,7 @@ export async function runExec(
           });
 
           console.log(
-            `[Guard] Done running guard on output for "${cmd}" (took ${result.performance}). Flagged as ${result.safe ? 'safe' : `unsafe. Reason: ${result.reason}`}.`
+            `[Guard] Done running guard on output for "${cmd}" ${performance ? `(took ${result.performance})` : ``}. Flagged as ${result.safe ? 'safe' : `unsafe. Reason: ${result.reason}`}.`
           );
 
           if (result.safe === false) {

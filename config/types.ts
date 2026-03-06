@@ -70,6 +70,11 @@ export interface Config {
        */
       use: GuardMethods;
       /**
+       * The timeout for the classifier in milliseconds.
+       * Default is 15 seconds (15_000).
+       */
+      timeout?: number;
+      /**
        * Allowlist of commands and URLs that are trusted.
        * These will either not be ran through the guard or with a specific `use` setting.
        */

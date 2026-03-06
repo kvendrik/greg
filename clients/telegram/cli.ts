@@ -180,8 +180,7 @@ bot.start();
 console.log('Ready.');
 
 await handoffToAgent({
-  content:
-    '<system_instructions>You just started. Check recent notes for context and greet me.</system_instructions>',
+  content: 'You just started. Check recent notes for context and greet me.',
   images: [],
 });
 

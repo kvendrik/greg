@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import config from '../../../../.greg';
 
+const CLASSIFIER_TIMEOUT_MS = config.tools.guard?.timeout ?? 15_000;
 const ONNX_MODEL_FILE = 'model';
 const guardDir = path.dirname(fileURLToPath(import.meta.url));
 const LOCAL_MODEL_PATH = path.join(
@@ -11,7 +12,6 @@ const LOCAL_MODEL_PATH = path.join(
   'models',
   'Llama-Prompt-Guard-2-22M-onnx'
 );
-const PATTERNS_PATH = path.join(guardDir, 'patterns.json');
 
 type ClassificationResult = {
   label: 'BENIGN' | 'MALICIOUS';
@@ -64,6 +64,8 @@ export async function load(
     dtype: 'fp32',
   })) as unknown as Classifier;
 
+  await classifier('warmup', {});
+
   const loadEnd = performance.now();
 
   if (options.logging === 'on') {
@@ -76,6 +78,7 @@ export async function isSafe(
   { use }: { use: GuardMethods }
 ): Promise<
   | {
+      success: boolean;
       safe: false;
       reason: string;
       evaluatedBy: 'patterns' | 'classifier';
@@ -83,6 +86,7 @@ export async function isSafe(
       performance?: string;
     }
   | {
+      success: true;
       safe: true;
       reason: null;
       evaluatedBy: 'patterns' | 'classifier';
@@ -93,6 +97,7 @@ export async function isSafe(
     for (const { pattern, reason } of patterns) {
       if (new RegExp(pattern, 'i').test(text)) {
         return {
+          success: true,
           safe: false,
           reason,
           evaluatedBy: 'patterns',
@@ -104,6 +109,7 @@ export async function isSafe(
 
   if (use === 'patterns') {
     return {
+      success: true,
       safe: true,
       reason: null,
       evaluatedBy: 'patterns',
@@ -115,7 +121,42 @@ export async function isSafe(
   }
 
   const start = performance.now();
-  const classification = await classifier(text, {});
+  let classification: ClassificationResult;
+
+  try {
+    classification = await new Promise<ClassificationResult>(
+      (resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error('TIMEOUT')),
+          CLASSIFIER_TIMEOUT_MS
+        );
+        classifier!(text, {})
+          .then((result) => {
+            clearTimeout(timer);
+            resolve(result);
+          })
+          .catch((err) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+      }
+    );
+  } catch (err) {
+    const isTimeout = err instanceof Error && err.message === 'TIMEOUT';
+
+    if (isTimeout) {
+      return {
+        success: false,
+        safe: false,
+        reason: null,
+        evaluatedBy: 'classifier',
+        message: `Scanning content failed. Content is too large to be scanned in under ${CLASSIFIER_TIMEOUT_MS / 1000} seconds`,
+      };
+    }
+
+    throw err;
+  }
+
   const end = performance.now();
   const performanceMs = `${Math.round(end - start)}ms`;
 
@@ -124,6 +165,7 @@ export async function isSafe(
 
   if (safe) {
     return {
+      success: true,
       safe: true,
       reason: null,
       evaluatedBy: 'classifier',
@@ -131,6 +173,7 @@ export async function isSafe(
     };
   } else {
     return {
+      success: true,
       safe: false,
       reason: 'Flagged as unsafe by classifier',
       evaluatedBy: 'classifier',
