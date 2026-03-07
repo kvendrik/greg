@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -38,7 +39,13 @@ func parseConfig() Config {
 	if exe, err := os.Executable(); err == nil {
 		defaultModel = filepath.Join(filepath.Dir(exe), "models", "modernbert-base-prompt-injection-detection")
 	}
-	flag.IntVar(&cfg.Port, "port", 7234, "Port to listen on")
+	defaultPort := 7234
+	if s := os.Getenv("PORT"); s != "" {
+		if p, err := strconv.Atoi(s); err == nil {
+			defaultPort = p
+		}
+	}
+	flag.IntVar(&cfg.Port, "port", defaultPort, "Port to listen on")
 	flag.StringVar(&cfg.ModelPath, "model", defaultModel, "Path to ONNX model directory")
 	flag.Float64Var(&cfg.Threshold, "threshold", 0.85, "Injection score threshold (0-1)")
 	flag.Parse()
