@@ -13,7 +13,6 @@ import {
 } from './skills';
 import { tools as execTools } from './exec';
 import { tools as webTools } from './web';
-import config from '../../.greg';
 
 export async function get(conversationStartIso: string): Promise<{
   tools: AgentTool[];
