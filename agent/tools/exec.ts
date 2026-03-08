@@ -1,7 +1,7 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import { spawn } from 'child_process';
-import { isSafe } from './utilities/guard/guard';
+import { isSafe, available as isGuardAvailable } from './utilities/guard/guard';
 import config from '../../.greg';
 import { isCommandAllowed } from './utilities/safe-commands';
 import pc from 'picocolors';
@@ -82,22 +82,17 @@ export async function runExec(
           config.tools.guard?.allowlist?.exec?.[cmd] ?? null;
 
         if (
-          config.tools.guard?.enabled &&
+          (await isGuardAvailable()) &&
           !commandOptions?.trusted &&
           !isAllowed
         ) {
-          console.log(`[Guard] Running guard on output for "${cmd}".`);
-
           const result = await isSafe(combined, {
+            name: cmd,
             use:
               commandOptions?.trusted === false
                 ? commandOptions?.use
                 : config.tools.guard?.use,
           });
-
-          console.log(
-            `[Guard] Done running guard on output for "${cmd}" ${performance ? `(took ${result.performance})` : ``}. Flagged as ${result.safe ? 'safe' : `unsafe. Reason: ${result.reason}`}.`
-          );
 
           if (result.safe === false) {
             combined = result.message;

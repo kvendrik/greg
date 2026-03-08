@@ -9,16 +9,15 @@ Telegram client is not configured. Please configure it in your config.ts file.
 const config: Config = {
   ...
   clients: {
-    default: 'telegram',
     telegram: {
-      // Open Telegram, message @BotFather, send /newbot, follow the prompts 
-      // (name and username ending in _bot); BotFather will reply with your token once 
+      // Open Telegram, message @BotFather, send /newbot, follow the prompts
+      // (name and username ending in _bot); BotFather will reply with your token once
       // (format 123456789:ABCdef...).
-      key: 'XXX',
+      botToken: 'XXX',
       // Your user ID is message.from.id. After sending a message to your bot, run:
       // curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates"
       // and read "from"."id" in the last message.
-      userId: 'XXX',
+      senderId: 'XXX',
     },
   },
   ...

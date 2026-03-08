@@ -1,6 +1,8 @@
 import config from '../.greg';
 
-const BASE = `http://localhost:${config.port}`;
+function getBase(): string {
+  return `http://localhost:${config.port}`;
+}
 
 type PromptCallbacks = {
   onThinking: (chunk: string) => void;
@@ -24,7 +26,7 @@ export type Thread = {
 
 export async function ping() {
   try {
-    const res = await fetch(`${BASE}/ping`);
+    const res = await fetch(`${getBase()}/ping`);
     return res.ok;
   } catch {
     return false;
@@ -32,7 +34,8 @@ export async function ping() {
 }
 
 export async function createThread(): Promise<Thread> {
-  const res = await fetch(`${BASE}/threads/new`, { method: 'POST' });
+  const base = getBase();
+  const res = await fetch(`${base}/threads/new`, { method: 'POST' });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Failed to create thread: ${res.status} ${text}`);
@@ -55,7 +58,7 @@ export async function createThread(): Promise<Thread> {
 }
 
 async function destroyThread(threadId: string) {
-  const res = await fetch(`${BASE}/threads/${threadId}`, {
+  const res = await fetch(`${getBase()}/threads/${threadId}`, {
     method: 'DELETE',
   });
   return res.ok;
@@ -73,7 +76,7 @@ async function prompt(
     onError,
   }: PromptCallbacks
 ) {
-  const res = await fetch(`${BASE}/threads/${threadId}`, {
+  const res = await fetch(`${getBase()}/threads/${threadId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt: input }),

@@ -79,8 +79,11 @@ function assertGuardOptions(config: Config): void {
 }
 
 async function validateGuardLoad(): Promise<void> {
-  await loadGuard({ logging: 'off' });
-  const result = await isGuardSafe('x', { use: 'all' });
+  const result = await isGuardSafe('x', {
+    use: 'all',
+    name: 'test',
+    logging: false,
+  });
   if (result.safe === false) {
     throw new Error(result.message);
   }
