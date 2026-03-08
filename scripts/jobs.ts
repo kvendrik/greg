@@ -11,7 +11,7 @@ import {
 import { join } from 'node:path';
 import pc from 'picocolors';
 import config from '../.greg';
-import { getWorkspacePath } from '../agent/utilities';
+import { getWorkspacePath } from '../service/Agent/utilities';
 import { createThread, type PromptInput } from '../clients/agent-sdk';
 
 type JobEntry = { cronTime: string; jobPrompt: string; id: string };
@@ -19,7 +19,7 @@ type JobEntry = { cronTime: string; jobPrompt: string; id: string };
 const JOBS_FILENAME = 'jobs.json';
 
 function getJobsPath(): string {
-  return join(getWorkspacePath(), JOBS_FILENAME);
+  return join(getWorkspacePath(config), JOBS_FILENAME);
 }
 
 function loadJobs(): JobEntry[] {
@@ -34,7 +34,7 @@ function loadJobs(): JobEntry[] {
 }
 
 function saveJobs(jobs: JobEntry[]): void {
-  const dir = getWorkspacePath();
+  const dir = getWorkspacePath(config);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(getJobsPath(), JSON.stringify(jobs, null, 2), 'utf-8');
 }
@@ -69,7 +69,9 @@ async function runJob(job: JobEntry): Promise<void> {
       onToolcall: () => {},
       onDone: () => {},
       onStop: () => {},
-      onError: (err) => { console.error(pc.red(`Job ${job.id} error: ${err}`)); },
+      onError: (err) => {
+        console.error(pc.red(`Job ${job.id} error: ${err}`));
+      },
     });
     await thread.destroy();
   } catch (err) {
@@ -231,7 +233,7 @@ program
       console.log('No jobs in', getJobsPath());
     }
 
-    const workspaceDir = getWorkspacePath();
+    const workspaceDir = getWorkspacePath(config);
     if (!existsSync(workspaceDir)) mkdirSync(workspaceDir, { recursive: true });
     let reloadTimeout: ReturnType<typeof setTimeout> | null = null;
     watch(workspaceDir, (_eventType, filename) => {

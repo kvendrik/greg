@@ -3,6 +3,7 @@ node_modules/
 memory/.data/
 .DS_Store
 **/.cache
+.pytest_cache/
 
 # Guard ONNX models (too large for GitHub; fetch from Hugging Face or copy locally)
 agent/tools/utilities/guard/models/
@@ -11,5 +12,5 @@ agent/tools/utilities/guard/models/
 classifier/classifier
 classifier/models/
 
-# Lock file used by send CLI when awaiting reply (service yields polling)
-.telegram-send-awaiting
+# Telegram service await-reply socket (MCP-style)
+clients/telegram/.telegram-await.sock

@@ -1,0 +1,10 @@
+---
+description: Parsing or constructing shell commands must account for chaining and quoting
+globs: "**/exec*.ts,**/spawn*.ts"
+alwaysApply: false
+---
+
+When parsing or constructing shell commands:
+
+- Do not derive "the command" by splitting the string on whitespace alone. That breaks chained commands (`&&`, `||`, `|`), quoted arguments (`echo "hello world"`), and subshells.
+- Prefer passing the full command to the shell (e.g. `spawn(trimmed, [], { shell: true })`) and only derive a first-token or name when needed (e.g. for allowlists), using logic that respects quotes and stops at `|`, `&`, `;`.

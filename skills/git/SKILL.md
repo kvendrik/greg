@@ -32,6 +32,25 @@ Before running **any** `git commit` command for changes made in this session:
 3. **Commit message guidance**  
    - Suggest a clear, imperative, one-line subject (e.g. `Add browser-use skill` or `Fix CLI prompt handling`).
    - If the user doesn’t care, you can pick a reasonable message and state it before running the command.
+   - For a more structured style, use **conventional commits** (see below).
+
+## Conventional commit messages (optional)
+
+When the user is happy with conventional commits or you want to suggest them, use this format:
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+**Common types:** `feat` (new feature), `fix` (bug fix), `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+
+**Workflow:** Run `git diff --staged` (or `git diff` if nothing staged) and `git status --porcelain` to see what changed. From the diff, choose **type**, optional **scope** (e.g. module or area), and a **description** in present tense, imperative mood, under 72 characters. Example: `feat(guard): handle classifier unreachable gracefully`.
+
+**Best practices:** One logical change per commit; present tense ("add" not "added"); imperative ("fix bug" not "fixes bug"); reference issues in footer with `Closes #123` or `Refs #456`.
 
 ## Always ask before pushing
 
@@ -94,6 +113,8 @@ Once there are commits to push and the user has explicitly confirmed the push:
 - **Do not change Git configuration** (e.g. `git config --global`) unless the user explicitly asks and understands the impact.
 - **Never run destructive history commands** (`git push --force`, `git reset --hard`, aggressive rebases) unless the user explicitly requests them and you have clearly described the risks.
 - **Never assume implicit permission to commit or push** just from general language; always perform the explicit confirmations described above.
+- **Never skip hooks** (e.g. `--no-verify`) unless the user explicitly asks. If a commit fails due to hooks, fix the issue and create a new commit; do not amend to bypass.
+- **Never force push to main/master** unless the user explicitly requests it and understands the impact.
 - If you lack permission to write to the repo (e.g. no `git_write` capability), **do not attempt to push**. Instead, show the user the exact commands they should run locally.
 ## When to use this skill
 

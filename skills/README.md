@@ -2,47 +2,31 @@
 
 Skills are Markdown files in `SKILL.md` inside each subdirectory. Greg discovers them from the project `skills/` directory and the workspace `skills/` directory (workspace overrides project when the same skill name exists).
 
-## Tier 1 OpenClaw skill additions
+## Tier 1 skills (added)
 
-These are the recommended first skills to add from [LeoYeAI/openclaw-master-skills](https://github.com/LeoYeAI/openclaw-master-skills). They align with Greg’s role as a personal assistant with memory, tools, and skill-writing.
+The following skills from [LeoYeAI/openclaw-master-skills](https://github.com/LeoYeAI/openclaw-master-skills) are included without an `openclaw-` prefix. Some are adapted for Greg (e.g. using workspace memory instead of subagents, or reading skill files via `cat` instead of a Skill tool).
 
-| OpenClaw skill      | Copy as (folder + frontmatter `name`) | Why |
-|---------------------|--------------------------------------|-----|
-| `writing-skills`    | `openclaw-writing-skills`            | Teaches when/how to create and edit skills; complements `save_skill`. |
-| `using-superpowers`  | `openclaw-using-superpowers`         | How to find and use skills; matches Greg’s “read from &lt;location&gt;” flow. |
-| `remembering-conversations` | `openclaw-remembering-conversations` | Reuse past conversations; fits Greg’s memory and notes. |
-| `skill-creator`     | `openclaw-skill-creator`             | Create, refine, and measure skills (Anthropic). |
-| `docx`              | `openclaw-docx`                      | Create, read, edit Word documents. |
-| `pdf`               | `openclaw-pdf`                       | Read, edit, merge PDFs. |
-| `xlsx`              | `openclaw-xlsx`                      | Spreadsheets as input/output. |
+| Skill | Notes |
+|-------|--------|
+| `writing-skills` | When/how to create and edit skills; Greg-adapted (save_skill, skills/ dir). |
+| `using-superpowers` | How to find and use skills; Greg-adapted (read from location, red flags, priority). |
+| `remembering-conversations` | Reuse past conversations; Greg-adapted (workspace memory and notes, no subagent). |
+| `skill-creator` | Create or improve skills; Greg-adapted (no eval runner, iterate with user feedback). |
+| `docx` | Create, read, edit Word documents (from OpenClaw). |
+| `pdf` | Read, edit, merge PDFs (from OpenClaw). |
+| `xlsx` | Spreadsheets as input/output (from OpenClaw). |
 
-**Do not add** OpenClaw’s `git-commit` as a separate skill: the project already has a `git` skill. To adopt conventional-commit style, extend `skills/git/SKILL.md` instead.
+**git:** The existing `git` skill was updated with conventional commit format, types, workflow, and safety rules from OpenClaw's `git-commit`. We do not add `git-commit` as a separate skill.
 
-### How to add Tier 1 skills
-
-1. Clone OpenClaw master skills once:
-   ```bash
-   git clone https://github.com/LeoYeAI/openclaw-master-skills.git
-   ```
-
-2. Copy each skill with the `openclaw-` prefix (from repo root):
-   ```bash
-   for skill in writing-skills using-superpowers remembering-conversations skill-creator docx pdf xlsx; do
-     cp -r openclaw-master-skills/skills/$skill skills/openclaw-$skill
-   done
-   ```
-
-3. In each `skills/openclaw-*/SKILL.md`, set the frontmatter `name` to the same as the folder (e.g. `name: openclaw-writing-skills`) so the skill list shows a consistent name and avoids clashes with any future local skill.
-
-4. Run `greg memory index` if you use memory indexing, then `greg restart` so the agent sees the new skills.
+To add more skills from OpenClaw: clone the repo, copy `skills/<name>` into this `skills/` directory (no prefix unless you want to avoid name clashes), and run `greg memory index` and `greg restart` if needed.
 
 ---
 
 ## Avoiding duplicate skills
 
-- **Naming**: Imported OpenClaw skills use the **`openclaw-` prefix** (folder and frontmatter `name`). Local skills (e.g. `git`, `jobs-cli`, `telegram-messaging`) stay unprefixed.
 - **Discovery**: If the same skill `name` appears in both project and workspace, **workspace wins** (only one entry is shown).
-- **Curating**: Before adding an OpenClaw skill, check this README and the list above. If we already have a local skill that covers the same use case (e.g. `git`), either extend the local skill or add the OpenClaw one with the prefix and a distinct purpose (e.g. we do not add `git-commit`; we keep one `git` skill).
+- **Curating**: Before adding a skill from OpenClaw, check this README. If we already have a local skill for the same use case (e.g. `git`), extend the local skill instead of adding a second one (e.g. we merged `git-commit` into `git`).
+- **Optional prefix**: If you add an OpenClaw skill that might clash with a future local skill, use a prefix (e.g. `openclaw-<name>`) for the folder and frontmatter `name`.
 
 ---
 

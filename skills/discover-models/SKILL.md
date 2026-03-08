@@ -7,7 +7,7 @@ description: 'Discover available LLM models, compare to what Greg is currently r
 
 Use this skill when the user wants to know what models are available, what Greg is currently running, or wants to switch to a newer model.
 
-`[CODE_PATH]` refers to the code directory. Check the environment if unsure.
+**Code path:** Use the path from your system prompt: **"The code you're running on is at: ..."** — that is the repo root. In the steps below, `[CODE_PATH]` means that path.
 
 ## Steps 1–3: Gather data silently
 

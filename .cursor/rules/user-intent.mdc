@@ -1,0 +1,6 @@
+---
+description: When the user only wants an answer or proposal, do not create or edit files
+alwaysApply: true
+---
+
+When the user says they only want information (e.g. "only tell me", "don't make changes", "just propose", "dont implement", "do not implement"), respond with the requested answer or proposal only. Do not create or edit any files.

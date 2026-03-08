@@ -24,7 +24,7 @@ Always confirm the **intended schedule and behavior** with the user before creat
 
 ## How to run
 
-From the repo root, always use `bun` and the `scripts/jobs` entry point:
+From the **repo root** (the path from your system prompt: **"The code you're running on is at: ..."**), always use `bun` and the `scripts/jobs` entry point:
 
 ```bash
 # Show help and available subcommands

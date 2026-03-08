@@ -7,11 +7,10 @@
     "greg": "bin/greg.ts"
   },
   "scripts": {
-    "agent": "pm2 start \"bun run agent/index.ts\" --name greg --no-autorestart",
+    "agent": "pm2 start \"bun run service/index.ts\" --name greg --no-autorestart",
     "agent:stop": "pm2 delete greg",
     "agent:restart": "pm2 restart greg",
     "agent:logs": "pm2 logs greg",
-    "agent:memory:index": "bun run qmd update --collection agent-chats && bun run qmd embed --collection agent-chats",
     "agent:tools": "bun run scripts/tools-cli.ts",
     "clients:telegram": "bun run clients/telegram/service.ts",
     "clients:telegram:start": "pm2 start \"bun run clients:telegram\" --name greg:telegram --instances 1 --no-autorestart",
@@ -28,7 +27,7 @@
     "guard:stop": "pm2 delete greg:guard",
     "guard:restart": "pm2 restart greg:guard",
     "guard:logs": "pm2 logs greg:guard",
-    "guard:test": "bun run agent/tools/utilities/guard/tests/guard.test.ts",
+    "guard:test": "bun run service/Agent/tools/utilities/guard/tests/guard.test.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },

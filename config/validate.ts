@@ -4,9 +4,9 @@ import { GoogleGenAI } from '@google/genai';
 import { Bot } from 'grammy';
 import pc from 'picocolors';
 
-import { isSafe as isGuardSafe } from '../agent/tools/utilities/guard/guard';
+import { isSafe as isGuardSafe } from '../service/Agent/tools/utilities/guard/guard';
 import type { Config } from './types';
-import type { GuardMethods } from '../agent/tools/utilities/guard/guard';
+import type { GuardMethods } from '../service/Agent/tools/utilities/guard/guard';
 
 const GUARD_METHODS: GuardMethods[] = ['patterns', 'classifier', 'all'];
 
@@ -60,26 +60,10 @@ function assertGuardOptions(config: Config): void {
       `Config tools.guard.use must be one of ${GUARD_METHODS.join(', ')}, got "${guard.use}"`
     );
   }
-
-  const allowlist = guard.allowlist ?? {};
-  for (const group of Object.values(allowlist)) {
-    for (const entry of Object.values(group ?? {})) {
-      if (
-        typeof entry === 'object' &&
-        entry !== null &&
-        'use' in entry &&
-        !GUARD_METHODS.includes(entry.use)
-      ) {
-        throw new Error(
-          `Config tools.guard.allowlist entry use must be one of ${GUARD_METHODS.join(', ')}, got "${(entry as { use: string }).use}"`
-        );
-      }
-    }
-  }
 }
 
-async function validateGuardLoad(): Promise<void> {
-  const result = await isGuardSafe('x', {
+async function validateGuardLoad(config: Config): Promise<void> {
+  const result = await isGuardSafe(config, 'x', {
     use: 'all',
     name: 'test',
     logging: false,
@@ -185,7 +169,7 @@ export async function validate(
   if (configUsesClassifier(config)) {
     checks.push({
       name: 'Guard',
-      run: () => validateGuardLoad(),
+      run: () => validateGuardLoad(config),
     });
   }
 

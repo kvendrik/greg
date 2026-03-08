@@ -1,0 +1,10 @@
+---
+description: Handle unreachable external services and network errors gracefully
+alwaysApply: true
+---
+
+For network calls or external services (APIs, classifiers, etc.):
+
+- Handle unreachable, timeout, and connection errors (e.g. ECONNREFUSED, ETIMEDOUT, fetch failed) without throwing when the failure is expected (e.g. service down).
+- Return a structured result (e.g. `success: false`, `reason: 'Service unreachable'`) with a clear, user-facing message so callers can show it instead of a stack trace.
+- Consider runtime-specific error messages (e.g. Bun's "Unable to connect. Is the computer able to access the url?") and treat them as connection failure when appropriate.
