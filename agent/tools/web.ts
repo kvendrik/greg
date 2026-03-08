@@ -5,7 +5,7 @@ import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { Type } from '@sinclair/typebox';
 import config from '../../.greg';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
-import { available as isGuardAvailable, isSafe } from './utilities/guard/guard';
+import { isSafe } from './utilities/guard/guard';
 
 export interface Citation {
   title: string;
@@ -131,16 +131,22 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
       (details.title ? `${details.title}\n\n` : '') + details.content;
 
     const host = new URL(finalUrl).host;
-    const hostOptions = config.tools.guard?.allowlist?.webFetch?.[host] ?? null;
+    const hostOptions =
+      config.tools.guard?.allowlist?.webSearch?.[host] ?? null;
 
-    if ((await isGuardAvailable()) && !hostOptions?.trusted) {
+    if (config.tools.guard?.enabled && !hostOptions?.trusted) {
+      console.log(`[Guard] Running guard on content for "${host}".`);
+
       const result = await isSafe(content, {
-        name: host,
         use:
           hostOptions?.trusted === false
             ? hostOptions?.use
             : config.tools.guard?.use,
       });
+
+      console.log(
+        `[Guard] Done running guard on content for "${host}" (took ${result.performance}). Flagged as ${result.safe ? 'safe' : `unsafe. Reason: ${result.reason}`}.`
+      );
 
       if (result.safe === false) {
         finalContent = result.message;
