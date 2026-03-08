@@ -1,10 +1,9 @@
-import { spawn, spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import pc from 'picocolors';
 import { randomUUID } from 'node:crypto';
 import config from '../.greg';
 import { thread, type Thread as ThreadBase } from './thread';
 import { startServer } from './server';
-import { available as isGuardAvailable } from './tools/utilities/guard/guard';
 
 type Thread = ThreadBase & { id: string; delete: () => void };
 
@@ -27,17 +26,23 @@ export function getThread(id: string): Thread | null {
   return threads.get(id);
 }
 
-export async function start() {
+export function start() {
   console.log(pc.green('📮 Starting server...'));
   startServer();
 
   console.log(pc.green('📮 Starting job scheduler...'));
   execScript(['jobs', 'schedule']);
 
-  if (config.tools.guard?.enabled && !(await isGuardAvailable())) {
-    throw new Error(
-      'Guard is not running. Run `greg guard start` to start it.'
-    );
+  if (config.clients?.telegram) {
+    console.log(pc.green('📮 Starting Telegram client...'));
+    execScript(['clients:telegram']);
+  } else {
+    console.log(pc.green('✉️  Ready to chat. Run \`greg cli\` to interact...'));
+  }
+
+  if (config.tools.guard?.enabled) {
+    console.log(pc.green('📮 Starting guard...'));
+    execScript(['guard:start']);
   }
 }
 

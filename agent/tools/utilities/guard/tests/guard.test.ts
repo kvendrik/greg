@@ -17,10 +17,7 @@ async function runTests(): Promise<{
     console.log(`Running test ${i + 1}/${tests.length}: ${testCase.title}...`);
 
     const start = performance.now();
-    const result = await isSafe(testCase.prompt, {
-      use: 'all',
-      name: testCase.title,
-    });
+    const result = await isSafe(testCase.prompt, { use: 'all' });
     const time = performance.now() - start;
 
     durationsMs.push(time);

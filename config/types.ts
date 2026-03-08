@@ -70,11 +70,6 @@ export interface Config {
        */
       use: GuardMethods;
       /**
-       * Port the guard classifier HTTP service listens on.
-       * Default is 7234.
-       */
-      port?: number;
-      /**
        * The timeout for the classifier in milliseconds.
        * Default is 15 seconds (15_000).
        */
@@ -89,7 +84,7 @@ export interface Config {
             | { trusted: false; use: GuardMethods }
             | { trusted: true };
         };
-        webFetch?: {
+        webSearch?: {
           [domain: string]:
             | { trusted: false; use: GuardMethods }
             | { trusted: true };
@@ -113,6 +108,11 @@ export interface Config {
     };
   };
   clients?: {
+    /**
+     * When running `greg` in the CLI without any arguments, the first time the server will start.
+     * If the server is already running, running `greg` again will start whatever client is set as the default.
+     */
+    default?: 'cli' | 'telegram';
     telegram?: {
       /**
        * https://core.telegram.org/bots#how-do-i-create-a-bot
