@@ -7,7 +7,7 @@ description: 'How to send messages to the user via Telegram using greg telegram 
 
 ## Overview
 
-This workspace has a built-in Telegram messaging capability. Use the `greg telegram send` command to send messages to the user and optionally wait for a reply.
+This workspace has a built-in Telegram messaging capability. Use the `greg telegram send` command to send messages to the user.
 
 ## When to use this skill
 
@@ -16,7 +16,7 @@ Use Telegram messaging when:
 - You want to send **short notifications or alerts** about job status, errors, or important events.
 - You need to send the user a **concise summary** of results from a long-running process.
 - The user explicitly asks to **receive updates via Telegram**.
-- You need to **ask the user a question** and use their reply in the next step (use `--await-reply`).
+- You need to **ask the user a question** and use their reply in the next step (the agent does this via the Telegram service’s await-reply channel when e.g. confirming a guarded command).
 
 Avoid using this skill for:
 
@@ -25,20 +25,10 @@ Avoid using this skill for:
 
 ## How to Send Messages
 
-Run from the workspace root. **Get the workspace path from your system prompt** (look for "The code you're running on is at:"). If that path is the repo root, use it as-is; if it points to a subfolder (e.g. the agent directory), use its parent as the workspace root.
-
-**Send only (fire-and-forget):**
+Run from the **repo root** (the directory where `greg` and `package.json` live). Your system prompt gives this as **"The code you're running on is at: ..."** — use that path as the working directory for these commands.
 
 ```bash
-cd [WORKSPACE_ROOT] && bun run greg telegram send "Your message here"
-```
-
-**Send and wait for a reply:**
-
-Use `--await-reply` when you need the user’s answer (e.g. a confirmation or a choice). When stdout is not a TTY, only the reply text is printed, so you can capture it easily.
-
-```bash
-cd [WORKSPACE_ROOT] && bun run greg telegram send --await-reply "Your question here"
+cd "<path from system prompt: The code you're running on is at: ...>" && bun run greg telegram send "Your message here"
 ```
 
 When sending a message:
@@ -74,7 +64,7 @@ Formatting guidelines:
 - Providing updates on long-running processes
 - Emergency notifications
 - Quick status updates
-- Asking the user a question and using their reply (with `--await-reply`)
+- Asking the user a question and using their reply (handled internally by the agent when e.g. confirming guarded commands)
 
 For long-running processes:
 
@@ -83,10 +73,8 @@ For long-running processes:
 
 ## Technical Details
 
-- Command: `bun run greg telegram send [options] <message>`
+- Command: `bun run greg telegram send <message>`
 - Arguments: `message` — the text to send.
-- Options:
-  - `--await-reply` — wait for a reply, then exit. When stdout is not a TTY, only the reply is printed (for easy capture).
 - The Telegram client is already configured and ready to use.
 
 ## Notes

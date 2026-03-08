@@ -5,8 +5,8 @@ import { createPrompt, type BotContext } from './prompt';
 import { pipeline } from '@xenova/transformers';
 import ffmpeg from 'fluent-ffmpeg';
 import fs from 'node:fs';
-import path from 'node:path';
-import { cliAwaitingReply, getTelegramEnv } from './utilities';
+import { getTelegramEnv, telegramAwaitSocketPath } from './utilities';
+import { TaskChannel } from './TaskChannel';
 
 const env = getTelegramEnv();
 const botToken = env.botToken;
@@ -33,17 +33,25 @@ function rejectUnauthorized(ctx: BotContext, label: string): void {
   );
 }
 
+const taskChannel = new TaskChannel(telegramAwaitSocketPath);
+taskChannel.onReply(
+  'await-reply',
+  async (text) => await bot.api.sendMessage(senderId, text)
+);
+taskChannel.listen();
+
 bot.on('message:text', async (ctx) => {
   if (!isAllowedSender(ctx)) {
     rejectUnauthorized(ctx, `Received: ${ctx.message.text}`);
     return;
   }
-  if (cliAwaitingReply.isAwaiting()) return;
+  const text = ctx.message.text ?? '';
+  if (taskChannel.onIncomingMessage(text).handledByChannel) return;
   if (!(await ping())) {
     await ctx.reply('Agent is not running');
     process.exit(1);
   }
-  prompt({ content: ctx.message.text, images: [] }, ctx);
+  prompt({ content: text, images: [] }, ctx);
 });
 
 bot.on('message:voice', async (ctx) => {
@@ -178,23 +186,7 @@ bot.on('message:photo', async (ctx) => {
   );
 });
 
-// When the send CLI creates the lock file, stop polling so it can receive the reply.
-let pausedByCli = false;
-const cliLockPath = cliAwaitingReply.getLockPath();
-fs.watch(path.dirname(cliLockPath), (_, filename) => {
-  if (filename !== path.basename(cliLockPath)) return;
-  if (cliAwaitingReply.isAwaiting()) {
-    if (!pausedByCli) {
-      pausedByCli = true;
-      void bot.stop();
-    }
-  } else if (pausedByCli) {
-    pausedByCli = false;
-    void bot.start();
-  }
-});
-
-await bot.start();
+bot.start();
 console.log('Ready.');
 
 prompt({

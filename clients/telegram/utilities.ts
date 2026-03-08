@@ -1,37 +1,21 @@
 import { spawn } from 'node:child_process';
-import fs from 'node:fs';
 import path from 'node:path';
 import config from '../../.greg';
+import { TaskChannel } from './TaskChannel';
 
 type TelegramConfig = NonNullable<
   NonNullable<typeof config.clients>['telegram']
 >;
 
-/** Lock file: when present, the send CLI is awaiting a reply and the service yields polling. */
-const cliAwaitingLockPath = path.join(
+/** Unix socket path for await-reply requests (MCP-style: request/response). */
+export const telegramAwaitSocketPath = path.join(
   import.meta.dirname,
-  '.telegram-send-awaiting'
+  '.telegram-await.sock'
 );
 
-export const cliAwaitingReply = {
-  isAwaiting(): boolean {
-    return fs.existsSync(cliAwaitingLockPath);
-  },
-  getLockPath(): string {
-    return cliAwaitingLockPath;
-  },
-  removeLock(): void {
-    fs.rmSync(cliAwaitingLockPath, { force: true });
-  },
-};
-
-export function createSendAwaitingLock(): void {
-  fs.writeFileSync(cliAwaitingLockPath, '');
-}
-
 /**
- * Sends a message via the send CLI. When awaitReply is true, waits for the
- * user's reply (no timeout – can take hours) and returns it.
+ * Sends a message: via send CLI when awaitReply is false; via service socket when true.
+ * When awaitReply is true, waits for the user's reply (no timeout) and returns it.
  */
 export function sendMessage(
   text: string,
@@ -45,20 +29,13 @@ export async function sendMessage(
   text: string,
   options: { awaitReply: boolean }
 ): Promise<string | void> {
-  const scriptPath = path.join(import.meta.dirname, 'send-message.ts');
-  const args = [scriptPath, text];
-  if (options.awaitReply) args.push('--await-reply');
-  const proc = spawn('bun', args, {
-    stdio: ['ignore', options.awaitReply ? 'pipe' : 'inherit', 'inherit'],
-  });
-
   if (options.awaitReply) {
-    const chunks: Buffer[] = [];
-    proc.stdout?.on('data', (chunk: Buffer) => chunks.push(chunk));
-    await waitForProcessExit(proc);
-    return Buffer.concat(chunks).toString('utf-8').trim();
+    return TaskChannel.send('await-reply', text, telegramAwaitSocketPath);
   }
-
+  const scriptPath = path.join(import.meta.dirname, 'send-message.ts');
+  const proc = spawn('bun', [scriptPath, text], {
+    stdio: 'inherit',
+  });
   await waitForProcessExit(proc);
 }
 
@@ -95,9 +72,7 @@ const config: Config = {
   return clients.telegram;
 }
 
-function waitForProcessExit(
-  proc: ReturnType<typeof spawn>
-): Promise<void> {
+function waitForProcessExit(proc: ReturnType<typeof spawn>): Promise<void> {
   return new Promise((resolve, reject) => {
     proc.on('close', (code) => {
       if (code === 0) resolve();

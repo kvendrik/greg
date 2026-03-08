@@ -1,6 +1,6 @@
 ---
 name: browser-usage
-description: "Instructions for using the `run_browser_task` tool"
+description: Use when you need to interact with a real browser (click, type, navigate, fill forms). Read this skill before using run_browser_task — the tool requires it.
 ---
 
 ## Summary

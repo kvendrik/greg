@@ -1,5 +1,6 @@
 import { Command } from 'commander';
-import { get as getTools } from '../agent/tools';
+import config from '../.greg';
+import { get as getTools } from '../service/Agent/tools';
 
 function camelCase(s: string): string {
   return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
@@ -19,7 +20,7 @@ program
   .option('-l, --list', 'List available tools and exit');
 
 async function main() {
-  const tools = await getTools(new Date().toISOString());
+  const tools = await getTools(new Date().toISOString(), config);
 
   if (process.argv.includes('--list') || process.argv.includes('-l')) {
     console.log('Available tools:\n');
@@ -31,7 +32,7 @@ async function main() {
   }
 
   for (const tool of tools.tools) {
-    const schema = (tool).parameters as ParamsSchema;
+    const schema = tool.parameters as ParamsSchema;
     const props = schema?.properties ?? {};
     const required = schema?.required ?? [];
 

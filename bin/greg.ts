@@ -4,7 +4,7 @@ import path from 'node:path';
 import { Command } from 'commander';
 import { name, description, version } from '../package.json';
 import { validate } from '../config';
-import { discoverSkills } from '../agent/tools/skills';
+import { discoverSkills } from '../service/Agent/tools/skills';
 import { sendCommand } from '../clients/telegram/send-message';
 import pc from 'picocolors';
 
@@ -65,10 +65,10 @@ function getPm2StatusByProcessName(): Map<string, string> {
   return map;
 }
 
-function runServiceStatus(
+async function runServiceStatus(
   serviceConfig: ServiceConfig,
   options: { pm2Status?: string } = {}
-): void {
+): Promise<void> {
   const pm2Status =
     options.pm2Status ??
     getPm2StatusByProcessName().get(serviceConfig.pm2ProcessName);
@@ -76,7 +76,7 @@ function runServiceStatus(
   const hasErrors = pm2Status === 'errored';
 
   console.log(pc.bold(serviceConfig.label));
-  serviceConfig.statusExtra?.();
+  await serviceConfig.statusExtra?.();
   console.log(`Running: ${running ? pc.green('yes') : pc.red('no')}`);
   if (running) {
     if (hasErrors) {
@@ -160,7 +160,9 @@ function waitForLogIdle(
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(resolveStatus, IDLE_MS);
     };
-    const onData = () => { scheduleIdle(); };
+    const onData = () => {
+      scheduleIdle();
+    };
     child.stdout?.on('data', onData);
     child.stderr?.on('data', onData);
     scheduleIdle();
@@ -248,7 +250,9 @@ function createServiceCommand(serviceConfig: ServiceConfig): Command {
     new Command('status')
       .alias('s')
       .description(serviceConfig.descriptions.status)
-      .action(() => { runServiceStatus(serviceConfig); })
+      .action(() => {
+        runServiceStatus(serviceConfig);
+      })
   );
 
   cmd.addCommand(
@@ -473,7 +477,7 @@ program
   .action(async () => {
     const { default: config } = await import('../.greg');
     const configFailures = await validate(config, { exit: false });
-    const skills = discoverSkills();
+    const skills = discoverSkills(config);
     for (const skill of skills) {
       if (!skill.requires?.length) continue;
       for (const req of skill.requires) {
@@ -570,10 +574,10 @@ program
 program
   .command('status')
   .description('Show status of all configured services')
-  .action(() => {
+  .action(async () => {
     const pm2StatusByProcessName = getPm2StatusByProcessName();
-    for (const serviceConfig of allServiceConfigs) {
-      runServiceStatus(serviceConfig, {
+    for (const serviceConfig of serviceConfigsStartOrder) {
+      await runServiceStatus(serviceConfig, {
         pm2Status: pm2StatusByProcessName.get(serviceConfig.pm2ProcessName),
       });
       console.log();

@@ -1,0 +1,6 @@
+---
+description: Do not create new files unless the user explicitly asked for them
+alwaysApply: true
+---
+
+Do not create new files (README, design docs, RULE.md, proposal docs, etc.) unless the user explicitly asked for them. Only create or modify files that are directly required for the requested task.

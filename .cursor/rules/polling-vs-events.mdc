@@ -1,0 +1,9 @@
+---
+description: Prefer event-driven or callback-based solutions over periodic polling
+alwaysApply: true
+---
+
+When coordinating between processes or waiting for a condition:
+
+- Prefer event-driven or callback-based solutions (e.g. handle in the message callback, use fs.watch for file presence) over periodic polling (e.g. setInterval every N seconds).
+- Use polling only when no event or callback is available and the operation is one-off or low-frequency.
