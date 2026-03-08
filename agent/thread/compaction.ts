@@ -1,5 +1,5 @@
 import { completeSimple } from '@mariozechner/pi-ai';
-import type { Model, Usage } from '@mariozechner/pi-ai';
+import type { Usage } from '@mariozechner/pi-ai';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import config from '../../.greg';
 
@@ -47,7 +47,7 @@ function messagesToTranscript(messages: AgentMessage[]): string {
   for (const m of messages) {
     const msg = m as {
       role: string;
-      content?: string | Array<{ type?: string; text?: string }>;
+      content?: string | { type?: string; text?: string }[];
     };
     const content = msg.content;
     if (!content) continue;
@@ -71,19 +71,20 @@ function messagesToTranscript(messages: AgentMessage[]): string {
 }
 
 function extractTextFromAssistantMessage(msg: {
-  content?: Array<{ type?: string; text?: string }>;
+  content?: { type?: string; text?: string }[];
 }): string {
   const content = msg.content ?? [];
   return content
-    .filter((b) => b && b.type === 'text' && typeof b.text === 'string')
+    .filter((b) => b?.type === 'text' && typeof b.text === 'string')
     .map((b) => b.text!)
     .join('');
 }
 
 export async function compactContext(
   messages: AgentMessage[],
-  signal: AbortSignal
+  signal?: AbortSignal
 ): Promise<AgentMessage[]> {
+  const effectiveSignal = signal ?? new AbortController().signal;
   const model = config.models.find((model) => model.role === 'primary')!.model;
   const getApiKey = (provider: string) => {
     const key =
@@ -97,7 +98,7 @@ export async function compactContext(
     return key;
   };
 
-  if (signal?.aborted) {
+  if (effectiveSignal.aborted) {
     throw new DOMException('Aborted', 'AbortError');
   }
 
@@ -139,7 +140,7 @@ export async function compactContext(
         },
       ],
     },
-    { signal, apiKey }
+    { signal: effectiveSignal, apiKey }
   );
 
   const summaryText = extractTextFromAssistantMessage(response).trim();

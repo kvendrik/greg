@@ -1,6 +1,9 @@
 ---
 name: google-cli
 description: 'Use the gog CLI (gogcli) to read calendar events, Gmail emails, and Google Tasks, and to create Gmail drafts. Use when the user wants Google Calendar, Gmail, or Google Tasks data, or to compose or draft emails.'
+requires:
+  - gog
+  - env:GOG_ACCOUNT
 ---
 
 # Google CLI (gog)

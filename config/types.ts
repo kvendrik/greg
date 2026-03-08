@@ -84,16 +84,10 @@ export interface Config {
        * These will either not be ran through the guard or with a specific `use` setting.
        */
       allowlist?: {
-        exec?: {
-          [command: string]:
-            | { trusted: false; use: GuardMethods }
-            | { trusted: true };
-        };
-        webFetch?: {
-          [domain: string]:
-            | { trusted: false; use: GuardMethods }
-            | { trusted: true };
-        };
+        exec?: Record<string, | { trusted: false; use: GuardMethods }
+            | { trusted: true }>;
+        webFetch?: Record<string, | { trusted: false; use: GuardMethods }
+            | { trusted: true }>;
       };
     };
     browser?: {

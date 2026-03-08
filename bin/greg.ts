@@ -3,8 +3,9 @@ import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { Command } from 'commander';
 import { name, description, version } from '../package.json';
-import config from '../.greg';
 import { validate } from '../config';
+import { discoverSkills } from '../agent/tools/skills';
+import { sendCommand } from '../clients/telegram/send-message';
 import pc from 'picocolors';
 
 const projectRoot = path.join(import.meta.dirname, '..');
@@ -16,7 +17,9 @@ const WAIT_ONLINE_TIMEOUT_MS = 30000;
 const WAIT_IDLE_TIMEOUT_MS = 15000;
 
 type ServiceScripts = {
-  start: string | { cmd: string; env: Record<string, string> };
+  start:
+    | string
+    | { cmd: string; getEnv: () => Promise<Record<string, string>> };
   stop: string;
   restart: string;
   logs: string;
@@ -49,7 +52,7 @@ function getPm2StatusByProcessName(): Map<string, string> {
   const map = new Map<string, string>();
   if (result.status !== 0 || !result.stdout) return map;
   try {
-    const processes: Array<{ name?: string; pm2_env?: { status?: string } }> =
+    const processes: { name?: string; pm2_env?: { status?: string } }[] =
       JSON.parse(result.stdout);
     for (const proc of processes) {
       const name = proc.name;
@@ -86,10 +89,10 @@ function runServiceStatus(
   }
 }
 
-function runServiceStart(
+async function runServiceStart(
   serviceConfig: ServiceConfig,
   options: { exitIfAlreadyRunning?: boolean } = {}
-): void {
+): Promise<void> {
   const { exitIfAlreadyRunning = true } = options;
   if (serviceConfig.checkPm2BeforeStart) {
     const statusResult = spawnSync(
@@ -108,7 +111,7 @@ function runServiceStart(
     spawnSync('bun', ['run', startScript.cmd], {
       stdio: 'inherit',
       cwd: projectRoot,
-      env: { ...process.env, ...startScript.env },
+      env: { ...process.env, ...(await startScript.getEnv()) },
     });
   } else {
     spawnSync('bun', ['run', startScript], {
@@ -118,13 +121,15 @@ function runServiceStart(
   }
 }
 
-function startServiceWithPipe(serviceConfig: ServiceConfig): void {
+async function startServiceWithPipe(
+  serviceConfig: ServiceConfig
+): Promise<void> {
   const startScript = serviceConfig.scripts.start;
   if (typeof startScript === 'object') {
     spawnSync('bun', ['run', startScript.cmd], {
       stdio: 'pipe',
       cwd: projectRoot,
-      env: { ...process.env, ...startScript.env },
+      env: { ...process.env, ...(await startScript.getEnv()) },
     });
   } else {
     spawnSync('bun', ['run', startScript], {
@@ -155,7 +160,7 @@ function waitForLogIdle(
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(resolveStatus, IDLE_MS);
     };
-    const onData = () => scheduleIdle();
+    const onData = () => { scheduleIdle(); };
     child.stdout?.on('data', onData);
     child.stderr?.on('data', onData);
     scheduleIdle();
@@ -243,7 +248,7 @@ function createServiceCommand(serviceConfig: ServiceConfig): Command {
     new Command('status')
       .alias('s')
       .description(serviceConfig.descriptions.status)
-      .action(() => runServiceStatus(serviceConfig))
+      .action(() => { runServiceStatus(serviceConfig); })
   );
 
   cmd.addCommand(
@@ -339,7 +344,8 @@ const telegramServiceConfig: ServiceConfig = {
     restart: 'Restart the Telegram client',
     logs: "Show the Telegram client's logs",
   },
-  statusExtra: () => {
+  statusExtra: async () => {
+    const { default: config } = await import('../.greg');
     const enabled = config.clients?.telegram ?? false;
     console.log(`Enabled: ${enabled ? 'yes' : 'no'}`);
   },
@@ -352,10 +358,12 @@ const guardServiceConfig: ServiceConfig = {
   scripts: {
     start: {
       cmd: 'guard:start',
-      env:
-        config.tools?.guard?.port != null
+      getEnv: async (): Promise<Record<string, string>> => {
+        const { default: config } = await import('../.greg');
+        return config.tools?.guard?.port != null
           ? { PORT: String(config.tools.guard.port) }
-          : {},
+          : ({} as Record<string, string>);
+      },
     },
     stop: 'guard:stop',
     restart: 'guard:restart',
@@ -372,9 +380,33 @@ const guardServiceConfig: ServiceConfig = {
     restart: 'Restart the guard classifier service',
     logs: "Show the guard's logs",
   },
-  statusExtra: () => {
+  statusExtra: async () => {
+    const { default: config } = await import('../.greg');
     const enabled = config.tools?.guard?.enabled ?? false;
     console.log(`Enabled: ${enabled ? 'yes' : 'no'}`);
+  },
+};
+
+const jobsScheduleServiceConfig: ServiceConfig = {
+  name: 'jobs:schedule',
+  description: 'Manage the jobs schedule',
+  pm2ProcessName: 'greg:jobs',
+  scripts: {
+    start: 'jobs:schedule',
+    stop: 'jobs:schedule:stop',
+    restart: 'jobs:schedule:restart',
+    logs: 'jobs:schedule:logs',
+  },
+  label: '📅 Jobs Scheduler',
+  logsHint:
+    'Jobs schedule is already running. Run `greg jobs:schedule logs` to see the logs.',
+  checkPm2BeforeStart: true,
+  descriptions: {
+    start: 'Start the jobs schedule',
+    status: 'Show whether the jobs schedule is running',
+    stop: 'Stop the jobs schedule',
+    restart: 'Restart the jobs schedule',
+    logs: "Show the jobs schedule's logs",
   },
 };
 
@@ -382,11 +414,13 @@ const allServiceConfigs: ServiceConfig[] = [
   agentServiceConfig,
   telegramServiceConfig,
   guardServiceConfig,
+  jobsScheduleServiceConfig,
 ];
 
 const serviceConfigsStartOrder: ServiceConfig[] = [
   guardServiceConfig,
   agentServiceConfig,
+  jobsScheduleServiceConfig,
   telegramServiceConfig,
 ];
 
@@ -409,18 +443,7 @@ program
   );
 
 const telegramCmd = createServiceCommand(telegramServiceConfig);
-telegramCmd.addCommand(
-  new Command('send')
-    .description('Send a message via Telegram')
-    .argument('<message...>', 'Message to send')
-    .action((messageParts: string[]) => {
-      const message = messageParts.join(' ');
-      spawn('bun', ['run', 'clients:telegram:send-message', message], {
-        stdio: 'inherit',
-        cwd: projectRoot,
-      }).on('exit', (code) => process.exit(code ?? 0));
-    })
-);
+telegramCmd.addCommand(sendCommand);
 program.addCommand(telegramCmd);
 
 program
@@ -430,14 +453,66 @@ program
     new Command('validate')
       .description('Validate the config file')
       .action(async () => {
+        const { default: config } = await import('../.greg');
         await validate(config);
       })
   )
   .addCommand(
     new Command('path')
       .description('Get the current config path')
-      .action(() => console.log(path.resolve('./.greg.ts')))
+      .action(() => {
+        console.log(path.resolve(projectRoot, '.greg.ts'));
+      })
   );
+
+program
+  .command('doctor')
+  .description(
+    'Validate config and check skill dependencies (CLIs and env vars from skill requires)'
+  )
+  .action(async () => {
+    const { default: config } = await import('../.greg');
+    const configFailures = await validate(config, { exit: false });
+    const skills = discoverSkills();
+    for (const skill of skills) {
+      if (!skill.requires?.length) continue;
+      for (const req of skill.requires) {
+        const isEnv = req.startsWith('env:');
+        const key = isEnv ? req.slice(4) : req;
+        if (isEnv) {
+          const value = process.env[key];
+          if (value === undefined || value === '') {
+            console.warn(
+              pc.yellow(
+                `Warning: skill "${skill.name}" cannot be used — env ${key} is not set`
+              )
+            );
+          } else {
+            console.log(
+              pc.green(`Skill "${skill.name}": env ${key} ${pc.green('✓')}`)
+            );
+          }
+        } else {
+          const result = spawnSync('which', [key], {
+            encoding: 'utf8',
+            stdio: 'pipe',
+          });
+          if (result.status !== 0) {
+            console.warn(
+              pc.yellow(
+                `Warning: skill "${skill.name}" cannot be used — CLI "${key}" not found`
+              )
+            );
+          } else {
+            console.log(
+              pc.green(`Skill "${skill.name}": ${key} ${pc.green('✓')}`)
+            );
+          }
+        }
+      }
+    }
+    process.exit(configFailures.length > 0 ? 1 : 0);
+  });
 
 program
   .command('tools')

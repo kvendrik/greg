@@ -133,16 +133,21 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
     const host = new URL(finalUrl).host;
     const hostOptions = config.tools.guard?.allowlist?.webFetch?.[host] ?? null;
 
-    if ((await isGuardAvailable()) && !hostOptions?.trusted) {
+    const guardUse =
+      hostOptions?.trusted === false
+        ? hostOptions?.use
+        : config.tools.guard?.use;
+    if (
+      guardUse != null &&
+      (await isGuardAvailable()) &&
+      !hostOptions?.trusted
+    ) {
       const result = await isSafe(content, {
         name: host,
-        use:
-          hostOptions?.trusted === false
-            ? hostOptions?.use
-            : config.tools.guard?.use,
+        use: guardUse,
       });
 
-      if (result.safe === false) {
+      if (!result.safe) {
         finalContent = result.message;
       }
     }
@@ -265,7 +270,7 @@ function isPrivateIPv6(address: string): boolean {
   if (lower.startsWith('fe80:')) return true;
   if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
   if (lower.startsWith('fec0:')) return true;
-  const ipv4Tail = lower.match(/(\d+\.\d+\.\d+\.\d+)$/);
+  const ipv4Tail = /(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
   if (ipv4Tail) return isPrivateIPv4(ipv4Tail[1]);
   return false;
 }
@@ -308,7 +313,7 @@ async function guardedFetch(
 
   const controller = new AbortController();
   const timeoutId = setTimeout(
-    () => controller.abort(new DOMException('Timeout', 'AbortError')),
+    () => { controller.abort(new DOMException('Timeout', 'AbortError')); },
     FETCH_TIMEOUT_MS
   );
 

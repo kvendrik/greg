@@ -7,7 +7,9 @@ export type BotContext = FileFlavor<Context>;
 
 function createSendTypingAction(ctx: BotContext) {
   const typingIntervalMs = 5000;
-  const chatId = ctx.chat.id;
+  const chat = ctx.chat;
+  if (!chat) throw new Error('No chat on context');
+  const chatId = chat.id;
   let stopped = false;
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
 

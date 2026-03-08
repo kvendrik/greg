@@ -7,24 +7,30 @@
     "greg": "bin/greg.ts"
   },
   "scripts": {
-    "agent": "pm2 describe greg >/dev/null 2>&1 && echo 'Greg is already running. Run `greg logs` to see the logs.' || pm2 start \"bun run agent/index.ts\" --name greg --no-autorestart",
-    "agent:stop": "pm2 stop greg",
+    "agent": "pm2 start \"bun run agent/index.ts\" --name greg --no-autorestart",
+    "agent:stop": "pm2 delete greg",
     "agent:restart": "pm2 restart greg",
     "agent:logs": "pm2 logs greg",
     "agent:memory:index": "bun run qmd update --collection agent-chats && bun run qmd embed --collection agent-chats",
     "agent:tools": "bun run scripts/tools-cli.ts",
     "clients:telegram": "bun run clients/telegram/service.ts",
     "clients:telegram:start": "pm2 start \"bun run clients:telegram\" --name greg:telegram --instances 1 --no-autorestart",
-    "clients:telegram:stop": "pm2 stop greg:telegram",
+    "clients:telegram:stop": "pm2 delete greg:telegram",
     "clients:telegram:restart": "pm2 restart greg:telegram",
     "clients:telegram:logs": "pm2 logs greg:telegram",
     "clients:telegram:send-message": "bun run clients/telegram/send-message.ts",
     "jobs": "bun run scripts/jobs.ts",
+    "jobs:schedule": "pm2 start \"bun run scripts/jobs schedule\" --name greg:jobs --no-autorestart",
+    "jobs:schedule:stop": "pm2 delete greg:jobs",
+    "jobs:schedule:logs": "pm2 logs greg:jobs",
+    "jobs:schedule:restart": "pm2 restart greg:jobs",
     "guard:start": "pm2 start ./classifier/classifier --name greg:guard --instances 1 --no-autorestart",
-    "guard:stop": "pm2 stop greg:guard",
+    "guard:stop": "pm2 delete greg:guard",
     "guard:restart": "pm2 restart greg:guard",
     "guard:logs": "pm2 logs greg:guard",
-    "guard:test": "bun run agent/tools/utilities/guard/tests/guard.test.ts"
+    "guard:test": "bun run agent/tools/utilities/guard/tests/guard.test.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.76.0",
@@ -54,10 +60,14 @@
     "yaml": "^2.8.2"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/bun": "^1.1.14",
-    "@types/jsdom": "^21.1.7",
     "@types/chrome-remote-interface": "^0.31.14",
+    "@types/jsdom": "^21.1.7",
     "@types/node": "^25.2.3",
-    "prettier": "^3.4.2"
+    "eslint": "^10.0.3",
+    "prettier": "^3.4.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1"
   }
 }

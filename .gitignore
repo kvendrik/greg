@@ -10,3 +10,6 @@ agent/tools/utilities/guard/models/
 # Classifier binary and model
 classifier/classifier
 classifier/models/
+
+# Lock file used by send CLI when awaiting reply (service yields polling)
+.telegram-send-awaiting

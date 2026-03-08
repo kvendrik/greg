@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import pc from 'picocolors';
 import { randomUUID } from 'node:crypto';
 import config from '../.greg';
@@ -11,7 +11,7 @@ type Thread = ThreadBase & { id: string; delete: () => void };
 const threads = new Map<string, Thread>();
 
 export async function createThread(): Promise<Thread> {
-  const t = {
+  const newThread = {
     ...(await thread()),
     id: randomUUID(),
     delete() {
@@ -19,15 +19,15 @@ export async function createThread(): Promise<Thread> {
       threads.delete(this.id);
     },
   };
-  threads.set(t.id, t);
-  return t;
+  threads.set(newThread.id, newThread);
+  return newThread;
 }
 
 export function getThread(id: string): Thread | null {
-  return threads.get(id);
+  return threads.get(id) ?? null;
 }
 
-export async function start() {
+export async function start(): Promise<void> {
   console.log(pc.green('📮 Starting server...'));
   startServer();
 
@@ -41,7 +41,7 @@ export async function start() {
   }
 }
 
-function execScript(args: string[]) {
+function execScript(args: string[]): void {
   const proc = spawn(`bun`, ['run', ...args], {
     stdio: 'inherit',
   });
@@ -49,7 +49,7 @@ function execScript(args: string[]) {
   proc.on('exit', (code) => {
     if (code !== 0) {
       console.error(pc.red(`Failed to execute script: ${args.join(' ')}`));
-      process.exit(code);
+      process.exit(code ?? 1);
     }
   });
 }

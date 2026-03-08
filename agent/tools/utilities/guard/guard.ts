@@ -18,7 +18,7 @@ export async function available(): Promise<boolean> {
   }
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), GUARD_ONLINE_TIMEOUT_MS);
+    const timer = setTimeout(() => { controller.abort(); }, GUARD_ONLINE_TIMEOUT_MS);
     const res = await fetch(`${CLASSIFIER_URL}/health`, {
       method: 'GET',
       signal: controller.signal,
@@ -86,11 +86,11 @@ export async function isSafe(
 
   const start = performance.now();
   let response: { injection: boolean; score: number; label: string };
-  let end: number = 0;
+  let end = 0;
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), CLASSIFIER_TIMEOUT_MS);
+    const timer = setTimeout(() => { controller.abort(); }, CLASSIFIER_TIMEOUT_MS);
     const res = await fetch(`${CLASSIFIER_URL}/classify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -108,6 +108,25 @@ export async function isSafe(
     response = data;
   } catch (err) {
     const isTimeout = err instanceof Error && err.name === 'AbortError';
+    const connectionErrorCodes = [
+      'ECONNREFUSED',
+      'ENOTFOUND',
+      'ETIMEDOUT',
+      'ECONNRESET',
+      'EAI_AGAIN',
+    ];
+    const code =
+      err instanceof Error && 'code' in err
+        ? (err as NodeJS.ErrnoException).code
+        : err instanceof Error && err.cause instanceof Error && 'code' in err.cause
+          ? (err.cause as NodeJS.ErrnoException).code
+          : undefined;
+    const message = err instanceof Error ? err.message : String(err);
+    const looksLikeConnectionFailure =
+      connectionErrorCodes.includes(code ?? '') ||
+      /unable to connect|fetch failed|connection refused|network|econnrefused|enotfound|etimedout|econnreset/i.test(
+        message
+      );
 
     if (isTimeout) {
       end = performance.now();
@@ -120,9 +139,27 @@ export async function isSafe(
       return {
         success: false,
         safe: false,
-        reason: null,
+        reason: 'Timeout',
         evaluatedBy: 'classifier',
         message: `Scanning content failed. Content is too large to be scanned in under ${CLASSIFIER_TIMEOUT_MS / 1000} seconds`,
+      };
+    }
+
+    if (looksLikeConnectionFailure) {
+      end = performance.now();
+      logResult({
+        name,
+        performance: end - start,
+        safe: false,
+        reason: 'Classifier unreachable',
+      });
+      return {
+        success: false,
+        safe: false,
+        reason: 'Classifier unreachable',
+        evaluatedBy: 'classifier',
+        message:
+          'Guard classifier is not reachable. Run `greg guard status` to check if it is running.',
       };
     }
 

@@ -9,8 +9,9 @@ function parsePath(url: string): string[] {
   return pathname.split('/').filter(Boolean);
 }
 
-const server = http.createServer(async (req, res) => {
-  console.log(pc.gray(`[${req.method}] ${req.url}`));
+const server = http.createServer((req, res) => {
+  void (async () => {
+  console.log(pc.gray(`[${req.method ?? 'GET'}] ${req.url ?? '/'}`));
 
   const path = parsePath(req.url ?? '');
   const method = req.method;
@@ -71,11 +72,12 @@ const server = http.createServer(async (req, res) => {
 
   let body = '';
 
-  req.on('data', (chunk) => {
-    body += chunk;
+  req.on('data', (chunk: Buffer | string) => {
+    body += typeof chunk === 'string' ? chunk : chunk.toString();
   });
 
-  req.on('end', async () => {
+  req.on('end', () => {
+    void (async () => {
     type Image = {
       data: string;
       mimeType: string;
@@ -179,7 +181,9 @@ const server = http.createServer(async (req, res) => {
         }
       }
     }
+  })();
   });
+  })();
 });
 
 server.timeout = 0;

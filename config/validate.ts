@@ -68,7 +68,7 @@ function assertGuardOptions(config: Config): void {
         typeof entry === 'object' &&
         entry !== null &&
         'use' in entry &&
-        !GUARD_METHODS.includes(entry.use as GuardMethods)
+        !GUARD_METHODS.includes(entry.use)
       ) {
         throw new Error(
           `Config tools.guard.allowlist entry use must be one of ${GUARD_METHODS.join(', ')}, got "${(entry as { use: string }).use}"`
@@ -84,7 +84,7 @@ async function validateGuardLoad(): Promise<void> {
     name: 'test',
     logging: false,
   });
-  if (result.safe === false) {
+  if (!result.safe) {
     throw new Error(result.message);
   }
 }
@@ -131,20 +131,25 @@ async function validateBrowserUseKey(key: string): Promise<void> {
   }
 }
 
-export async function validate(config: Config): Promise<void> {
+export type ValidateOptions = { exit?: boolean };
+
+export async function validate(
+  config: Config,
+  options?: ValidateOptions
+): Promise<string[]> {
   assertModelsStructure(config);
   assertGuardOptions(config);
   console.info(pc.green('Config structure is valid ✓'));
 
   const providersToKeys = new Map<string, string>();
   for (const entry of config.models) {
-    const provider = entry.model.provider as string;
+    const provider = entry.model.provider;
     if (!providersToKeys.has(provider)) {
       providersToKeys.set(provider, entry.key);
     }
   }
 
-  const checks: Array<{ name: string; run: () => Promise<void> }> = [];
+  const checks: { name: string; run: () => Promise<void> }[] = [];
 
   for (const [provider, key] of providersToKeys) {
     if (provider === 'openai') {
@@ -195,5 +200,9 @@ export async function validate(config: Config): Promise<void> {
       failures.push(checks[index].name);
     }
   });
-  process.exit(failures.length > 0 ? 1 : 0);
+  const exitOnFailure = options?.exit !== false;
+  if (exitOnFailure) {
+    process.exit(failures.length > 0 ? 1 : 0);
+  }
+  return failures;
 }
