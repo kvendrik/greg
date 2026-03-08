@@ -1,25 +1,13 @@
-import { Bot, type Context } from 'grammy';
-import { FileFlavor, hydrateFiles } from '@grammyjs/files';
-import {
-  ping,
-  createThread,
-  type Thread,
-  type PromptInput,
-} from '../agent-sdk';
+import { Bot } from 'grammy';
+import { hydrateFiles } from '@grammyjs/files';
+import { ping, createThread, type Thread } from '../agent-sdk';
+import { createPrompt, type BotContext } from './prompt';
 import { pipeline } from '@xenova/transformers';
 import ffmpeg from 'fluent-ffmpeg';
-import pc from 'picocolors';
 import fs from 'node:fs';
 import { getTelegramEnv } from './utilities';
 
-type BotContext = FileFlavor<Context>;
-
 const { botToken, senderId } = getTelegramEnv();
-
-if (!(await ping())) {
-  console.error('Agent is not running.');
-  process.exit(1);
-}
 
 const bot = new Bot<BotContext>(botToken);
 const transcriber = await pipeline(
@@ -30,6 +18,7 @@ const transcriber = await pipeline(
 bot.api.config.use(hydrateFiles(bot.token));
 
 const thread: Thread = await createThread();
+const prompt = createPrompt(thread, bot, senderId);
 
 bot.on('message:text', async (ctx) => {
   if (ctx.from?.id.toString() !== senderId) {
@@ -45,7 +34,7 @@ bot.on('message:text', async (ctx) => {
   }
 
   const message = ctx.message;
-  handoffToAgent({ content: message.text, images: [] }, ctx);
+  prompt({ content: message.text, images: [] }, ctx);
 });
 
 bot.on('message:voice', async (ctx) => {
@@ -77,7 +66,7 @@ bot.on('message:voice', async (ctx) => {
     return_timestamps: false,
   })) as { text: string };
 
-  handoffToAgent({ content: result.text.trim(), images: [] }, ctx);
+  prompt({ content: result.text.trim(), images: [] }, ctx);
 
   fs.unlinkSync('./temp.ogg');
   fs.unlinkSync('./temp.pcm');
@@ -120,7 +109,7 @@ async function processPhotoBatch(contexts: BotContext[], replyCtx: BotContext) {
     data: r.base64,
     mimeType: 'image/jpeg' as const,
   }));
-  await handoffToAgent({ content: caption, images }, replyCtx);
+  await prompt({ content: caption, images }, replyCtx);
 }
 
 bot.on('message:photo', async (ctx) => {
@@ -167,7 +156,7 @@ bot.on('message:photo', async (ctx) => {
   }
 
   const { base64, caption } = await processPhotoMessage(ctx);
-  await handoffToAgent(
+  await prompt(
     {
       content: caption || 'User sent an image.',
       images: [{ data: base64, mimeType: 'image/jpeg' }],
@@ -179,7 +168,7 @@ bot.on('message:photo', async (ctx) => {
 bot.start();
 console.log('Ready.');
 
-await handoffToAgent({
+prompt({
   content: 'You just started. Check recent notes for context and greet me.',
   images: [],
 });
@@ -210,103 +199,4 @@ async function readAudioAsFloat32(pcmPath: string): Promise<Float32Array> {
   }
 
   return float32Array;
-}
-
-async function handoffToAgent(input: PromptInput, ctx?: BotContext) {
-  const typing = ctx ? createSendTypingAction(ctx) : null;
-
-  const imageSuffix =
-    input.images.length > 0 ? ` [+${input.images.length} image(s)]` : '';
-  const preview = `${input.content}${imageSuffix}`;
-
-  console.log(`\n\nPrompting: "${preview}"`);
-
-  const message = `Sending response to ${ctx ? ctx.from?.username : 'user'}...`;
-  let response = '';
-
-  typing?.start();
-
-  await thread.prompt(input, {
-    onThinking: (chunk: string) => {},
-    onContent: (chunk: string) => {
-      response += chunk;
-    },
-    onToolcall: async () => {
-      if (response.trim() !== '') {
-        process.stdout.write(`\n\n${message} (partial response)`);
-        const text = response;
-        response = '';
-        await send(text);
-      }
-    },
-    onDone: async () => {
-      typing?.stop();
-      if (response.trim() !== '') {
-        console.log(`\n\n${message}`);
-        console.log(`"${response}"`);
-        await send(response);
-      }
-      response = '';
-      process.stdout.write(`done. ${pc.green('✓')}\n`);
-    },
-    onStop: async () => {
-      typing?.stop();
-      await send('Stopped.');
-      response = '';
-      process.stdout.write(`stopped.\n`);
-    },
-    onError: async (error: string) => {
-      if (error) {
-        console.error(pc.red(`Error: ${error}`));
-        typing?.stop();
-        await send(error);
-      }
-      response = '';
-    },
-  });
-
-  function send(text: string) {
-    if (ctx) {
-      return ctx.reply(text);
-    } else {
-      return bot.api.sendMessage(senderId, text);
-    }
-  }
-}
-
-function createSendTypingAction(ctx: BotContext) {
-  const typingIntervalMs = 5000;
-  const chatId = ctx.chat.id;
-  let stopped = false;
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  const loop = async () => {
-    if (stopped) {
-      return;
-    }
-
-    try {
-      await ctx.api.sendChatAction(chatId, 'typing');
-    } catch (error) {
-      console.error(error);
-    }
-
-    if (stopped) {
-      return;
-    }
-
-    timeoutId = setTimeout(loop, typingIntervalMs);
-  };
-
-  return {
-    start() {
-      void loop();
-    },
-    stop() {
-      stopped = true;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    },
-  };
 }
