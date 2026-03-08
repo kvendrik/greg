@@ -81,20 +81,22 @@ export async function runExec(
         const commandOptions =
           config.tools.guard?.allowlist?.exec?.[cmd] ?? null;
 
+        const guardUse =
+          commandOptions?.trusted === false
+            ? commandOptions?.use
+            : config.tools.guard?.use;
         if (
+          guardUse != null &&
           (await isGuardAvailable()) &&
           !commandOptions?.trusted &&
           !isAllowed
         ) {
           const result = await isSafe(combined, {
             name: cmd,
-            use:
-              commandOptions?.trusted === false
-                ? commandOptions?.use
-                : config.tools.guard?.use,
+            use: guardUse,
           });
 
-          if (result.safe === false) {
+          if (!result.safe) {
             combined = result.message;
           }
         }
@@ -121,7 +123,10 @@ export const tools: AgentTool[] = [
     }),
     execute: async (_id, params, signal, _onUpdate) => {
       const { command } = params as { command: string };
-      const text = await runExec({ command }, signal);
+      const text = await runExec(
+        { command },
+        signal ?? new AbortController().signal
+      );
       return { content: [{ type: 'text' as const, text }], details: {} };
     },
   },

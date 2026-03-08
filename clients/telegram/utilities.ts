@@ -1,7 +1,70 @@
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import config from '../../.greg';
 
-export function getTelegramEnv(): typeof config.clients.telegram {
-  if (!config.clients.telegram) {
+type TelegramConfig = NonNullable<
+  NonNullable<typeof config.clients>['telegram']
+>;
+
+/** Lock file: when present, the send CLI is awaiting a reply and the service yields polling. */
+const cliAwaitingLockPath = path.join(
+  import.meta.dirname,
+  '.telegram-send-awaiting'
+);
+
+export const cliAwaitingReply = {
+  isAwaiting(): boolean {
+    return fs.existsSync(cliAwaitingLockPath);
+  },
+  getLockPath(): string {
+    return cliAwaitingLockPath;
+  },
+  removeLock(): void {
+    fs.rmSync(cliAwaitingLockPath, { force: true });
+  },
+};
+
+export function createSendAwaitingLock(): void {
+  fs.writeFileSync(cliAwaitingLockPath, '');
+}
+
+/**
+ * Sends a message via the send CLI. When awaitReply is true, waits for the
+ * user's reply (no timeout – can take hours) and returns it.
+ */
+export function sendMessage(
+  text: string,
+  options: { awaitReply: true }
+): Promise<string>;
+export function sendMessage(
+  text: string,
+  options: { awaitReply: false }
+): Promise<void>;
+export async function sendMessage(
+  text: string,
+  options: { awaitReply: boolean }
+): Promise<string | void> {
+  const scriptPath = path.join(import.meta.dirname, 'send-message.ts');
+  const args = [scriptPath, text];
+  if (options.awaitReply) args.push('--await-reply');
+  const proc = spawn('bun', args, {
+    stdio: ['ignore', options.awaitReply ? 'pipe' : 'inherit', 'inherit'],
+  });
+
+  if (options.awaitReply) {
+    const chunks: Buffer[] = [];
+    proc.stdout?.on('data', (chunk: Buffer) => chunks.push(chunk));
+    await waitForProcessExit(proc);
+    return Buffer.concat(chunks).toString('utf-8').trim();
+  }
+
+  await waitForProcessExit(proc);
+}
+
+export function getTelegramEnv(): TelegramConfig {
+  const clients = config.clients;
+  if (!clients?.telegram) {
     console.warn(`
 Telegram client is not configured. Please configure it in your config.ts file.
 
@@ -29,5 +92,16 @@ const config: Config = {
     );
   }
 
-  return config.clients.telegram;
+  return clients.telegram;
+}
+
+function waitForProcessExit(
+  proc: ReturnType<typeof spawn>
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    proc.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`send exited with ${code}`));
+    });
+  });
 }

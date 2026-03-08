@@ -44,11 +44,11 @@ function generateId(): string {
 }
 
 function extractTextFromResponse(msg: {
-  content?: Array<{ type?: string; text?: string }>;
+  content?: { type?: string; text?: string }[];
 }): string {
   const content = msg.content ?? [];
   return content
-    .filter((b) => b && b.type === 'text' && typeof b.text === 'string')
+    .filter((b) => b?.type === 'text' && typeof b.text === 'string')
     .map((b) => b.text!)
     .join('');
 }
@@ -69,7 +69,7 @@ async function runJob(job: JobEntry): Promise<void> {
       onToolcall: () => {},
       onDone: () => {},
       onStop: () => {},
-      onError: (err) => console.error(pc.red(`Job ${job.id} error: ${err}`)),
+      onError: (err) => { console.error(pc.red(`Job ${job.id} error: ${err}`)); },
     });
     await thread.destroy();
   } catch (err) {
@@ -82,7 +82,7 @@ async function parseScheduleAndJob(description: string): Promise<{
   jobPrompt: string;
 }> {
   const primary = config.models.find((m) => m.role === 'primary');
-  if (!primary || primary.role !== 'primary' || !('key' in primary)) {
+  if (primary?.role !== 'primary' || !('key' in primary)) {
     throw new Error('No primary model with API key in config.');
   }
   const model = primary.model;

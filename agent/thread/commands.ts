@@ -53,9 +53,9 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
   let content = input.content.trim();
   let model: ConfigModel | null = null;
   let thinkingLevel: ThinkingLevel | null = null;
-  let statusRequested: boolean = false;
-  let stopRequested: boolean = false;
-  let helpRequested: boolean = false;
+  let statusRequested = false;
+  let stopRequested = false;
+  let helpRequested = false;
 
   if (!content.startsWith('/')) {
     return {
@@ -72,7 +72,7 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
   }
 
   while (true) {
-    const match = content.match(COMMAND_REGEX);
+    const match = COMMAND_REGEX.exec(content);
     if (!match) break;
 
     const cmd = match[1];
@@ -93,7 +93,7 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
         break;
       }
       case 'think': {
-        const levelMatch = content.match(THINK_LEVEL_REGEX);
+        const levelMatch = THINK_LEVEL_REGEX.exec(content);
         if (!levelMatch) {
           return {
             status: 'error',

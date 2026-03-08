@@ -1,4 +1,3 @@
-import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Command } from 'commander';
 import { get as getTools } from '../agent/tools';
 
@@ -32,7 +31,7 @@ async function main() {
   }
 
   for (const tool of tools.tools) {
-    const schema = (tool as AgentTool).parameters as ParamsSchema;
+    const schema = (tool).parameters as ParamsSchema;
     const props = schema?.properties ?? {};
     const required = schema?.required ?? [];
 

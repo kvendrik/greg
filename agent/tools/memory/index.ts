@@ -274,7 +274,7 @@ export async function saveConversationNote(
     const escaped = timeHeading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp(`(?:^|\\n)(${escaped})(?:\\s|$)`, 'm');
     const match = body.match(re);
-    if (match && match.index != null) {
+    if (match?.index != null) {
       const insertAt =
         match.index + (body[match.index] === '\n' ? 1 : 0) + timeHeading.length;
       return (

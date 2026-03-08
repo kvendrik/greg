@@ -44,8 +44,11 @@ export interface SkillMeta {
   name: string;
   description: string;
   location: string;
+  /** Optional: CLI names (e.g. "gog") and/or "env:VAR" for required env vars. Used by `greg doctor`. */
+  requires?: string[];
 }
 
+/** When the same skill name exists in both project and workspace, workspace wins. */
 export function discoverSkills(): SkillMeta[] {
   const globalSkillsDir = path.resolve(SKILLS_DIR);
   const workspaceSkillsDir = path.resolve(WORKSPACE_SKILLS_DIR);
@@ -70,7 +73,7 @@ export function discoverSkills(): SkillMeta[] {
   }
 
   const entries = [...globalSkills, ...workspaceSkills];
-  const result: SkillMeta[] = [];
+  const byName = new Map<string, SkillMeta>();
 
   for (const ent of entries) {
     if (!ent.isDirectory()) continue;
@@ -85,21 +88,37 @@ export function discoverSkills(): SkillMeta[] {
       const name = typeof data?.name === 'string' ? data.name.trim() : ent.name;
       const description =
         typeof data?.description === 'string' ? data.description.trim() : '';
-      result.push({
+      const requires = parseRequires(data?.requires);
+      const meta: SkillMeta = {
         name: name || ent.name,
         description: description || '',
         location: path.resolve(skillMdPath),
-      });
+        ...(requires.length > 0 ? { requires } : {}),
+      };
+      byName.set(meta.name, meta);
     } catch {
-      result.push({
+      const meta: SkillMeta = {
         name: ent.name,
         description: '',
         location: path.resolve(skillMdPath),
-      });
+      };
+      byName.set(meta.name, meta);
     }
   }
 
-  return result;
+  return [...byName.values()];
+}
+
+function parseRequires(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter(
+      (item): item is string => typeof item === 'string' && item.length > 0
+    );
+  }
+  if (typeof value === 'string' && value.length > 0) {
+    return [value];
+  }
+  return [];
 }
 
 export function getInstructions(): string {
@@ -119,6 +138,8 @@ export function getInstructions(): string {
 </available_skills>
 
 When a user request matches an available skill, read that skill's full content from its <location> (e.g. with the terminal: cat "<location>") and follow the instructions.
+
+Some skills list requirements (e.g. a CLI on PATH or an environment variable). If you try to use a skill and its requirements are not available (e.g. the command is not found, or an API returns an auth error), do not keep retrying. Tell the user you have a skill for that task but it cannot be used because a requirement is missing, and suggest they run \`greg doctor\` to see what is needed.
 
 When you learn or establish something reusable (workflow, rule, convention, or capability), you must call save_skill before considering the exchange complete. Examples: a new CLI or editor workflow, a project convention, a preference for how to do X, or any instruction you give that the user might want applied again. If in doubt, save it as a skill.
 `;

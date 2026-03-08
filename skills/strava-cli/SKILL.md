@@ -1,6 +1,10 @@
 ---
 name: strava-cli
 description: Run and use the Strava CLI in hub/strava to authenticate, refresh tokens, list activities, and fetch activity details. Use when the user wants Strava data, activities, or OAuth/auth for Strava.
+requires:
+  - env:STRAVA_CLIENT_ID
+  - env:STRAVA_CLIENT_SECRET
+  - env:STRAVA_STORAGE_PATH
 ---
 
 # Hub Strava CLI

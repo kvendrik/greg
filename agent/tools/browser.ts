@@ -36,10 +36,14 @@ function normalizeSpacing(text: string): string {
 }
 
 function getProc(): { proc: ChildProcess; rl: readline.Interface } {
-  if (!proc || proc.exitCode !== null) {
+  const browserConfig = config.tools.browser;
+  if (!browserConfig) {
+    throw new Error('Browser tool is not configured (config.tools.browser).');
+  }
+  if (proc?.exitCode !== null) {
     proc = spawn('uv', ['run', 'scripts/browser-use.py'], {
       stdio: ['pipe', 'pipe', 'inherit'],
-      env: { ...process.env, BROWSER_USE_API_KEY: config.tools.browser.key },
+      env: { ...process.env, BROWSER_USE_API_KEY: browserConfig.key },
       detached: true, // New process group so we can kill the whole tree (uv → python → browser) on abort
     });
 
@@ -76,7 +80,7 @@ export function runBrowserTask(
                 ? normalizeSpacing(msg.result)
                 : String(msg.result ?? ''))
           );
-      } catch (parseErr) {
+      } catch {
         reject(new Error(`Failed to parse response: ${line}`));
       }
     };
@@ -142,7 +146,10 @@ export const tools: AgentTool[] = config.tools.browser
         execute: async (_id, params, signal, _onUpdate) => {
           const { task } = params as { task: string };
           try {
-            let text = await runBrowserTask(task, signal);
+            const text = await runBrowserTask(
+              task,
+              signal ?? new AbortController().signal
+            );
             return { content: [{ type: 'text' as const, text }], details: {} };
           } catch (err) {
             if (err instanceof DOMException && err.name === 'AbortError') {

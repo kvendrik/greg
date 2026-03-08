@@ -31,13 +31,14 @@ type TokenResponse = {
 };
 
 function getTokens(): TokenResponse {
-  if (!fs.existsSync(process.env.STRAVA_STORAGE_PATH)) {
+  const storagePath = process.env.STRAVA_STORAGE_PATH;
+  if (!storagePath || !fs.existsSync(storagePath)) {
     throw new Error(
       `Strava storage path (${process.env.STRAVA_STORAGE_PATH}) does not exist. Run \`strava auth\` first.`
     );
   }
   const tokens = JSON.parse(
-    fs.readFileSync(process.env.STRAVA_STORAGE_PATH, 'utf8')
+    fs.readFileSync(storagePath, 'utf8')
   ) as TokenResponse;
   if (!tokens.access_token) {
     throw new Error(
@@ -292,7 +293,7 @@ function printActivitiesTable(activities: SummaryActivity[]): void {
   }
 }
 
-function printTokenOutput(tokens: TokenResponse, json: boolean): void {
+function _printTokenOutput(tokens: TokenResponse, json: boolean): void {
   if (json) {
     console.log(JSON.stringify(tokens, null, 2));
     return;
@@ -377,7 +378,7 @@ program
   .description(
     'Get a new access token using client ID, secret, and refresh token.'
   )
-  .action(async (opts: {}) => {
+  .action(async (_opts: Record<string, never>) => {
     const { clientId, clientSecret } = getClientCredentials();
     const storagePath = process.env.STRAVA_STORAGE_PATH;
     if (!storagePath) {

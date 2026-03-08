@@ -39,7 +39,7 @@ function pageTitle(page: PageObjectResponse): string {
   for (const prop of Object.values(page.properties)) {
     const value = prop as {
       type?: string;
-      title?: Array<{ plain_text?: string }>;
+      title?: { plain_text?: string }[];
     };
     if (
       value?.type === 'title' &&
@@ -136,7 +136,7 @@ type BlockWithRichText = {
 };
 
 function richTextToPlain(
-  richText: Array<{ plain_text?: string }> | undefined
+  richText: { plain_text?: string }[] | undefined
 ): string {
   if (!Array.isArray(richText)) return '';
   return richText.map((t) => t.plain_text ?? '').join('');
@@ -146,14 +146,14 @@ function getBlockContent(block: BlockWithRichText): string {
   const content = block[block.type];
   if (!content || typeof content !== 'object') return '';
   const obj = content as Record<string, unknown>;
-  const richText = obj.rich_text as Array<{ plain_text?: string }> | undefined;
+  const richText = obj.rich_text as { plain_text?: string }[] | undefined;
   if (Array.isArray(richText)) return richTextToPlain(richText);
   if (typeof obj.title === 'string') return obj.title;
-  const titleArr = obj.title as Array<{ plain_text?: string }> | undefined;
+  const titleArr = obj.title as { plain_text?: string }[] | undefined;
   if (Array.isArray(titleArr)) return richTextToPlain(titleArr);
   if (typeof obj.expression === 'string') return obj.expression;
   if (Array.isArray(obj.cells)) {
-    return (obj.cells as Array<Array<{ plain_text?: string }>>)
+    return (obj.cells as { plain_text?: string }[][])
       .map((cell) => richTextToPlain(cell))
       .join(' | ');
   }
@@ -222,7 +222,7 @@ function formatBlockAsMarkdown(
 type MediaBlockContent = {
   file?: { url: string };
   external?: { url: string };
-  caption?: Array<{ plain_text?: string }>;
+  caption?: { plain_text?: string }[];
   url?: string;
   name?: string;
 };
@@ -240,13 +240,13 @@ function getMediaUrlAndCaption(block: BlockWithRichText): {
     (content as { external?: { url?: string } }).external?.url ??
     null;
   const caption = content.caption
-    ? richTextToPlain(content.caption as Array<{ plain_text?: string }>)
+    ? richTextToPlain(content.caption as { plain_text?: string }[])
     : (content.name ?? '');
   return { url, caption: String(caption).trim() };
 }
 
 function mimeFromUrl(url: string): string {
-  const match = url.match(/\.(png|jpe?g|gif|webp|svg|bmp|tiff?)(\?|$)/i);
+  const match = /\.(png|jpe?g|gif|webp|svg|bmp|tiff?)(\?|$)/i.exec(url);
   if (!match) return 'image/png';
   const ext = match[1].toLowerCase().replace('jpg', 'jpeg');
   return `image/${ext}`;
@@ -274,7 +274,7 @@ async function fetchImageAsBase64(
   }
 }
 
-async function fetchBlockChildren(
+async function _fetchBlockChildren(
   notion: InstanceType<typeof Client>,
   blockId: string
 ): Promise<BlockWithRichText[]> {
@@ -371,7 +371,7 @@ async function collectBlocksMarkdown(
         const image = block.image as MediaBlockContent | undefined;
         const url = image?.file?.url ?? image?.external?.url;
         const caption = image?.caption
-          ? richTextToPlain(image.caption as Array<{ plain_text?: string }>)
+          ? richTextToPlain(image.caption as { plain_text?: string }[])
           : '';
         if (url) {
           const result = await fetchImageAsBase64(url, apiKey);
