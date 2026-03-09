@@ -10,11 +10,14 @@ import pc from 'picocolors';
 export async function runExec(
   params: { command: string },
   signal: AbortSignal,
-  config: AgentConfig
+  config: AgentConfig,
+  options: {
+    addToTranscript: (content: string) => void;
+  }
 ): Promise<string> {
   const { command } = params;
 
-  const policy = await evaluatePolicy('exec', { command }, config);
+  const policy = await evaluatePolicy('exec', { command }, config, options);
 
   if (!policy.allowed) {
     return policy.reason;
@@ -107,7 +110,12 @@ export async function runExec(
   });
 }
 
-export function getExecTools(config: AgentConfig): AgentTool[] {
+export function getExecTools(
+  config: AgentConfig,
+  options: {
+    addToTranscript: (content: string) => void;
+  }
+): AgentTool[] {
   return [
     {
       name: 'exec',
@@ -121,7 +129,8 @@ export function getExecTools(config: AgentConfig): AgentTool[] {
         const text = await runExec(
           { command },
           signal ?? new AbortController().signal,
-          config
+          config,
+          options
         );
         return { content: [{ type: 'text' as const, text }], details: {} };
       },

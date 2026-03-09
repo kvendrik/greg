@@ -79,7 +79,23 @@ export function parseCommand(command: string): ParsedCommand {
   }
 
   const parsedSegments: ParsedCommandSegment[] = segments.map((segment) => {
-    const argv = parseWords(segment);
+    let argv = parseWords(segment);
+
+    // Strip leading environment variable assignments like
+    // "FOO=bar BAR=baz cmd ..." so that policy and allowlist
+    // checks operate on the real command ("cmd").
+    let envPrefixCount = 0;
+    while (
+      envPrefixCount < argv.length &&
+      /^[A-Za-z_][A-Za-z0-9_]*=/.test(argv[envPrefixCount]!)
+    ) {
+      envPrefixCount++;
+    }
+
+    if (envPrefixCount > 0) {
+      argv = argv.slice(envPrefixCount);
+    }
+
     const commandWord = argv[0] ?? null;
     const subcommands: string[] = [];
 

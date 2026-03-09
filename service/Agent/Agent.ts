@@ -12,6 +12,7 @@ export type PromptOptions = {
   onThinking: (chunk: string) => void;
   onDone: () => void;
   onToolcall: (name: string, args: Record<string, unknown>) => void;
+  onToolcallResult?: (name: string, result: string) => void;
   onError: (err: string) => void;
   onStop: () => void;
 };
@@ -55,6 +56,7 @@ export class Agent {
       onContent,
       onThinking,
       onToolcall,
+      onToolcallResult,
       onDone,
       onError,
       onStop,
@@ -172,6 +174,7 @@ export class Agent {
           break;
         case 'tool_execution_end':
           console.info(pc.gray(JSON.stringify(event.result)));
+          onToolcallResult?.(event.toolName, JSON.stringify(event.result));
           break;
         case 'agent_end':
           console.info(pc.green('Done.\n'));
@@ -268,9 +271,14 @@ export class Agent {
     }
   }
 
-  static async create(config: AgentConfig): Promise<Agent> {
+  static async create(
+    config: AgentConfig,
+    options: {
+      addToTranscript: (content: string) => void;
+    }
+  ): Promise<Agent> {
     const conversationStartIso = new Date().toISOString();
-    const tools = await getTools(conversationStartIso, config);
+    const tools = await getTools(conversationStartIso, config, options);
     const system = `
 You are a helpful personal assistant that runs on my personal computer and talks to me through a chat interface.
 Answer with short and conversational answers.

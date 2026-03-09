@@ -51,11 +51,13 @@
     "gray-matter": "^4.0.3",
     "image-js": "^1.4.0",
     "jsdom": "^25.0.0",
+    "minimatch": "^10.2.4",
     "node-html-markdown": "^1.0.0",
     "node-llama-cpp": "^3.16.2",
     "openai": "^6.25.0",
     "picocolors": "^1.1.1",
     "pm2": "^6.0.14",
+    "telegram-markdown-v2": "^0.0.4",
     "yaml": "^2.8.2"
   },
   "devDependencies": {

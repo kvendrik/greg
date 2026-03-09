@@ -190,14 +190,32 @@ Returns { answer: string, citations: { title: string, url: string }[] }`,
     async execute(_id, params, signal) {
       const { query } = params as { query: string };
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: query,
-        config: {
-          tools: [{ googleSearch: {} }],
-          abortSignal: signal,
-        },
-      });
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 10_000);
+
+      const onAbort = () => controller.abort();
+      signal?.addEventListener('abort', onAbort, { once: true });
+
+      let response;
+      try {
+        response = await ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: query,
+          config: {
+            tools: [{ googleSearch: {} }],
+            abortSignal: controller.signal,
+          },
+        });
+      } finally {
+        clearTimeout(timeoutId);
+        signal?.removeEventListener('abort', onAbort);
+      }
 
       const answer = response.text ?? '';
       const chunks =

@@ -15,13 +15,16 @@ import { getWebTools } from './web';
 
 export async function get(
   conversationStartIso: string,
-  config: AgentConfig
+  config: AgentConfig,
+  options: {
+    addToTranscript: (content: string) => void;
+  }
 ): Promise<{
   tools: AgentTool[];
   instructions: string;
 }> {
   const tools: AgentTool[] = [
-    ...getExecTools(config),
+    ...getExecTools(config, options),
     ...getBrowserTools(config),
     ...getWebTools(config),
     ...getMemoryTools(config),
