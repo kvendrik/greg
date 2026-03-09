@@ -55,12 +55,13 @@ const tests: TestCase[] = [
     expected: { allow: true, trusted: false },
   },
   {
-    title: 'allowing subcommand doesn’t allow more than specified',
+    title:
+      'allowing subcommand plus default wildcard allows more than specified',
     allowlist: {
       'git status': { trusted: false, allow: true },
     },
     command: 'git status diff',
-    expected: { allow: false, trusted: false },
+    expected: { allow: true, trusted: true },
   },
   {
     title: 'ignores env variables',
@@ -255,11 +256,167 @@ const tests: TestCase[] = [
     expected: { allow: true, trusted: true },
   },
   {
+    title: 'allowing wildcard doesn’t mean you can’t run the basecommand',
+    allowlist: {
+      'jq *': { trusted: true, allow: true },
+    },
+    command: 'jq',
+    expected: { allow: true, trusted: true },
+  },
+  {
     title: 'full-path safe bin wildcard jq',
     allowlist: {
       '/usr/bin/jq *': { trusted: false, allow: true },
     },
     command: '/usr/bin/jq .',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows pwd',
+    allowlist: {} as AllowList,
+    command: 'pwd',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows ls with args',
+    allowlist: {} as AllowList,
+    command: 'ls -la',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows echo with args',
+    allowlist: {} as AllowList,
+    command: 'echo "hello world"',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows cd anywhere',
+    allowlist: {} as AllowList,
+    command: 'cd /tmp',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows printf with args',
+    allowlist: {} as AllowList,
+    command: 'printf "%s\\n" hello',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows greg commands',
+    allowlist: {} as AllowList,
+    command: 'greg guard status',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows git status with flags',
+    allowlist: {} as AllowList,
+    command: 'git status -sb',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows git diff with args',
+    allowlist: {} as AllowList,
+    command: 'git diff HEAD~1',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows git log with flags',
+    allowlist: {} as AllowList,
+    command: 'git log --oneline',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows git branch with flags',
+    allowlist: {} as AllowList,
+    command: 'git branch -a',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows git rev-parse with args',
+    allowlist: {} as AllowList,
+    command: 'git rev-parse HEAD',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows jq',
+    allowlist: {} as AllowList,
+    command: 'jq .',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows head',
+    allowlist: {} as AllowList,
+    command: 'head -10 file.txt',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows tail',
+    allowlist: {} as AllowList,
+    command: 'tail -10 file.txt',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows wc',
+    allowlist: {} as AllowList,
+    command: 'wc -l file.txt',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows sort',
+    allowlist: {} as AllowList,
+    command: 'sort file.txt',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows uniq',
+    allowlist: {} as AllowList,
+    command: 'uniq file.txt',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows grep',
+    allowlist: {} as AllowList,
+    command: 'grep foo file.txt',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows rg',
+    allowlist: {} as AllowList,
+    command: 'rg foo',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'default allowlist allows cat',
+    allowlist: {} as AllowList,
+    command: 'cat file.txt',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title:
+      'config allowlist can override default wildcard to deny ls with args',
+    allowlist: {
+      ls: { trusted: false, allow: false },
+    },
+    command: 'ls -la',
+    expected: { allow: false, trusted: false },
+  },
+  {
+    title:
+      'config allowlist exact entry overrides default wildcard but keeps other defaults',
+    allowlist: {
+      'git status': { trusted: false, allow: false },
+    },
+    command: 'git status -sb && git log --oneline',
+    expected: { allow: false, trusted: false },
+  },
+  {
+    title:
+      'when both wildcard and exact entries match, both must allow and be trusted',
+    allowlist: {
+      'git status *': { trusted: true, allow: true },
+      'git status -sb': { trusted: false, allow: true },
+    },
+    command: 'git status -sb',
     expected: { allow: true, trusted: false },
   },
 ];

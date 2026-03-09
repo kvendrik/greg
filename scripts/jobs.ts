@@ -64,11 +64,12 @@ async function runJob(job: JobEntry): Promise<void> {
     const session = await createSession();
     const input: PromptInput = { content: job.jobPrompt, images: [] };
     await session.prompt(input, {
-      onThinking: () => {},
+      onThinking: (chunk) => process.stdout.write(chunk),
       onContent: (chunk) => process.stdout.write(chunk),
-      onToolcall: () => {},
-      onDone: () => {},
-      onStop: () => {},
+      onToolcall: (toolName, args) =>
+        console.log(pc.cyan(`[${toolName}] ${JSON.stringify(args)}`)),
+      onDone: () => console.log(pc.green(`Jobs ${job.id} completed`)),
+      onStop: () => console.log(pc.yellow(`Jobs ${job.id} stopped`)),
       onError: (err) => {
         console.error(pc.red(`Job ${job.id} error: ${err}`));
       },
