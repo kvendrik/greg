@@ -17,7 +17,9 @@ export async function available(config: AgentConfig): Promise<boolean> {
   const url = `http://127.0.0.1:${port}`;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => { controller.abort(); }, GUARD_ONLINE_TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, GUARD_ONLINE_TIMEOUT_MS);
     const res = await fetch(`${url}/health`, {
       method: 'GET',
       signal: controller.signal,
@@ -84,6 +86,16 @@ export async function isSafe(
     };
   }
 
+  if (text.trim() === '') {
+    logResult({ name, performance: 0, safe: true, reason: null });
+    return {
+      success: true,
+      safe: true,
+      reason: null,
+      evaluatedBy: 'classifier',
+    };
+  }
+
   const start = performance.now();
   let response: { injection: boolean; score: number; label: string };
   let end = 0;
@@ -93,13 +105,18 @@ export async function isSafe(
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => { controller.abort(); }, timeoutMs);
+
+    const timer = setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+
     const res = await fetch(`${classifierUrl}/classify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text.slice(0, 4096) }),
+      body: JSON.stringify({ text }),
       signal: controller.signal,
     });
+
     clearTimeout(timer);
 
     const data = await res.json();
@@ -121,7 +138,9 @@ export async function isSafe(
     const code =
       err instanceof Error && 'code' in err
         ? (err as NodeJS.ErrnoException).code
-        : err instanceof Error && err.cause instanceof Error && 'code' in err.cause
+        : err instanceof Error &&
+            err.cause instanceof Error &&
+            'code' in err.cause
           ? (err.cause as NodeJS.ErrnoException).code
           : undefined;
     const message = err instanceof Error ? err.message : String(err);

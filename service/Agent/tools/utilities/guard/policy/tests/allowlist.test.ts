@@ -39,6 +39,74 @@ const tests: TestCase[] = [
     expected: { allow: true, trusted: false },
   },
   {
+    title: 'allowing base command doesn’t allow subcommands',
+    allowlist: {
+      something: { trusted: false, allow: true },
+    },
+    command: 'something else',
+    expected: { allow: false, trusted: false },
+  },
+  {
+    title: 'allowing subcommands',
+    allowlist: {
+      'git status': { trusted: false, allow: true },
+    },
+    command: 'git status',
+    expected: { allow: true, trusted: false },
+  },
+  {
+    title: 'allowing subcommand doesn’t allow more than specified',
+    allowlist: {
+      'git status': { trusted: false, allow: true },
+    },
+    command: 'git status diff',
+    expected: { allow: false, trusted: false },
+  },
+  {
+    title: 'ignores env variables',
+    allowlist: {
+      'gog calendar events *': { trusted: false, allow: true },
+    },
+    command:
+      'GOG_ACCOUNT=example@gmail.com gog calendar events primary --today',
+    expected: { allow: true, trusted: false },
+  },
+  {
+    title: 'ignores pipes',
+    allowlist: {
+      'gog calendar events *': { trusted: false, allow: true },
+    },
+    command:
+      'GOG_ACCOUNT=example@gmail.com gog calendar events primary --today --json 2>/dev/null',
+    expected: { allow: true, trusted: false },
+  },
+  {
+    title:
+      'allowing subcommand does allow more than specified when wildcard is used',
+    allowlist: {
+      'git status *': { trusted: false, allow: true },
+    },
+    command: 'git status diff',
+    expected: { allow: true, trusted: false },
+  },
+  {
+    title: 'single allowed base command without args',
+    allowlist: {
+      cat: { trusted: false, allow: true },
+    },
+    command: 'cat "./skills/update/SKILL.md"',
+    expected: { allow: true, trusted: false },
+  },
+  {
+    title:
+      'default allowlist entries still apply when config exec allowlist is present',
+    allowlist: {
+      'bun run *': { trusted: false, allow: false },
+    },
+    command: 'cat "./skills/status-update/SKILL.md"',
+    expected: { allow: true, trusted: true },
+  },
+  {
     title: 'single disallowed base command',
     allowlist: {
       ls: { trusted: false, allow: false },
@@ -80,6 +148,23 @@ const tests: TestCase[] = [
     },
     command: 'npm run dev && git status -sb',
     expected: { allow: true, trusted: false },
+  },
+  {
+    title: 'allow wildcard to be used inside subcommands',
+    allowlist: {
+      'bun run hub/*': { trusted: true, allow: true },
+    },
+    command:
+      'bun run hub/notion -- search -q "diary" --page-only 2>/dev/null | head -20',
+    expected: { allow: true, trusted: true },
+  },
+  {
+    title: 'wildcards inside subcommands only match what they’re supposed to',
+    allowlist: {
+      'bun run hub/*': { trusted: true, allow: true },
+    },
+    command: 'bun run hub_root/dangerous -- search_secrets',
+    expected: { allow: false, trusted: false },
   },
   {
     title:
@@ -192,4 +277,3 @@ describe('allowlist', () => {
     }
   });
 });
-

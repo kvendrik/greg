@@ -17,11 +17,14 @@ type PolicyEvaluation =
 export async function evaluatePolicy(
   toolName: string,
   args: Object,
-  config: AgentConfig
+  config: AgentConfig,
+  options: {
+    addToTranscript: (content: string) => void;
+  }
 ): Promise<PolicyEvaluation> {
   switch (toolName) {
     case 'exec':
-      return evaluateExecPolicy(args as { command: string }, config);
+      return evaluateExecPolicy(args as { command: string }, config, options);
     default:
       return {
         allowed: true,
@@ -32,29 +35,35 @@ export async function evaluatePolicy(
 
 async function evaluateExecPolicy(
   { command }: { command: string },
-  config: AgentConfig
+  config: AgentConfig,
+  {
+    addToTranscript,
+  }: {
+    addToTranscript: (content: string) => void;
+  }
 ): Promise<PolicyEvaluation> {
   const parsedCommand = parseCommand(command);
   const options = getAllowlistForCommand(command, config);
 
   if (config.tools.guard?.enabled && !options.allow) {
     const firstCommand = parsedCommand.segments[0].commandWithSubcommands!;
-    const reply = await sendMessage(
-      `💂 Greg is asking to run a command.
+
+    const message = `💂 Greg is asking to run a command.
 \`\`\`\n${command}\n\`\`\`\
+\n
 /deny - deny Greg to run this command
 /once - allow Greg to run this command this time
-/always - allow Greg to run this command always${parsedCommand.segments.length === 1 ? `\n/always_${firstCommand} - always allow Greg to run "${firstCommand}"` : ''}`,
-      {
-        awaitReply: true,
-      }
-    );
+/always - allow Greg to run this command always${parsedCommand.segments.length === 1 ? `\n/always_cmd - always allow Greg to run "${firstCommand}"` : ''}`;
 
-    if (
-      reply !== '/once' &&
-      reply !== '/always' &&
-      reply !== `/always_${firstCommand}`
-    ) {
+    addToTranscript(`<guard>${message}`);
+
+    const reply = await sendMessage(message, {
+      awaitReply: true,
+    });
+
+    addToTranscript(`<user_reply>${reply}</user_reply></guard>`);
+
+    if (reply !== '/once' && reply !== '/always' && reply !== `/always_cmd`) {
       const reason = `Command not allowed: ${command}. Permission was denied by the user. User replied: "${reply}".`;
       return {
         allowed: false,
@@ -66,7 +75,7 @@ async function evaluateExecPolicy(
       await saveAlwaysAllowPreferenceForCommand(command, config);
     }
 
-    if (reply === `/always_${firstCommand}`) {
+    if (reply === `/always_cmd`) {
       await saveAlwaysAllowPreferenceForCommand(firstCommand, config);
     }
   }

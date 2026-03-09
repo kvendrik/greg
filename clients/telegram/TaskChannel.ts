@@ -118,25 +118,42 @@ export class TaskChannel<D> {
       respond({ task, error: 'Missing or invalid prompt' });
       return;
     }
-    if (this.pendingMessageConsumer) {
-      respond({
-        task,
-        error: 'Another task is already in progress',
-      });
-      return;
-    }
     const handler = this.handlers[task];
     if (!handler) {
       respond({ task, error: 'No handler registered' });
       return;
     }
-    this.setPendingMessageConsumer((text) => {
-      respond({ task, reply: text });
-    });
-    handler(prompt).catch((err) => {
-      this.setPendingMessageConsumer(null);
-      respond({ task, error: String(err) });
-    });
+    if (task === 'await-reply') {
+      // if (this.pendingMessageConsumer) {
+      //   respond({
+      //     task,
+      //     error: 'Another task is already in progress',
+      //   });
+      //   return;
+      // }
+      this.setPendingMessageConsumer((text) => {
+        respond({ task, reply: text });
+      });
+      handler(prompt).catch((err) => {
+        this.setPendingMessageConsumer(null);
+        respond({ task, error: String(err) });
+      });
+      return;
+    }
+
+    handler(prompt)
+      .then((result) => {
+        const reply =
+          typeof result === 'string' ? result : result == null ? '' : undefined;
+        if (typeof reply === 'string') {
+          respond({ task, reply });
+        } else {
+          respond({ task, reply: '' });
+        }
+      })
+      .catch((err) => {
+        respond({ task, error: String(err) });
+      });
   }
 
   private handleLine(line: string, respond: (payload: unknown) => void): void {

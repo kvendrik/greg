@@ -52,6 +52,44 @@ taskChannel.onTask('await-reply', async (text) => {
   });
 });
 
+taskChannel.onTask('send-message', async (text) => {
+  const escaped = escapeMarkdownV2(text);
+  await bot.api.sendMessage(senderId, escaped, {
+    message_thread_id: lastMessageThreadId ?? undefined,
+  });
+});
+
+taskChannel.onTask('edit-topic', async (raw) => {
+  if (!lastMessageThreadId) {
+    console.warn('edit-topic requested but lastMessageThreadId is not set');
+    return;
+  }
+  let title = raw;
+  let emoji: string | undefined;
+
+  try {
+    const parsed = JSON.parse(raw as string) as {
+      title?: unknown;
+      emoji?: unknown;
+    };
+    if (typeof parsed === 'object' && parsed !== null) {
+      if (typeof parsed.title === 'string') {
+        title = parsed.title;
+      }
+      if (typeof parsed.emoji === 'string') {
+        emoji = parsed.emoji;
+      }
+    }
+  } catch {
+    // Fallback: treat raw as the plain title string for backwards compatibility.
+  }
+
+  await bot.api.editForumTopic(senderId, lastMessageThreadId, {
+    name: title,
+    ...(emoji ? { icon_custom_emoji_id: emoji } : {}),
+  });
+});
+
 taskChannel.listen();
 
 bot.on('message:text', async (ctx) => {
@@ -218,10 +256,12 @@ bot.on('message:photo', async (ctx) => {
 bot.start();
 console.log('Ready.');
 
-prompt({
-  content: 'You just started. Check recent notes for context and greet me.',
-  images: [],
-});
+if (await ping()) {
+  prompt({
+    content: 'You just started. Check recent notes for context and greet me.',
+    images: [],
+  });
+}
 
 function oggToRawPcm(input: string, output: string): Promise<void> {
   return new Promise((resolve, reject) => {

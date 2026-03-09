@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { convert } from 'telegram-markdown-v2';
 import config from '../../.greg';
 import { TaskChannel } from './TaskChannel';
 
@@ -8,7 +9,9 @@ type TelegramConfig = NonNullable<
 >;
 
 export function escapeMarkdownV2(text: string): string {
-  return text.replace(/([\[\]()~>#+\-=|{}.!\\])/g, '\\$1');
+  // Use the official converter so we support full Telegram MarkdownV2 rules.
+  // We pass 'escape' to ensure unsupported constructs are safely escaped.
+  return convert(text, 'escape');
 }
 
 /** Unix socket path for await-reply requests (MCP-style: request/response). */
@@ -41,6 +44,14 @@ export async function sendMessage(
     stdio: 'inherit',
   });
   await waitForProcessExit(proc);
+}
+
+export async function editTopicName(
+  name: string,
+  emoji?: string
+): Promise<void> {
+  const payload = emoji != null ? JSON.stringify({ title: name, emoji }) : name;
+  await TaskChannel.send('edit-topic', payload, telegramAwaitSocketPath);
 }
 
 export function getTelegramEnv(): TelegramConfig {

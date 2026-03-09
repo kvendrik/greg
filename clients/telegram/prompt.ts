@@ -38,11 +38,13 @@ function createSendTypingAction(ctx: BotContext) {
 }
 
 export async function createPromper(bot: Bot<BotContext>) {
-  const sessions = new Map<number | 'main', Session>([
-    ['main', await createSession()],
-  ]);
+  const sessions = new Map<number | 'main', Session>();
 
   return async function prompt(input: PromptInput, ctx?: BotContext) {
+    if (!sessions.has('main')) {
+      sessions.set('main', await createSession());
+    }
+
     const messageThreadId = ctx?.message?.message_thread_id ?? null;
     let session = sessions.get('main')!;
 

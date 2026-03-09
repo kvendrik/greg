@@ -2,9 +2,30 @@ import type { AgentConfig, AllowList, AllowListEntry } from '../../../../types';
 import { getWorkspacePath } from '../../../../utilities';
 import path from 'node:path';
 import fs from 'node:fs';
+import { minimatch } from 'minimatch';
 import { parseCommand } from './command-parser/command-parser';
 import type { ParsedCommandSegment } from './command-parser/command-parser';
 import { defaultExecAllowlist } from './default_exec_allowlist';
+
+/** True if the allowlist key contains glob metacharacters (* ? [ ]). */
+function isGlobPattern(key: string): boolean {
+  return /[*?[\]]/.test(key);
+}
+
+/** Match candidate strings against a glob pattern (e.g. "npm run *", "bun run hub/*", "cd *"). */
+function matchesGlob(candidate: string, pattern: string): boolean {
+  // "cmd *" / "cmd path" style: match when candidate starts with pattern prefix (e.g. "cd ").
+  if (pattern.endsWith(' *') && !pattern.includes('/')) {
+    const prefix = pattern.slice(0, -2);
+    if (candidate === prefix || candidate.startsWith(prefix + ' ')) return true;
+  }
+  const patternForPath =
+    pattern.endsWith(' *') && !pattern.endsWith(' **')
+      ? pattern.slice(0, -1) + '**'
+      : pattern;
+  const useGlobstar = patternForPath.includes('**');
+  return minimatch(candidate, patternForPath, { noglobstar: !useGlobstar });
+}
 
 /**
  * Resolve the allowlist entry for a given shell command.
@@ -31,26 +52,25 @@ import { defaultExecAllowlist } from './default_exec_allowlist';
  *   { "npm run build": { "trusted": true, "allow": true } } // matches "npm run build --watch"
  *   ```
  *
- * - **Wildcard syntax** (key ends with " *", matches by prefix on commandWithSubcommands)
- *
- *   ```json
- *   { "cd *": { "trusted": false, "allow": true } }      // matches "cd repo", "cd src/app", etc.
- *   { "npm run *": { "trusted": false, "allow": true } } // matches "npm run dev", "npm run build", etc.
- *   ```
+ * - **Glob patterns** (via minimatch: `*`, `?`, `[]`); e.g. `"npm run *"`, `"bun run hub/*"`, `"cd *"`.
  */
 export function getAllowlistForCommand(
   command: string,
   config: AgentConfig
 ): AllowListEntry {
-  const configAllowlist = config.tools.guard?.allowlist?.exec;
+  const configAllowlist = config.tools.guard?.allowlist?.exec ?? {};
 
-  // When a config-level exec allowlist is provided, treat it (together with
-  // any workspace-level allowlist) as authoritative and do NOT include the
-  // built-in defaults. This lets users fully override default trust/allow
-  // behavior when they opt in to a custom allowlist.
-  const mergedAllowlist: AllowList = configAllowlist
-    ? {}
-    : { ...defaultExecAllowlist };
+  // Start from the curated default allowlist, then let workspace- and
+  // config-level entries extend/override it.
+  //
+  // This means:
+  // - Defaults are always available out of the box (e.g. `cat`).
+  // - Workspace `exec_allowlist.json` can refine/override defaults.
+  // - Config-level `allowlist.exec` has the highest precedence and can
+  //   both add new entries and override defaults/workspace entries
+  //   (e.g. to explicitly deny `git status` even though it's allowed
+  //   by default).
+  let mergedAllowlist: AllowList = { ...defaultExecAllowlist };
 
   const workspaceAllowlistPath = path.join(
     getWorkspacePath(config),
@@ -61,12 +81,10 @@ export function getAllowlistForCommand(
     const workspaceAllowlistData: AllowList = JSON.parse(
       fs.readFileSync(workspaceAllowlistPath, 'utf8')
     );
-    Object.assign(mergedAllowlist, workspaceAllowlistData);
+    mergedAllowlist = { ...mergedAllowlist, ...workspaceAllowlistData };
   }
 
-  if (configAllowlist) {
-    Object.assign(mergedAllowlist, configAllowlist);
-  }
+  mergedAllowlist = { ...mergedAllowlist, ...configAllowlist };
 
   if (Object.keys(mergedAllowlist).length === 0) {
     return { trusted: false, allow: false };
@@ -90,12 +108,31 @@ function normalizeAllowlistWithResolvedCommands(list: AllowList): AllowList {
     // entries. Multi-segment keys are kept as-is to avoid surprising splits.
     if (parsed.segments.length > 1) continue;
 
+    // Path-like globs (e.g. "bun run hub/*") must not get normalized variants,
+    // or we would add "bun run *" / "/path/to/bun run *" and over-match.
+    if (isGlobPattern(rawKey) && rawKey.includes('/')) continue;
+
     const segment: ParsedCommandSegment = parsed.segments[0]!;
-    // Only normalize bare commands (like "git status"). Entries that already
-    // use full binary paths (e.g. "/usr/bin/git status") are left as-is,
-    // since the parser will produce matching resolvedCommandPath values.
-    if (segment.command && segment.command.includes('/')) continue;
     const baseKeys = new Set<string>();
+
+    // For path-based keys (e.g. "/usr/bin/git status"), add basename form so
+    // "git status -sb" matches when the binary resolves to that path.
+    if (segment.command?.includes('/') && segment.commandWithSubcommands) {
+      const basenameForm =
+        path.basename(segment.command) +
+        (segment.subcommands.length > 0
+          ? ' ' + segment.subcommands.join(' ')
+          : '');
+      baseKeys.add(basenameForm);
+    }
+
+    // Only normalize bare commands (no path) further; path keys already added basename above.
+    if (segment.command && segment.command.includes('/')) {
+      for (const baseKey of baseKeys) {
+        normalized[baseKey] = entry;
+      }
+      continue;
+    }
 
     if (segment.commandWithSubcommands) {
       baseKeys.add(segment.commandWithSubcommands);
@@ -116,8 +153,20 @@ function normalizeAllowlistWithResolvedCommands(list: AllowList): AllowList {
     // also add wildcard variants for the resolved/basename forms.
     const isWildcard = /[^\*]+\*$/.test(rawKey);
     const wildcardSuffix = isWildcard ? ' *' : '';
+    const wildcardPrefix = isWildcard
+      ? rawKey.replace(/\s+\*$/, '').replace(/\*$/, '')
+      : '';
 
     for (const baseKey of baseKeys) {
+      // Don't add a shortened base (e.g. "bun run") for a wildcard key like
+      // "bun run hub/*", or we would allow "bun run anything".
+      if (
+        isWildcard &&
+        baseKey.length < wildcardPrefix.length &&
+        wildcardPrefix.startsWith(baseKey)
+      ) {
+        continue;
+      }
       const keyToAdd = isWildcard
         ? `${baseKey.replace(/\s+\*$/, '')}${wildcardSuffix}`
         : baseKey;
@@ -179,81 +228,82 @@ function getAllowlistForSegmentFromList(
   const directEntry = list?.[trimmedSegment];
   if (directEntry) return directEntry;
 
-  const baseCommands = new Set<string>();
-  const baseCommandsWithSubcommands = new Set<string>();
-
-  if (segment.command) {
-    baseCommands.add(segment.command);
-  }
+  const candidates: string[] = [trimmedSegment];
 
   if (segment.commandWithSubcommands) {
-    baseCommandsWithSubcommands.add(segment.commandWithSubcommands);
+    candidates.push(segment.commandWithSubcommands);
   }
 
   if (segment.resolvedCommandPath) {
-    baseCommands.add(segment.resolvedCommandPath);
-
     const resolvedWithSubcommands =
       segment.subcommands.length > 0
         ? `${segment.resolvedCommandPath} ${segment.subcommands.join(' ')}`
         : segment.resolvedCommandPath;
-
-    baseCommandsWithSubcommands.add(resolvedWithSubcommands);
+    candidates.push(resolvedWithSubcommands);
   }
 
-  const matchedEntries = Object.entries(list).filter(([key]) => {
-    if (baseCommands.has(key)) return true;
-    if (baseCommandsWithSubcommands.has(key)) return true;
-    if (
-      /[^\*]+\*$/.test(key) &&
-      Array.from(baseCommandsWithSubcommands).some((baseCommand) =>
-        baseCommand.startsWith(key.replace(/\s+\*$/, ''))
-      )
-    ) {
-      return true;
-    }
-    return false;
-  });
+  const matches: [string, AllowListEntry][] = [];
 
-  // Fallback: if nothing matched structurally, try simple prefix matching on the
-  // raw segment (and its resolved form) so that commands like
-  // "/usr/bin/git status -sb" still match an entry for "/usr/bin/git status".
-  if (matchedEntries.length === 0) {
-    const raw = segment.raw.trim();
-    const resolvedPrefix =
-      segment.resolvedCommandPath && segment.subcommands.length > 0
-        ? `${segment.resolvedCommandPath} ${segment.subcommands.join(' ')}`
-        : null;
+  // For path-like globs (e.g. "bun run hub/*"), match only the segment before " -- "
+  // so "bun run hub_root/dangerous -- x" does not match "bun run hub/*".
+  const candidatesForGlob =
+    trimmedSegment.includes(' -- ')
+      ? [
+          trimmedSegment.split(' -- ')[0]!.trim(),
+          ...candidates.filter((c) => !c.includes(' -- ')),
+        ]
+      : candidates;
 
-    const fallbackMatches = Object.entries(list).filter(([key]) => {
-      if (raw === key) return true;
-      if (raw.startsWith(`${key} `)) return true;
-      if (resolvedPrefix) {
-        if (resolvedPrefix === key) return true;
-        if (resolvedPrefix.startsWith(`${key} `)) return true;
+  for (const [key, entry] of Object.entries(list)) {
+    // Glob patterns (e.g. "npm run *", "bun run hub/*").
+    if (isGlobPattern(key)) {
+      const toCheck = key.includes('/') ? candidatesForGlob : candidates;
+      if (toCheck.some((candidate) => matchesGlob(candidate, key))) {
+        matches.push([key, entry]);
       }
-      return false;
-    });
-
-    if (fallbackMatches.length === 0) {
-      return { trusted: false, allow: false };
+      continue;
     }
 
-    const allAllowedFallback = fallbackMatches.every(
-      ([, entry]) => entry.allow
-    );
-    const allTrustedFallback = fallbackMatches.every(
-      ([, entry]) => entry.trusted
-    );
+    // Non-glob keys with spaces: subcommand-style ("git status", "/usr/bin/git status").
+    if (key.includes(' ')) {
+      const exactMatch =
+        segment.commandWithSubcommands === key || candidates.includes(key);
+      const prefixPlusFlags =
+        (segment.commandWithSubcommands.startsWith(key + ' ') ||
+          trimmedSegment === key ||
+          trimmedSegment.startsWith(key + ' ')) &&
+        segment.commandWithSubcommands
+          .slice(key.length + 1)
+          .trim()
+          .split(/\s+/)
+          .every((w) => w.startsWith('-'));
+      if (exactMatch || prefixPlusFlags) {
+        matches.push([key, entry]);
+      }
+      continue;
+    }
 
-    return {
-      trusted: allTrustedFallback,
-      allow: allAllowedFallback,
-    };
+    // Base command key like "ls" or "cat": match when command is key and there
+    // are no subcommands, or only flag-like tokens (e.g. "ls -la" has subcommands ["-la"]).
+    const onlyFlagsAsSubcommands =
+      segment.subcommands.length === 0 ||
+      segment.subcommands.every((s) => s.startsWith('-'));
+    if (
+      onlyFlagsAsSubcommands &&
+      (segment.command === key ||
+        (segment.resolvedCommandPath &&
+          path.basename(segment.resolvedCommandPath) === key))
+    ) {
+      matches.push([key, entry]);
+    }
   }
 
-  const allAllowed = matchedEntries.every(([, entry]) => entry.allow);
-  const allTrusted = matchedEntries.every(([, entry]) => entry.trusted);
+  if (matches.length === 0) {
+    return { trusted: false, allow: false };
+  }
+
+  const allAllowed = matches.every(([, entry]) => entry.allow);
+  const allTrusted = matches.every(([, entry]) => entry.trusted);
 
   return {
     trusted: allTrusted,
