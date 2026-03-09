@@ -28,7 +28,7 @@ Avoid using this skill for:
 Run from the **repo root** (the directory where `greg` and `package.json` live). Your system prompt gives this as **"The code you're running on is at: ..."** — use that path as the working directory for these commands.
 
 ```bash
-cd "<path from system prompt: The code you're running on is at: ...>" && bun run greg telegram send "Your message here"
+cd "<path from system prompt: The code you're running on is at: ...>" && greg telegram send "Your message here"
 ```
 
 When sending a message:
@@ -41,14 +41,14 @@ When sending a message:
 Passing a multi-line message directly as a shell argument will collapse all newlines. Use bash ANSI-C quoting (`$'...'`) with `\n` to preserve line breaks — no temp file needed:
 
 ```bash
-cd [WORKSPACE_ROOT] && bun run greg telegram send $'Line 1\n\nLine 2\n- item 1\n- item 2'
+cd [WORKSPACE_ROOT] && greg telegram send $'Line 1\n\nLine 2\n- item 1\n- item 2'
 ```
 
 For very long messages, you can also write to a temp file and use `$(cat ...)`:
 
 ```bash
 printf 'Line 1\n\nLine 2\n- item\n' > /tmp/message.txt
-cd [WORKSPACE_ROOT] && bun run greg telegram send "$(cat /tmp/message.txt)"
+cd [WORKSPACE_ROOT] && greg telegram send "$(cat /tmp/message.txt)"
 ```
 
 Formatting guidelines:
@@ -73,7 +73,7 @@ For long-running processes:
 
 ## Technical Details
 
-- Command: `bun run greg telegram send <message>`
+- Command: `greg telegram send <message>`
 - Arguments: `message` — the text to send.
 - The Telegram client is already configured and ready to use.
 

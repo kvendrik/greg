@@ -98,7 +98,7 @@ export async function runExec(
           }
         }
 
-        resolve(combined || '(no output)');
+        resolve(combined || '(no output. exit code: ' + code + ')');
       }
     });
 
