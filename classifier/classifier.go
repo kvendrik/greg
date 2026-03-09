@@ -28,6 +28,7 @@ import (
 // ---------------------------------------------------------------------------
 
 type Config struct {
+	HTTP      bool
 	Port      int
 	ModelPath string
 	Threshold float64
@@ -45,7 +46,8 @@ func parseConfig() Config {
 			defaultPort = p
 		}
 	}
-	flag.IntVar(&cfg.Port, "port", defaultPort, "Port to listen on")
+	flag.BoolVar(&cfg.HTTP, "http", false, "Start HTTP server; otherwise classify the positional argument string")
+	flag.IntVar(&cfg.Port, "port", defaultPort, "Port to listen on (with -http)")
 	flag.StringVar(&cfg.ModelPath, "model", defaultModel, "Path to ONNX model directory")
 	flag.Float64Var(&cfg.Threshold, "threshold", 0.85, "Injection score threshold (0-1)")
 	flag.Parse()
@@ -81,6 +83,35 @@ func onnxLibPath() string {
 	}
 
 	return "" // hugot will attempt auto-detection
+}
+
+const classifyChunkSize = 4096
+
+// chunkString splits s into chunks of at most size bytes, never splitting a UTF-8 rune.
+func chunkString(s string, size int) []string {
+	if size <= 0 || len(s) == 0 {
+		if s == "" {
+			return nil
+		}
+		return []string{s}
+	}
+	var chunks []string
+	for len(s) > 0 {
+		if len(s) <= size {
+			chunks = append(chunks, s)
+			break
+		}
+		cut := size
+		for cut > 0 && (s[cut]&0xC0) == 0x80 {
+			cut--
+		}
+		if cut == 0 {
+			cut = size
+		}
+		chunks = append(chunks, s[:cut])
+		s = s[cut:]
+	}
+	return chunks
 }
 
 // ---------------------------------------------------------------------------
@@ -144,8 +175,57 @@ func NewServer(modelPath string, threshold float64) (*Server, error) {
 	return &Server{pipeline: pipeline, threshold: threshold}, nil
 }
 
-func (s *Server) handleClassify(w http.ResponseWriter, r *http.Request) {
+// Classify runs the model on text (chunked as needed) and returns the aggregated result.
+func (s *Server) Classify(text string) (ClassifyResponse, error) {
 	start := time.Now()
+	if strings.TrimSpace(text) == "" {
+		return ClassifyResponse{
+			Injection: false,
+			Score:     0,
+			Label:     "LEGITIMATE",
+			LatencyMs: 0,
+		}, nil
+	}
+	chunks := chunkString(text, classifyChunkSize)
+	results, err := s.pipeline.RunPipeline(chunks)
+	if err != nil {
+		return ClassifyResponse{}, err
+	}
+	numOutputs := len(results.ClassificationOutputs)
+	if numOutputs == 0 {
+		return ClassifyResponse{}, fmt.Errorf("no output from model")
+	}
+	if numOutputs != len(chunks) {
+		return ClassifyResponse{}, fmt.Errorf("model result count does not match chunk count")
+	}
+	var maxScore float64
+	var anyInjection bool
+	for chunkIdx := range results.ClassificationOutputs {
+		if len(results.ClassificationOutputs[chunkIdx]) == 0 {
+			continue
+		}
+		result := results.ClassificationOutputs[chunkIdx][0]
+		score := injectionScore(result)
+		if score > maxScore {
+			maxScore = score
+		}
+		if score >= s.threshold {
+			anyInjection = true
+		}
+	}
+	label := "LEGITIMATE"
+	if anyInjection {
+		label = "INJECTION"
+	}
+	return ClassifyResponse{
+		Injection: anyInjection,
+		Score:     maxScore,
+		Label:     label,
+		LatencyMs: float64(time.Since(start).Microseconds()) / 1000.0,
+	}, nil
+}
+
+func (s *Server) handleClassify(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method != http.MethodPost {
@@ -166,33 +246,13 @@ func (s *Server) handleClassify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	text := req.Text
-	if len(text) > 4096 {
-		text = text[:4096]
-	}
-
-	results, err := s.pipeline.RunPipeline([]string{text})
+	resp, err := s.Classify(req.Text)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(ErrorResponse{Error: err.Error()})
 		return
 	}
-
-	if len(results.ClassificationOutputs) == 0 || len(results.ClassificationOutputs[0]) == 0 {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "no output from model"})
-		return
-	}
-
-	result := results.ClassificationOutputs[0][0]
-	score := injectionScore(result)
-
-	json.NewEncoder(w).Encode(ClassifyResponse{
-		Injection: score >= s.threshold,
-		Score:     score,
-		Label:     result.Label,
-		LatencyMs: float64(time.Since(start).Microseconds()) / 1000.0,
-	})
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -227,11 +287,32 @@ func main() {
 		log.Fatalf("Failed to start: %v", err)
 	}
 
+	if cfg.HTTP {
+		runHTTP(srv, cfg.Port)
+		return
+	}
+
+	args := flag.Args()
+	if len(args) == 0 {
+		log.Fatal("Usage: classifier <string> to classify, or classifier -http to start the server")
+	}
+	text := strings.Join(args, " ")
+
+	resp, err := srv.Classify(text)
+	if err != nil {
+		log.Fatalf("Classify: %v", err)
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(resp); err != nil {
+		log.Fatalf("Output: %v", err)
+	}
+}
+
+func runHTTP(srv *Server, port int) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/classify", srv.handleClassify)
 	mux.HandleFunc("/health", srv.handleHealth)
 
-	addr := fmt.Sprintf("127.0.0.1:%d", cfg.Port)
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	httpSrv := &http.Server{
 		Addr:         addr,
 		Handler:      mux,
