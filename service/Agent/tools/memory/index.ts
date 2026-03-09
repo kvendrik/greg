@@ -54,9 +54,10 @@ function createGetRecentConversationNotesTool(
   config: AgentConfig
 ): AgentTool {
   return {
-    name: 'get_recent_conversation_notes',
-    label: 'get recent conversation notes',
-    description: 'Get the most recent conversation notes.',
+    name: 'memory_recent',
+    label: 'memory: recent',
+    description:
+      'Get recent conversation notes from the last few days (medium-term memory).',
     parameters: Type.Object({
       max_notes: Type.Optional(
         Type.Number({
@@ -109,9 +110,10 @@ function createGetRecentConversationNotesTool(
 
 function createSearchConversationNotesTool(config: AgentConfig): AgentTool {
   return {
-    name: 'search_past_conversations',
-    label: 'search past conversations',
-    description: 'Search through past conversations.',
+    name: 'memory_search',
+    label: 'memory: search',
+    description:
+      'Search through past conversations using semantic + keyword search.',
     parameters: Type.Object({
       search_query: Type.String({ description: 'The query to search for' }),
     }),
@@ -135,11 +137,95 @@ function createSearchConversationNotesTool(config: AgentConfig): AgentTool {
   };
 }
 
+function createSummarizeConversationNotesTool(config: AgentConfig): AgentTool {
+  return {
+    name: 'memory_summarize',
+    label: 'memory: summarize',
+    description:
+      'Collect recent or topic-focused notes so you can summarize past conversations in your own words.',
+    parameters: Type.Object({
+      topic: Type.Optional(
+        Type.String({
+          description:
+            'Optional topic or query to focus on (uses semantic search when provided)',
+        })
+      ),
+      max_notes: Type.Optional(
+        Type.Number({
+          description:
+            'Approximate max number of recent day files to include (1-10).',
+        })
+      ),
+    }),
+    execute: async (_id, params, signal) => {
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+
+      const { topic, max_notes } = params as {
+        topic?: string;
+        max_notes?: number;
+      };
+
+      await ensureWorkspaceExists(config);
+
+      let text: string;
+      try {
+        if (topic && topic.trim()) {
+          // Let QMD pick the most relevant snippets for the topic.
+          text = await vsearch(topic, config);
+        } else {
+          const limit = Math.max(1, Math.min(10, max_notes ?? 3));
+          const chatsPath = getChatsPath(config);
+          const files = fs.readdirSync(chatsPath);
+          const mdFiles = files.filter((f) => f.endsWith('.md'));
+
+          if (mdFiles.length === 0) {
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: 'No past conversation notes available to summarize.',
+                },
+              ],
+              details: {},
+            };
+          }
+
+          const withMtime = mdFiles.map((f) => ({
+            name: f,
+            mtime: fs.statSync(join(chatsPath, f)).mtimeMs,
+          }));
+
+          withMtime.sort((a, b) => b.mtime - a.mtime);
+
+          const dayFiles = withMtime.slice(0, limit).map((e) => e.name);
+          text = await multiGet(dayFiles, config);
+        }
+      } catch (err) {
+        text =
+          'Error collecting notes for summarization: ' +
+          (err instanceof Error ? err.message : String(err));
+      }
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text,
+          },
+        ],
+        details: {},
+      };
+    },
+  };
+}
+
 function createGetConversationNoteTool(config: AgentConfig): AgentTool {
   return {
-    name: 'get_past_conversation',
-    label: 'get past conversation',
-    description: 'Get a single conversation by docid',
+    name: 'memory_get',
+    label: 'memory: get',
+    description: 'Get a single past conversation note by docid.',
     parameters: Type.Object({
       docid: Type.String({
         description:
@@ -184,9 +270,9 @@ function createGetConversationNoteTool(config: AgentConfig): AgentTool {
 
 function createUpdateUserMemoryTool(config: AgentConfig): AgentTool {
   return {
-    name: 'save_user_memory',
-    label: 'save user memory',
-    description: `Update USER.md with persistent facts about the user. Call whenever the user shares something about themselves (name, preferences, context). Pass the complete updated content (merge with existing so information stays accurate).`,
+    name: 'memory_user_set',
+    label: 'memory: user set',
+    description: `Replace USER.md with persistent facts about the user. Call when the user shares or changes something about themselves (name, preferences, context). Always send the complete updated content (merge with existing so information stays accurate).`,
     parameters: Type.Object({
       content: Type.String({
         description:
@@ -212,9 +298,9 @@ function createUpdateUserMemoryTool(config: AgentConfig): AgentTool {
 
 function createUpdateIdentityTool(config: AgentConfig): AgentTool {
   return {
-    name: 'save_identity',
-    label: 'save identity',
-    description: `Update IDENTITY.md with who you (Greg) are. Call when the user defines or changes your identity, persona, or how you should behave. Pass the complete updated content (merge with existing).`,
+    name: 'memory_identity_set',
+    label: 'memory: identity set',
+    description: `Replace IDENTITY.md with who you are. Call when the user defines or changes your identity, persona, or how you should behave. Always send the complete updated content (merge with existing).`,
     parameters: Type.Object({
       content: Type.String({
         description:
@@ -305,13 +391,21 @@ export async function saveConversationNote(
 
 function createSaveConversationNoteTool(config: AgentConfig): AgentTool {
   return {
-    name: 'save_conversation_note',
-    label: 'save conversation note',
-    description: `Append a note to the workspace YYYY-MM-DD.md at the time the conversation started. Call at the end of substantive replies for task-related info, topics discussed, decisions, or actions taken (not persistent user facts). Prefer calling too often. Use conversation_start_iso from the system prompt.`,
+    name: 'memory_note',
+    label: 'memory: note',
+    description: `Append a brief note to chats/YYYY-MM-DD.md at the time the conversation started. Call at the end of substantive replies when a decision was made, a plan was agreed, or a multi-step task moved forward (not for small talk or one-off debug). Use conversation_start_iso from the system prompt.`,
     parameters: Type.Object({
       note: Type.String({
         description: 'The note to save (task, topic, or conversation summary)',
       }),
+      category: Type.Optional(
+        Type.Union([
+          Type.Literal('decision'),
+          Type.Literal('task'),
+          Type.Literal('summary'),
+          Type.Literal('context'),
+        ])
+      ),
       conversation_start_iso: Type.String({
         description:
           'ISO timestamp when this conversation started (use the value from the system prompt)',
@@ -322,8 +416,9 @@ function createSaveConversationNoteTool(config: AgentConfig): AgentTool {
         throw new DOMException('Aborted', 'AbortError');
       }
 
-      const { note, conversation_start_iso } = params as {
+      const { note, category, conversation_start_iso } = params as {
         note: string;
+        category?: 'decision' | 'task' | 'summary' | 'context';
         conversation_start_iso: string;
       };
       const trimmed = note.trim();
@@ -335,22 +430,89 @@ function createSaveConversationNoteTool(config: AgentConfig): AgentTool {
       }
 
       const d = new Date(conversation_start_iso);
+      if (Number.isNaN(d.getTime())) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Could not save note: invalid conversation_start_iso "${conversation_start_iso}".`,
+            },
+          ],
+          details: {},
+        };
+      }
+
+      const prefix =
+        category != null ? `**[${category}]** ${trimmed}` : trimmed;
+
       const date = d.toLocaleDateString('en-CA');
       const time = d.toLocaleTimeString('en-GB', {
         hour: '2-digit',
         minute: '2-digit',
       });
 
-      await saveConversationNote(note, conversation_start_iso, config);
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: `Saving to ${date}.md under ${time}.`,
-          },
-        ],
-        details: {},
-      };
+      try {
+        await saveConversationNote(prefix, conversation_start_iso, config);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Saved note to ${date}.md under ${time}.`,
+            },
+          ],
+          details: {},
+        };
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Unknown error while saving note.';
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error saving note: ${message}`,
+            },
+          ],
+          details: {},
+        };
+      }
+    },
+  };
+}
+
+function createGetUserMemoryTool(config: AgentConfig): AgentTool {
+  return {
+    name: 'memory_user_get',
+    label: 'memory: user get',
+    description: 'Read the current USER.md persistent user memory.',
+    parameters: Type.Object({}),
+    execute: async (_id, _params, signal) => {
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+
+      await ensureWorkspaceExists(config);
+      const userPath = getUserPath(config);
+      const text = fs.readFileSync(userPath, 'utf8');
+      return { content: [{ type: 'text' as const, text }], details: {} };
+    },
+  };
+}
+
+function createGetIdentityTool(config: AgentConfig): AgentTool {
+  return {
+    name: 'memory_identity_get',
+    label: 'memory: identity get',
+    description: 'Read the current IDENTITY.md (who you are and how to behave).',
+    parameters: Type.Object({}),
+    execute: async (_id, _params, signal) => {
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+
+      await ensureWorkspaceExists(config);
+      const identityPath = getIdentityPath(config);
+      const text = fs.readFileSync(identityPath, 'utf8');
+      return { content: [{ type: 'text' as const, text }], details: {} };
     },
   };
 }
@@ -358,8 +520,11 @@ function createSaveConversationNoteTool(config: AgentConfig): AgentTool {
 export function getTools(config: AgentConfig): AgentTool[] {
   return [
     createUpdateUserMemoryTool(config),
+    createGetUserMemoryTool(config),
     createUpdateIdentityTool(config),
+    createGetIdentityTool(config),
     createSearchConversationNotesTool(config),
+    createSummarizeConversationNotesTool(config),
     createGetConversationNoteTool(config),
     createSaveConversationNoteTool(config),
     createGetRecentConversationNotesTool(config),
@@ -373,16 +538,25 @@ export function getInstructions(
   ensureWorkspaceExistsSync(config);
   return `
 ## Memory recall
-Memory has three layers: this conversation (short-term), daily notes in chats/ (medium-term; use \`get_recent_conversation_notes\` and \`search_past_conversations\`), and the blocks below (long-term; USER.md + IDENTITY.md). Before your first reply, call \`get_recent_conversation_notes\` to load recent context. Use \`search_past_conversations\` when you need something specific. When you use that context or the blocks below, weave it in naturally—do not say "I see that...", "Based on our previous conversation...", or similar. Respond as if you remember.
+Memory has three layers: this conversation (short-term), daily notes in chats/ (medium-term; use \`memory_recent\`, \`memory_search\`, \`memory_summarize\`, and \`memory_get\`), and the blocks below (long-term; USER.md + IDENTITY.md).
+
+When you need past context:
+
+- Use \`memory_recent\` to load the last few days of notes for ongoing/project conversations (skip it for clearly one-off questions).
+- Use \`memory_search\` when you are looking for specific information (IDs, decisions, tasks, names) that likely lives in past notes.
+- Use \`memory_summarize\` when you want a compact bundle of notes around a topic so that you can summarize them yourself in your reply.
+- Use \`memory_get\` when you already know a specific note \`docid\` and only need that one entry (optionally a slice via \`start_line\` / \`max_lines\`).
+
+When you use recalled context or the blocks below, weave it in naturally—do not say "I see that...", "Based on our previous conversation...", or similar. Respond as if you remember.
 
 ## Saving to memory
-At the end of each substantive reply, call the right tool. Prefer saving too often over too rarely. Keep USER.md and IDENTITY.md concise: quality over quantity; only include information that will still be relevant.
+At the end of substantive replies, decide whether anything is worth saving. Save when a decision or plan is made, the user shares a durable preference or identity detail, or a multi-step task moves forward. Do not save pure small talk, one-off debugging, or trivial clarifications. Keep USER.md and IDENTITY.md concise: quality over quantity; only include information that will still be relevant.
 
-- **Persistent user facts** (name, preferences, context) → \`save_user_memory\` with the full updated USER.md. Merge with "Information about the user" below. Before saving, ask: "Will this still be true in 2 weeks?". Call when the user shares something about themselves.
-- **Your identity** (persona, how you should behave) → \`save_identity\` with the full updated IDENTITY.md. Merge with "Your identity" below. Call when the user defines or changes who you are.
-- **Conversation/task info** → \`save_conversation_note\` for non-trivial exchanges: what was discussed, decisions, tasks, or what you did. Write notes that are self-contained and use natural language (and key names/terms) so search can find them later. Use \`conversation_start_iso\` from below. Do not save: small talk or greetings only, temporary debugging, or one-line exchanges.
+- **Persistent user facts** (name, preferences, context) → \`memory_user_set\` with the full updated USER.md. When in doubt, first read the current file with \`memory_user_get\`. Merge with "Information about the user" below. Before saving, ask: "Will this still be true in 2 weeks?". Call when the user shares or corrects something about themselves.
+- **Your identity** (persona, how you should behave) → \`memory_identity_set\` with the full updated IDENTITY.md. When in doubt, first read the current file with \`memory_identity_get\`. Merge with "Your identity" below. Call when the user defines or changes who you are.
+- **Conversation/task info** → \`memory_note\` for non-trivial exchanges: what was discussed, decisions, tasks, or what you did. Set the \`category\` parameter when possible (\`decision\`, \`task\`, \`summary\`, or \`context\`) so future search and summarization work better. Write notes that are self-contained and use natural language (and key names/terms) so search can find them later. Use \`conversation_start_iso\` from below. Do not save: small talk or greetings only, temporary debugging, or one-line exchanges.
 
-Before ending your response, consider: \`save_conversation_note\`, \`save_user_memory\` (if they shared something about themselves), \`save_identity\` (if they defined or changed who you are), \`save_skill\` (if something reusable was learned).
+Before ending your response, quickly check: \`memory_note\` (for decisions/plans), \`memory_user_set\` (if they shared or corrected something about themselves), \`memory_identity_set\` (if they defined or changed who you are), \`save_skill\` (if something reusable was learned).
 
 ### Your identity
 ${fs.readFileSync(getIdentityPath(config), 'utf8')}
@@ -394,6 +568,6 @@ ${fs.readFileSync(getUserPath(config), 'utf8')}
 Memory files and workspace: ${getWorkspacePath(config)}.
 
 ### Conversation start
-Conversation started: ${formatDate(conversationStartIso)}. For \`save_conversation_note\` use conversation_start_iso: \`${conversationStartIso}\`.
+Conversation started: ${formatDate(conversationStartIso)}. For \`memory_note\` use conversation_start_iso: \`${conversationStartIso}\`.
   `;
 }

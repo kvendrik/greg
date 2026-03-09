@@ -112,9 +112,4 @@ These jobs only work however if you keep an instance of the scheduler running: `
 
 LLM safety is a big issue. Prompt injections are largely an unsolved issue and giving an LLM the level of access Greg has forms a real risk. To better understand the risks I’d recommend giving [Anthropic’s article on browser use safety](https://www.anthropic.com/research/prompt-injection-defenses) a read.
 
-So give a quick overview, LLM safety comes in 2 parts:
-
-1. Ensuring incoming untrusted content is safe. For this there is no 100% guaranteed solution.
-2. Minizing the blast radius in case something were to happen.
-
-Step 2 is usually solved using a combination of limiting the LLM’s access to the machine and ensuring that user confirmation is neccesary when executing for example shell commands.
+So give a quick overview

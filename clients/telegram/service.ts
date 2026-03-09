@@ -1,11 +1,15 @@
 import { Bot } from 'grammy';
 import { hydrateFiles } from '@grammyjs/files';
-import { ping, createThread, type Thread } from '../agent-sdk';
-import { createPrompt, type BotContext } from './prompt';
+import { ping } from '../agent-sdk';
+import { createPromper, type BotContext } from './prompt';
 import { pipeline } from '@xenova/transformers';
 import ffmpeg from 'fluent-ffmpeg';
 import fs from 'node:fs';
-import { getTelegramEnv, telegramAwaitSocketPath } from './utilities';
+import {
+  escapeMarkdownV2,
+  getTelegramEnv,
+  telegramAwaitSocketPath,
+} from './utilities';
 import { TaskChannel } from './TaskChannel';
 
 const env = getTelegramEnv();
@@ -19,9 +23,11 @@ const transcriber = await pipeline(
 );
 
 bot.api.config.use(hydrateFiles(bot.token));
+bot.api.config.use((prev, method, payload, signal) =>
+  prev(method, { parse_mode: 'MarkdownV2', ...payload }, signal)
+);
 
-const thread: Thread = await createThread();
-const prompt = createPrompt(thread, bot, senderId);
+const prompt = await createPromper(bot);
 
 function isAllowedSender(ctx: BotContext): boolean {
   return ctx.from?.id.toString() === senderId;
@@ -33,11 +39,19 @@ function rejectUnauthorized(ctx: BotContext, label: string): void {
   );
 }
 
-const taskChannel = new TaskChannel(telegramAwaitSocketPath);
-taskChannel.onReply(
-  'await-reply',
-  async (text) => await bot.api.sendMessage(senderId, text)
-);
+const taskChannel = new TaskChannel<{
+  messageThreadId?: number;
+}>(telegramAwaitSocketPath);
+
+let lastMessageThreadId: number | null = null;
+
+taskChannel.onTask('await-reply', async (text) => {
+  const escaped = escapeMarkdownV2(text);
+  await bot.api.sendMessage(senderId, escaped, {
+    message_thread_id: lastMessageThreadId ?? undefined,
+  });
+});
+
 taskChannel.listen();
 
 bot.on('message:text', async (ctx) => {
@@ -45,12 +59,22 @@ bot.on('message:text', async (ctx) => {
     rejectUnauthorized(ctx, `Received: ${ctx.message.text}`);
     return;
   }
+
   const text = ctx.message.text ?? '';
-  if (taskChannel.onIncomingMessage(text).handledByChannel) return;
+  lastMessageThreadId = ctx.message.message_thread_id ?? null;
+
+  if (
+    taskChannel.onIncomingMessage(text, {
+      messageThreadId: ctx.message.message_thread_id,
+    }).handledByChannel
+  )
+    return;
+
   if (!(await ping())) {
     await ctx.reply('Agent is not running');
     process.exit(1);
   }
+
   prompt({ content: text, images: [] }, ctx);
 });
 
@@ -73,11 +97,16 @@ bot.on('message:voice', async (ctx) => {
   if (!chat) return;
   await ctx.api.sendChatAction(chat.id, 'upload_voice');
 
-  const file = await ctx.getFile();
-  await file.download('./temp.ogg');
+  const paths = {
+    ogg: `/tmp/greg-telegram-${ctx.message.message_id}.ogg`,
+    pcm: `/tmp/greg-telegram-${ctx.message.message_id}.pcm`,
+  };
 
-  await oggToRawPcm('./temp.ogg', './temp.pcm');
-  const audioData = await readAudioAsFloat32('./temp.pcm');
+  const file = await ctx.getFile();
+  await file.download(paths.ogg);
+
+  await oggToRawPcm(paths.ogg, paths.pcm);
+  const audioData = await readAudioAsFloat32(paths.pcm);
 
   const result = (await transcriber(audioData, {
     return_timestamps: false,
@@ -85,8 +114,8 @@ bot.on('message:voice', async (ctx) => {
 
   prompt({ content: result.text.trim(), images: [] }, ctx);
 
-  fs.unlinkSync('./temp.ogg');
-  fs.unlinkSync('./temp.pcm');
+  fs.unlinkSync(paths.ogg);
+  fs.unlinkSync(paths.pcm);
 });
 
 const mediaGroupCollector = new Map<

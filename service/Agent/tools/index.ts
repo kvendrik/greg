@@ -10,6 +10,7 @@ import {
   getInstructions as getSkillsInstructions,
   getTools as getSkillTools,
 } from './skills';
+import { getFilesTools } from './files';
 import { getWebTools } from './web';
 
 export async function get(
@@ -25,6 +26,7 @@ export async function get(
     ...getWebTools(config),
     ...getMemoryTools(config),
     ...getSkillTools(config),
+    ...getFilesTools(config),
   ];
 
   const instructions = `

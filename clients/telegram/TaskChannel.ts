@@ -4,27 +4,27 @@ import readline from 'node:readline';
 
 type TaskRequest = { task: string; [key: string]: unknown };
 
-export class TaskChannel {
+export class TaskChannel<D> {
   private readonly socketPath: string;
-  private pendingMessageConsumer: ((text: string) => void) | null = null;
-  private replyHandlers: Record<string, (text: string) => Promise<unknown>> =
-    {};
+  private pendingMessageConsumer: ((text: string, details?: D) => void) | null =
+    null;
+  private handlers: Record<string, (text: string) => Promise<unknown>> = {};
 
   constructor(socketPath: string) {
     this.socketPath = socketPath;
   }
 
   /** Register how to send the prompt to the user for the task. */
-  onReply(task: string, sendMessage: (text: string) => Promise<unknown>): void {
-    this.replyHandlers[task] = sendMessage;
+  onTask(task: string, callback: (text: string) => Promise<unknown>): void {
+    this.handlers[task] = callback;
   }
 
   /** Returns whether the message was consumed by a pending. */
-  onIncomingMessage(text: string): { handledByChannel: boolean } {
+  onIncomingMessage(text: string, details: D): { handledByChannel: boolean } {
     if (!this.pendingMessageConsumer) return { handledByChannel: false };
     const consumer = this.pendingMessageConsumer;
     this.pendingMessageConsumer = null;
-    consumer(text);
+    consumer(text, details);
     return { handledByChannel: true };
   }
 
@@ -102,13 +102,13 @@ export class TaskChannel {
     respond: (payload: unknown) => void
   ): void {
     if (request.task === task) {
-      this.handleAwaitReply(task, request, respond);
+      this.handleAwaitResponse(task, request, respond);
       return;
     }
     respond({ task: request.task, error: `Unknown task: ${request.task}` });
   }
 
-  private handleAwaitReply(
+  private handleAwaitResponse(
     task: string,
     request: TaskRequest,
     respond: (payload: unknown) => void
@@ -125,15 +125,15 @@ export class TaskChannel {
       });
       return;
     }
-    const send = this.replyHandlers[task];
-    if (!send) {
-      respond({ task, error: 'No reply handler registered' });
+    const handler = this.handlers[task];
+    if (!handler) {
+      respond({ task, error: 'No handler registered' });
       return;
     }
     this.setPendingMessageConsumer((text) => {
       respond({ task, reply: text });
     });
-    send(prompt).catch((err) => {
+    handler(prompt).catch((err) => {
       this.setPendingMessageConsumer(null);
       respond({ task, error: String(err) });
     });
