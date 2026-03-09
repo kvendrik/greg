@@ -23,7 +23,7 @@
     "jobs:schedule:stop": "pm2 delete greg:jobs",
     "jobs:schedule:logs": "pm2 logs greg:jobs",
     "jobs:schedule:restart": "pm2 restart greg:jobs",
-    "guard:start": "pm2 start ./classifier/classifier --name greg:guard --instances 1 --no-autorestart",
+    "guard:start": "pm2 start ./classifier/classifier --name greg:guard --instances 1 --no-autorestart -- --http",
     "guard:stop": "pm2 delete greg:guard",
     "guard:restart": "pm2 restart greg:guard",
     "guard:logs": "pm2 logs greg:guard",
