@@ -1,8 +1,10 @@
 import { Bot, type Context } from 'grammy';
 import { FileFlavor } from '@grammyjs/files';
-import { type Thread, type PromptInput } from '../agent-sdk';
+import { createSession, type Session, type PromptInput } from '../agent-sdk';
+import { escapeMarkdownV2, getTelegramEnv } from './utilities';
 import pc from 'picocolors';
 
+const { senderId } = getTelegramEnv();
 export type BotContext = FileFlavor<Context>;
 
 function createSendTypingAction(ctx: BotContext) {
@@ -35,12 +37,26 @@ function createSendTypingAction(ctx: BotContext) {
   };
 }
 
-export function createPrompt(
-  thread: Thread,
-  bot: Bot<BotContext>,
-  senderId: string
-) {
+export async function createPromper(bot: Bot<BotContext>) {
+  const sessions = new Map<number | 'main', Session>([
+    ['main', await createSession()],
+  ]);
+
   return async function prompt(input: PromptInput, ctx?: BotContext) {
+    const messageThreadId = ctx?.message?.message_thread_id ?? null;
+    let session = sessions.get('main')!;
+
+    if (messageThreadId) {
+      const threadSession = sessions.get(messageThreadId) ?? null;
+
+      if (threadSession) {
+        session = threadSession;
+      } else {
+        session = await createSession();
+        sessions.set(messageThreadId, session);
+      }
+    }
+
     const typing = ctx ? createSendTypingAction(ctx) : null;
 
     const imageSuffix =
@@ -54,7 +70,7 @@ export function createPrompt(
 
     typing?.start();
 
-    await thread.prompt(input, {
+    await session.prompt(input, {
       onThinking: () => {},
       onContent: (chunk: string) => {
         response += chunk;
@@ -94,8 +110,9 @@ export function createPrompt(
     });
 
     function send(text: string) {
-      if (ctx) return ctx.reply(text);
-      return bot.api.sendMessage(senderId, text);
+      const escaped = escapeMarkdownV2(text);
+      if (ctx) return ctx.reply(escaped);
+      return bot.api.sendMessage(senderId, escaped);
     }
   };
 }

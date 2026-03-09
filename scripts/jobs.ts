@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import pc from 'picocolors';
 import config from '../.greg';
 import { getWorkspacePath } from '../service/Agent/utilities';
-import { createThread, type PromptInput } from '../clients/agent-sdk';
+import { createSession, type PromptInput } from '../clients/agent-sdk';
 
 type JobEntry = { cronTime: string; jobPrompt: string; id: string };
 
@@ -61,9 +61,9 @@ async function runJob(job: JobEntry): Promise<void> {
   const label = `${job.id}: ${preview}`;
   console.log(pc.gray(`[${new Date().toISOString()}] Running job ${label}`));
   try {
-    const thread = await createThread();
+    const session = await createSession();
     const input: PromptInput = { content: job.jobPrompt, images: [] };
-    await thread.prompt(input, {
+    await session.prompt(input, {
       onThinking: () => {},
       onContent: (chunk) => process.stdout.write(chunk),
       onToolcall: () => {},
@@ -73,7 +73,7 @@ async function runJob(job: JobEntry): Promise<void> {
         console.error(pc.red(`Job ${job.id} error: ${err}`));
       },
     });
-    await thread.destroy();
+    await session.destroy();
   } catch (err) {
     console.error(pc.red(`Job ${job.id} failed:`), err);
   }

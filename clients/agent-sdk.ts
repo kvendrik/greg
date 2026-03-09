@@ -18,7 +18,7 @@ export type PromptInput = {
   images: { data: string; mimeType: string }[];
 };
 
-export type Thread = {
+export type Session = {
   id: string;
   destroy(): Promise<boolean>;
   prompt(input: PromptInput, callbacks: PromptCallbacks): Promise<void>;
@@ -33,12 +33,12 @@ export async function ping() {
   }
 }
 
-export async function createThread(): Promise<Thread> {
+export async function createSession(): Promise<Session> {
   const base = getBase();
-  const res = await fetch(`${base}/threads/new`, { method: 'POST' });
+  const res = await fetch(`${base}/sessions/new`, { method: 'POST' });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Failed to create thread: ${res.status} ${text}`);
+    throw new Error(`Failed to create session: ${res.status} ${text}`);
   }
 
   const { id } = (await res.json()) as { id: string };
@@ -49,7 +49,7 @@ export async function createThread(): Promise<Thread> {
     async destroy() {
       if (destroyed) return true;
       destroyed = true;
-      return destroyThread(id);
+      return destroySession(id);
     },
     prompt(input, callbacks) {
       return prompt(id, input, callbacks);
@@ -57,15 +57,15 @@ export async function createThread(): Promise<Thread> {
   };
 }
 
-async function destroyThread(threadId: string) {
-  const res = await fetch(`${getBase()}/threads/${threadId}`, {
+async function destroySession(sessionId: string) {
+  const res = await fetch(`${getBase()}/sessions/${sessionId}`, {
     method: 'DELETE',
   });
   return res.ok;
 }
 
 async function prompt(
-  threadId: string,
+  sessionId: string,
   input: PromptInput,
   {
     onThinking,
@@ -76,7 +76,7 @@ async function prompt(
     onError,
   }: PromptCallbacks
 ) {
-  const res = await fetch(`${getBase()}/threads/${threadId}`, {
+  const res = await fetch(`${getBase()}/sessions/${sessionId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt: input }),

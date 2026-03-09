@@ -82,12 +82,12 @@ export const tests: GuardTestCase[] = [
   {
     title: 'flags malicious phrase in support forum thread',
     prompt: readFixture('support-thread'),
-    expectedClassification: 'BENIGN',
+    expectedClassification: 'MALICIOUS',
   },
   {
     title: 'flags malicious phrase in debug log dump',
     prompt: readFixture('log-dump'),
-    expectedClassification: 'BENIGN',
+    expectedClassification: 'MALICIOUS',
   },
 ];
 

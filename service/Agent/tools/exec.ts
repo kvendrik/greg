@@ -3,33 +3,9 @@ import { Type } from '@sinclair/typebox';
 import { spawn } from 'child_process';
 import { isSafe, available as isGuardAvailable } from './utilities/guard/guard';
 import type { AgentConfig } from '../types';
-import {
-  getAllowlistForCommand,
-  saveAlwaysAllowPreferenceForCommand,
-} from './utilities/allowlist';
-import { sendMessage } from '../../../clients/telegram/utilities';
+import { evaluatePolicy } from './utilities/guard/policy/policy';
+import { getAllowlistForCommand } from './utilities/guard/policy/allowlist';
 import pc from 'picocolors';
-
-/** First token of a segment, respecting single/double quotes. */
-function firstToken(segment: string): string {
-  const trimmed = segment.trim();
-  if (!trimmed) return '';
-  const quote = trimmed[0];
-  if (quote === '"' || quote === "'") {
-    const end = trimmed.indexOf(quote, 1);
-    return end === -1 ? trimmed : trimmed.slice(1, end);
-  }
-  const match = trimmed.match(/^([^\s|&;]+)/);
-  return match ? match[1] : (trimmed.split(/\s/)[0] ?? '');
-}
-
-/** First token of each pipeline/chain segment (split by |, &&, ||, ;). */
-function commandTokens(command: string): string[] {
-  const trimmed = command.trim();
-  if (!trimmed) return [];
-  const segments = trimmed.split(/\s*(?:&&|\|\||\||;)\s*/);
-  return segments.map((seg) => firstToken(seg)).filter(Boolean);
-}
 
 export async function runExec(
   params: { command: string },
@@ -37,33 +13,16 @@ export async function runExec(
   config: AgentConfig
 ): Promise<string> {
   const { command } = params;
-  const options = getAllowlistForCommand(command, config);
 
-  if (config.tools.guard?.enabled && !options.allow) {
-    const reply = await sendMessage(
-      `💂 Greg is asking to run a command.\n\n\`\`\`\n${command}\n\`\`\`\n\n/yes /no /always`,
-      {
-        awaitReply: true,
-      }
-    );
+  const policy = await evaluatePolicy('exec', { command }, config);
 
-    if (reply !== '/yes' && reply !== '/always') {
-      return Promise.resolve(
-        `Command not allowed: ${command}. Permission was denied by the user. User replied: "${reply}".`
-      );
-    }
-
-    if (reply === '/always') {
-      await saveAlwaysAllowPreferenceForCommand(command, config);
-    }
+  if (!policy.allowed) {
+    return policy.reason;
   }
 
   return new Promise<string>((resolve, reject) => {
     const output: string[] = [];
     const errorOutput: string[] = [];
-
-    const trimmed = command.trim();
-    const commands = commandTokens(trimmed);
 
     const child = spawn(command, [], {
       stdio: ['inherit', 'pipe', 'pipe'],
@@ -124,9 +83,10 @@ export async function runExec(
         resolve(`Command exited with code ${code}\n${combined}`);
       } else {
         const guardUse = config.tools.guard?.use ?? 'all';
-        if ((await isGuardAvailable(config)) && !options.trusted) {
+        const { trusted } = getAllowlistForCommand(command, config);
+        if ((await isGuardAvailable(config)) && !trusted) {
           const result = await isSafe(config, combined, {
-            name: commands[0],
+            name: command.split(' ')[0],
             use: guardUse,
           });
 

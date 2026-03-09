@@ -7,6 +7,10 @@ type TelegramConfig = NonNullable<
   NonNullable<typeof config.clients>['telegram']
 >;
 
+export function escapeMarkdownV2(text: string): string {
+  return text.replace(/([\[\]()~>#+\-=|{}.!\\])/g, '\\$1');
+}
+
 /** Unix socket path for await-reply requests (MCP-style: request/response). */
 export const telegramAwaitSocketPath = path.join(
   import.meta.dirname,

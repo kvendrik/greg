@@ -1,0 +1,34 @@
+---
+description: Testing describe block naming and structure for Bun tests
+globs: **/*.test.ts
+alwaysApply: false
+---
+
+# Testing `describe` Structure
+
+When writing tests (for example with Bun's `bun:test`):
+
+- **Module-level `describe`**
+  - Always use a top-level `describe` whose name is the **module** under test.
+  - **Do**:
+    - `describe('guard', () => { ... })`
+    - `describe('command parser', () => { ... })`
+  - **Don't**:
+    - `describe('guard isSafe', () => { ... })`
+    - `describe('command parser parseCommand', () => { ... })`
+
+- **Method-level `describe`**
+  - Nest a second-level `describe` for the **method or function** under test.
+  - **Do**:
+    - `describe('guard', () => {`
+      - `describe('isSafe()', () => {`
+        - `it('classifies short casual greeting as benign', () => { ... });`
+      - `});`
+    - `});`
+  - This keeps module and method naming separate and consistent.
+
+- **`it` blocks**
+  - Use `it(...)` descriptions for concrete behaviors or scenarios (not for module/method names).
+  - Example:
+    - `it('flags direct prompt injection asking for system prompt', async () => { ... });`
+

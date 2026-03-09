@@ -1,0 +1,7 @@
+---
+description: Updating test suites
+globs: **/*.test.ts
+alwaysApply: false
+---
+
+When you create or update a `*.test.ts` file always make sure you follow Bun's best practises for writing tests. When done always run the tests to ensure they pass.

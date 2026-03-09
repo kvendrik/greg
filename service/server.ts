@@ -23,7 +23,7 @@ const server = http.createServer((req, res) => {
     }
 
     if (
-      path[0] === 'threads' &&
+      path[0] === 'sessions' &&
       path[1] === 'new' &&
       path.length === 2 &&
       method === 'POST'
@@ -35,15 +35,15 @@ const server = http.createServer((req, res) => {
     }
 
     if (
-      path[0] === 'threads' &&
+      path[0] === 'sessions' &&
       path[1] &&
       path.length === 2 &&
       method === 'DELETE'
     ) {
       const id = path[1];
-      const thread = session.get(id);
-      if (thread) {
-        thread.delete();
+      const existingSession = session.get(id);
+      if (existingSession) {
+        existingSession.delete();
       }
       res.writeHead(204);
       res.end();
@@ -51,7 +51,7 @@ const server = http.createServer((req, res) => {
     }
 
     if (
-      path[0] !== 'threads' ||
+      path[0] !== 'sessions' ||
       !path[1] ||
       path.length !== 2 ||
       method !== 'POST'
@@ -62,9 +62,9 @@ const server = http.createServer((req, res) => {
     }
 
     const id = path[1];
-    const thread = session.get(id);
+    const existingSession = session.get(id);
 
-    if (!thread) {
+    if (!existingSession) {
       res.writeHead(404);
       res.end(JSON.stringify({ error: 'Thread not found' }));
       return;
@@ -144,7 +144,7 @@ const server = http.createServer((req, res) => {
         req.socket.setTimeout(0);
 
         try {
-          await thread.prompt(userPrompt, {
+          await existingSession.prompt(userPrompt, {
             onContent(chunk) {
               res.write(JSON.stringify({ type: 'content', chunk }) + '\n');
             },
@@ -199,7 +199,7 @@ export function startServer() {
   server.listen(Number(config.port), () => {
     console.log('Running...');
     console.log(
-      'Endpoints: GET /ping, POST /threads/new, POST /threads/:id, DELETE /threads/:id'
+      'Endpoints: GET /ping, POST /sessions/new, POST /sessions/:id, DELETE /sessions/:id'
     );
     console.log(
       'Use a client to interact. E.g. `bun run clients:cli "How are you today?"`'
