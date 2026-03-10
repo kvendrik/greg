@@ -110,7 +110,7 @@ export async function createPromper(bot: Bot<BotContext>) {
     }
 
     if (!sessions.has('main')) {
-      const mainSession = await Session.create();
+      const mainSession = await Session.create('telegram-main');
       mainSession.listen(callbacks);
       sessions.set('main', mainSession);
     }
@@ -124,7 +124,7 @@ export async function createPromper(bot: Bot<BotContext>) {
       if (threadSession) {
         session = threadSession;
       } else {
-        session = await Session.create();
+        session = await Session.create(`telegram-thread-${messageThreadId}`);
         session.listen(callbacks);
         sessions.set(messageThreadId, session);
       }

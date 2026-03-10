@@ -3,6 +3,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { Command } from 'commander';
 import { name, description, version } from '../package.json';
+import { Session, listSessions } from '../service/server/sdk/sdk';
 import { validate } from '../config';
 import { discoverSkills } from '../service/Agent/tools/skills';
 import { sendCommand } from '../clients/telegram/send-message';
@@ -625,5 +626,118 @@ program
       }
     }
   });
+
+program
+  .command('sessions')
+  .description('Inspect Greg sessions')
+  .addCommand(
+    new Command('list')
+      .description('List known session IDs')
+      .action(async () => {
+        try {
+          const sessionIds = await listSessions();
+          if (!sessionIds.length) {
+            console.log('No sessions found.');
+            return;
+          }
+          for (const sessionId of sessionIds) {
+            console.log(sessionId);
+          }
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          console.error(pc.red(message));
+          process.exitCode = 1;
+        }
+      })
+  )
+  .addCommand(
+    new Command('create')
+      .description('Create a new session')
+      .action(async () => {
+        try {
+          const session = await Session.create();
+          console.log(pc.green(`Session created: ${session.id}`));
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          console.error(pc.red(message));
+          process.exitCode = 1;
+        }
+      })
+  )
+  .addCommand(
+    new Command('prompt')
+      .description('Send a prompt to an existing session')
+      .argument('<sessionId>', 'ID of the session to prompt')
+      .argument('[text...]', 'Prompt text (defaults to stdin if omitted)')
+      .action(async (sessionId: string, textParts: string[]) => {
+        const promptTextFromArgs = textParts.join(' ').trim();
+
+        const readStdin = async (): Promise<string> => {
+          return new Promise((resolve, reject) => {
+            let data = '';
+            process.stdin.setEncoding('utf8');
+            process.stdin.on('data', (chunk) => {
+              data += chunk;
+            });
+            process.stdin.on('end', () => resolve(data.trim()));
+            process.stdin.on('error', (err) => reject(err));
+          });
+        };
+
+        try {
+          const promptText =
+            promptTextFromArgs !== '' ? promptTextFromArgs : await readStdin();
+
+          if (!promptText) {
+            console.error(pc.red('No prompt text provided.'));
+            process.exitCode = 1;
+            return;
+          }
+
+          const session = new Session(sessionId);
+          let buffer = '';
+
+          session.listen({
+            onTurnStart() {
+              buffer = '';
+            },
+            onThinking(chunk) {
+              process.stdout.write(pc.gray(chunk));
+            },
+            onContent(chunk) {
+              buffer += chunk;
+              process.stdout.write(chunk);
+            },
+            onToolcall(name, args) {
+              const label =
+                args && Object.keys(args).length
+                  ? `${name}(${JSON.stringify(args)})`
+                  : name;
+              process.stdout.write(`\n${pc.gray(`[toolcall] ${label}`)}\n`);
+            },
+            onTurnDone() {
+              process.stdout.write('\n');
+              process.exit(0);
+            },
+            onTurnStop() {
+              process.stdout.write(pc.yellow('\n[stopped]\n'));
+            },
+            onError(error) {
+              console.error(pc.red(`\nError: ${error}`));
+              process.exit(1);
+            },
+          });
+
+          await session.prompt({ content: promptText, images: [] });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          console.error(pc.red(message));
+          process.exitCode = 1;
+        }
+      })
+  );
 
 program.parse();

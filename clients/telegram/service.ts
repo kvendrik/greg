@@ -1,6 +1,6 @@
 import { Bot } from 'grammy';
 import { hydrateFiles } from '@grammyjs/files';
-import { Session } from '../../service/server/sdk/sdk';
+import { Session, ping } from '../../service/server/sdk/sdk';
 import { createPromper, type BotContext } from './prompt';
 import { pipeline } from '@xenova/transformers';
 import ffmpeg from 'fluent-ffmpeg';
@@ -108,7 +108,7 @@ bot.on('message:text', async (ctx) => {
   )
     return;
 
-  if (!(await Session.agentOnline())) {
+  if (!(await ping())) {
     await ctx.reply('Agent is not running');
     process.exit(1);
   }
@@ -208,7 +208,7 @@ bot.on('message:photo', async (ctx) => {
     return;
   }
 
-  if (!(await Session.agentOnline())) {
+  if (!(await ping())) {
     await ctx.reply('Agent is not running');
     process.exit(1);
   }
@@ -256,7 +256,7 @@ bot.on('message:photo', async (ctx) => {
 bot.start();
 console.log('Ready.');
 
-if (await Session.agentOnline()) {
+if (await ping()) {
   prompt({
     content: 'You just started. Check recent notes for context and greet me.',
     images: [],

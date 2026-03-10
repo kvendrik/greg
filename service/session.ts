@@ -14,8 +14,14 @@ export type Session = {
 
 const sessions = new Map<string, Session>();
 
-export async function create(): Promise<Session> {
-  const sessionId = randomUUID();
+export function listIds(): string[] {
+  return Array.from(sessions.keys());
+}
+
+export async function create(idSuffix?: string): Promise<Session> {
+  const baseId = randomUUID();
+  const sessionId =
+    idSuffix && idSuffix.trim() !== '' ? `${baseId}-${idSuffix}` : baseId;
   const transcripter = createTranscripter(sessionId);
 
   const agent = await Agent.create(config, {
