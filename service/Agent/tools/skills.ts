@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import matter from 'gray-matter';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
-import type { AgentConfig } from '../types';
+import type { AgentConfig, ToolContext } from '../types';
 import { getWorkspacePath } from '../utilities/index';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -294,6 +294,7 @@ function createSaveSkillTool(config: AgentConfig): AgentTool {
   };
 }
 
-export function getTools(config: AgentConfig): AgentTool[] {
+export function getTools(context: ToolContext): AgentTool[] {
+  const config = context.config;
   return [createSaveSkillTool(config)];
 }

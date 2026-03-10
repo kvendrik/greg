@@ -1,5 +1,5 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core';
-import type { AgentConfig } from '../types';
+import type { ToolContext } from '../types';
 import { getBrowserInstructions, getBrowserTools } from './browser';
 import { getExecTools } from './exec';
 import {
@@ -15,27 +15,24 @@ import { getWebTools } from './web';
 
 export async function get(
   conversationStartIso: string,
-  config: AgentConfig,
-  options: {
-    addToTranscript: (content: string) => void;
-  }
+  context: ToolContext
 ): Promise<{
   tools: AgentTool[];
   instructions: string;
 }> {
   const tools: AgentTool[] = [
-    ...getExecTools(config, options),
-    ...getBrowserTools(config),
-    ...getWebTools(config),
-    ...getMemoryTools(config),
-    ...getSkillTools(config),
-    ...getFilesTools(config),
+    ...getExecTools(context),
+    ...getBrowserTools(context),
+    ...getWebTools(context),
+    ...getMemoryTools(context),
+    ...getSkillTools(context),
+    ...getFilesTools(context),
   ];
 
   const instructions = `
-  ${getMemoryInstructions(conversationStartIso, config)}
+  ${getMemoryInstructions(conversationStartIso, context.config)}
   
-  ${getSkillsInstructions(config)}
+  ${getSkillsInstructions(context.config)}
   
   ${getBrowserInstructions()}
   `;

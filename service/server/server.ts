@@ -70,7 +70,7 @@ export function startServer(port = Number(config.port)) {
           // ignore malformed body, fall back to random ID
         }
 
-        const newSession = await session.create(idSuffix);
+        const newSession = await session.create(idSuffix ?? '');
         return new Response(JSON.stringify({ id: newSession.id }), {
           status: 201,
           headers: { 'Content-Type': 'application/json' },
@@ -224,9 +224,7 @@ export function startServer(port = Number(config.port)) {
   });
 
   console.log('Running...');
-  console.log(
-    'Endpoints: GET /ping, POST /sessions/new, DELETE /sessions/:id'
-  );
+  console.log('Endpoints: GET /ping, POST /sessions/new, DELETE /sessions/:id');
   console.log(
     'WebSocket: ws://<host>:<port>/sessions/:id for bi-directional communication'
   );
@@ -238,4 +236,3 @@ export function startServer(port = Number(config.port)) {
 
   return server;
 }
-

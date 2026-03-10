@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { convert } from 'telegram-markdown-v2';
 import config from '../../.greg';
-import { TaskChannel } from './TaskChannel';
+import { TaskChannel } from '../TaskChannel';
 
 type TelegramConfig = NonNullable<
   NonNullable<typeof config.clients>['telegram']

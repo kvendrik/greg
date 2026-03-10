@@ -3,6 +3,11 @@ export type { Config as BaseConfig } from '../../config';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { GuardMethods } from './tools/utilities/guard/guard';
 
+export interface ToolContext {
+  config: AgentConfig;
+  addToTranscript: (content: string) => void;
+}
+
 /**
  * Trusted means the output is trusted to be safe and won't be ran through the guard.
  * Allow means the input is allowed to run.

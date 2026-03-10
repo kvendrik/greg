@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { startServer } from '../../server';
 import config from '../../../../.greg';
 import {
-  pingAgent,
+  ping,
   Session,
   setWebSocketFactory,
   type Callbacks,
@@ -22,7 +22,7 @@ afterAll(() => {
 describe('agent SDK', () => {
   describe('ping()', () => {
     it('returns true when server is reachable', async () => {
-      const result = await pingAgent();
+      const result = await ping();
       expect(result).toBe(true);
     });
   });
@@ -69,14 +69,19 @@ describe('agent SDK', () => {
           const turnStartEvent = {
             data: JSON.stringify({
               type: 'turn_start',
-              prompt: { content: 'Hi', images: [] satisfies PromptInput['images'] },
+              prompt: {
+                content: 'Hi',
+                images: [] satisfies PromptInput['images'],
+              },
             }),
           };
           const doneEvent = {
             data: JSON.stringify({ type: 'done' }),
           };
 
-          this.listeners.message?.forEach((listener) => listener(turnStartEvent));
+          this.listeners.message?.forEach((listener) =>
+            listener(turnStartEvent)
+          );
           this.listeners.message?.forEach((listener) => listener(doneEvent));
         }
 
@@ -88,7 +93,9 @@ describe('agent SDK', () => {
         }
       }
 
-      setWebSocketFactory((url) => new FakeWebSocket(url) as unknown as WebSocket);
+      setWebSocketFactory(
+        (url) => new FakeWebSocket(url) as unknown as WebSocket
+      );
 
       try {
         const session = await Session.create();

@@ -2,7 +2,7 @@ import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import { spawn, type ChildProcess } from 'child_process';
 import * as readline from 'readline';
-import type { AgentConfig } from '../types';
+import type { AgentConfig, ToolContext } from '../types';
 
 let proc: ChildProcess | null = null;
 let rl: readline.Interface | null = null;
@@ -131,7 +131,8 @@ export function runBrowserTask(
   });
 }
 
-export function getBrowserTools(config: AgentConfig): AgentTool[] {
+export function getBrowserTools(context: ToolContext): AgentTool[] {
+  const config = context.config;
   return config.tools.browser
     ? [
         {

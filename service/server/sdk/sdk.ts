@@ -27,8 +27,12 @@ export class Session {
   } | null = null;
   private callbacks: Callbacks = {};
 
-  constructor(id: string) {
+  private constructor(id: string) {
     this.id = id;
+  }
+
+  async connect(): Promise<void> {
+    await this.ensureSocket();
   }
 
   listen(callbacks: Callbacks): void {
@@ -188,12 +192,14 @@ export class Session {
       throw new Error('Session is already handling a prompt');
     }
 
-    const ws = await this.ensureSocket();
-
     return new Promise<void>((resolve, reject) => {
       this.pendingTurn = { resolve, reject };
 
-      ws.send(
+      if (!this.socket) {
+        throw new Error('Session is not connected');
+      }
+
+      this.socket.send(
         JSON.stringify({
           type: 'prompt',
           prompt: input,
@@ -216,6 +222,14 @@ export class Session {
     }
     const { id } = (await res.json()) as { id: string };
     return new Session(id);
+  }
+
+  static async existing(sessionId: string): Promise<Session> {
+    const sessions = await listSessions();
+    if (!sessions.includes(sessionId)) {
+      throw new Error(`Session ${sessionId} not found`);
+    }
+    return new Session(sessionId);
   }
 }
 

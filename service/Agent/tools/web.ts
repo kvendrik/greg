@@ -3,7 +3,7 @@ import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { Type } from '@sinclair/typebox';
-import type { AgentConfig } from '../types';
+import type { AgentConfig, ToolContext } from '../types';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { available as isGuardAvailable, isSafe } from './utilities/guard/guard';
 
@@ -249,7 +249,8 @@ Returns { answer: string, citations: { title: string, url: string }[] }`,
   };
 }
 
-export function getWebTools(config: AgentConfig): AgentTool[] {
+export function getWebTools(context: ToolContext): AgentTool[] {
+  const config = context.config;
   const webSearchTool = getWebSearchTool(config);
   return [
     createWebFetchTool(config),

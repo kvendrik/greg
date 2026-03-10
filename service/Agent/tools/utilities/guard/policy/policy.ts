@@ -1,6 +1,7 @@
 import type { AgentConfig } from '../../../../types';
 import { getAllowlistForCommand } from './allowlist';
 import { saveAlwaysAllowPreferenceForCommand } from './allowlist';
+import type { ToolContext } from '../../../../types';
 import { parseCommand } from './command-parser/command-parser';
 import { sendMessage } from '../../../../../../clients/telegram/utilities';
 
@@ -17,14 +18,11 @@ type PolicyEvaluation =
 export async function evaluatePolicy(
   toolName: string,
   args: Object,
-  config: AgentConfig,
-  options: {
-    addToTranscript: (content: string) => void;
-  }
+  context: ToolContext
 ): Promise<PolicyEvaluation> {
   switch (toolName) {
     case 'exec':
-      return evaluateExecPolicy(args as { command: string }, config, options);
+      return evaluateExecPolicy(args as { command: string }, context);
     default:
       return {
         allowed: true,
@@ -35,12 +33,7 @@ export async function evaluatePolicy(
 
 async function evaluateExecPolicy(
   { command }: { command: string },
-  config: AgentConfig,
-  {
-    addToTranscript,
-  }: {
-    addToTranscript: (content: string) => void;
-  }
+  { config, addToTranscript }: ToolContext
 ): Promise<PolicyEvaluation> {
   const parsedCommand = parseCommand(command);
   const options = getAllowlistForCommand(command, config);
