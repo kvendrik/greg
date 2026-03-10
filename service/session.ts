@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import config from '../.greg';
-import { Agent, type PromptInput, type PromptOptions } from './Agent';
+import { Agent, type PromptInput, type Callbacks } from './Agent';
 import { getWorkspacePath } from './Agent/utilities';
 import path from 'node:path';
 import fs from 'node:fs';
 
 export type Session = {
   working: boolean;
+  listen(callbacks: Callbacks): void;
   abort(): void;
-  prompt(input: PromptInput, options: PromptOptions): Promise<void>;
+  prompt(input: PromptInput): Promise<void>;
   id: string;
   delete(): void;
 };
@@ -24,13 +25,15 @@ export async function create(): Promise<Session> {
   });
 
   const session: Session = {
+    id: sessionId,
     get working() {
       return agent.working;
     },
-    abort: () => agent.abort(),
-    prompt: (input, opts) =>
-      transcripter.proxy(agent.prompt.bind(agent))(input, opts),
-    id: sessionId,
+    listen: (callbacks: Callbacks) => {
+      agent.listen(transcripter.proxy(callbacks, agent));
+    },
+    abort: agent.abort.bind(agent),
+    prompt: agent.prompt.bind(agent),
     delete() {
       agent.abort();
       sessions.delete(session.id);
@@ -47,9 +50,7 @@ export function get(id: string): Session | null {
 
 function createTranscripter(sessionId: string): {
   add: (content: string) => void;
-  proxy: (
-    prompt: typeof Agent.prototype.prompt
-  ) => typeof Agent.prototype.prompt;
+  proxy: (callbacks: Callbacks, agent: Agent) => Callbacks;
 } {
   fs.mkdirSync(path.join(getWorkspacePath(config), 'transcripts'), {
     recursive: true,
@@ -82,57 +83,73 @@ function createTranscripter(sessionId: string): {
       transcript += content;
       write();
     },
-    proxy: (
-      prompt: typeof Agent.prototype.prompt
-    ): typeof Agent.prototype.prompt => {
-      return (input, opts) => {
-        const runId = randomUUID();
-        const time = new Date().toISOString();
+    proxy: (callbacks: Callbacks, agent: Agent): Callbacks => {
+      const {
+        onTurnStart,
+        onThinking,
+        onContent,
+        onToolcall,
+        onToolcallResult,
+        onTurnDone,
+        onTurnStop,
+        onError,
+      } = Object.entries(callbacks).reduce(
+        (acc, [key, callback]) => ({
+          ...acc,
+          [key]: callback.bind(agent),
+        }),
+        {} as Callbacks
+      );
 
-        transcript += `<user time="${time}" run-id="${runId}">`;
-        transcript += input.content;
-        transcript += `</user>`;
+      return {
+        onTurnStart: (input: PromptInput) => {
+          const runId = randomUUID();
+          const time = new Date().toISOString();
 
-        transcript += `<assistant time="${time}" run-id="${runId}">`;
+          transcript += `<user time="${time}" run-id="${runId}">`;
+          transcript += input.content;
+          transcript += `</user>`;
 
-        return prompt(input, {
-          onThinking: (content: string) => {
-            transcript += content;
-            opts.onThinking?.(content);
-          },
-          onContent: (content: string) => {
-            transcript += content;
-            opts.onContent?.(content);
-          },
-          onToolcall: (name: string, args: Record<string, unknown>) => {
-            transcript += `<tool_call name="${name}" arguments="${JSON.stringify(args).replaceAll('"', "'")}">`;
-            opts.onToolcall?.(name, args);
-            write();
-          },
-          onToolcallResult: (name: string, result: string) => {
-            transcript += `${result}`;
-            transcript += `</tool_call>`;
-            opts.onToolcallResult?.(name, result);
-            write();
-          },
-          onDone: () => {
-            transcript += `</assistant>`;
-            opts.onDone?.();
-            write();
-          },
-          onStop: () => {
-            transcript += `<update status="stopped" time="${new Date().toISOString()}" />`;
-            transcript += `</assistant>`;
-            opts.onStop?.();
-            write();
-          },
-          onError: (error: string) => {
-            transcript += `<update status="error" time="${new Date().toISOString()}">${error}</error>`;
-            transcript += `</assistant>`;
-            opts.onError?.(error);
-            write();
-          },
-        });
+          transcript += `<assistant time="${time}" run-id="${runId}">`;
+
+          onTurnStart?.(input);
+        },
+        onThinking: (content: string) => {
+          transcript += content;
+          onThinking?.(content);
+        },
+        onContent: (content: string) => {
+          transcript += content;
+          onContent?.(content);
+        },
+        onToolcall: (name: string, args: Record<string, unknown>) => {
+          transcript += `<tool_call name="${name}" arguments="${JSON.stringify(args).replaceAll('"', "'")}">`;
+          onToolcall?.(name, args);
+          write();
+        },
+        onToolcallResult: (name: string, result: string) => {
+          transcript += `${result}`;
+          transcript += `</tool_call>`;
+          onToolcallResult?.(name, result);
+          write();
+        },
+        onTurnDone: () => {
+          transcript += `</assistant>`;
+          onTurnDone?.();
+          write();
+        },
+        onTurnStop: () => {
+          transcript += `<update status="stopped" time="${new Date().toISOString()}" />`;
+          transcript += `</assistant>`;
+          onTurnStop?.();
+          write();
+        },
+        onError: (error: string) => {
+          transcript += `<update status="error" time="${new Date().toISOString()}">${error}</error>`;
+          transcript += `</assistant>`;
+          onError?.(error);
+          write();
+        },
       };
     },
   };

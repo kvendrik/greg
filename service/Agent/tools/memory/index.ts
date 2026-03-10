@@ -5,13 +5,7 @@ import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import type { AgentConfig } from '../../types';
 import { formatDate, getWorkspacePath } from '../../utilities';
-import {
-  ensureCollection,
-  get as qmdGet,
-  multiGet,
-  runUpdateAndEmbed,
-  vsearch,
-} from './qmd';
+import { QMD } from './qmd';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_IDENTITY_PATH = join(__dirname, 'defaults', 'IDENTITY.md');
@@ -26,6 +20,10 @@ function getUserPath(config: AgentConfig): string {
 
 function getIdentityPath(config: AgentConfig): string {
   return join(getWorkspacePath(config), 'IDENTITY.md');
+}
+
+function createChatsQmd(config: AgentConfig): QMD {
+  return new QMD(config, 'chats');
 }
 
 function ensureWorkspaceExistsSync(config: AgentConfig): void {
@@ -47,7 +45,8 @@ function ensureWorkspaceExistsSync(config: AgentConfig): void {
 
 async function ensureWorkspaceExists(config: AgentConfig): Promise<void> {
   ensureWorkspaceExistsSync(config);
-  await ensureCollection(getChatsPath(config), config);
+  const qmd = createChatsQmd(config);
+  await qmd.ensureCollection(getChatsPath(config));
 }
 
 function createGetRecentConversationNotesTool(
@@ -95,9 +94,10 @@ function createGetRecentConversationNotesTool(
       withMtime.sort((a, b) => b.mtime - a.mtime);
 
       const dayFiles = withMtime.slice(0, limit).map((e) => e.name);
+      const qmd = createChatsQmd(config);
       let text: string;
       try {
-        text = await multiGet(dayFiles, config);
+        text = await qmd.multiGet(dayFiles);
       } catch (err) {
         text =
           'Error fetching conversation notes: ' +
@@ -124,9 +124,10 @@ function createSearchConversationNotesTool(config: AgentConfig): AgentTool {
 
       const { search_query } = params as { search_query: string };
       await ensureWorkspaceExists(config);
+      const qmd = createChatsQmd(config);
       let text: string;
       try {
-        text = await vsearch(search_query, config);
+        text = await qmd.vsearch(search_query);
       } catch (err) {
         text =
           'Error searching conversations: ' +
@@ -169,11 +170,12 @@ function createSummarizeConversationNotesTool(config: AgentConfig): AgentTool {
 
       await ensureWorkspaceExists(config);
 
+      const qmd = createChatsQmd(config);
       let text: string;
       try {
         if (topic && topic.trim()) {
           // Let QMD pick the most relevant snippets for the topic.
-          text = await vsearch(topic, config);
+          text = await qmd.vsearch(topic);
         } else {
           const limit = Math.max(1, Math.min(10, max_notes ?? 3));
           const chatsPath = getChatsPath(config);
@@ -200,7 +202,7 @@ function createSummarizeConversationNotesTool(config: AgentConfig): AgentTool {
           withMtime.sort((a, b) => b.mtime - a.mtime);
 
           const dayFiles = withMtime.slice(0, limit).map((e) => e.name);
-          text = await multiGet(dayFiles, config);
+          text = await qmd.multiGet(dayFiles);
         }
       } catch (err) {
         text =
@@ -252,11 +254,11 @@ function createGetConversationNoteTool(config: AgentConfig): AgentTool {
       };
       await ensureWorkspaceExists(config);
       try {
-        const text = await qmdGet(
-          docid,
-          { startLine: start_line, maxLines: max_lines },
-          config
-        );
+        const qmd = createChatsQmd(config);
+        const text = await qmd.get(docid, {
+          startLine: start_line,
+          maxLines: max_lines,
+        });
         return { content: [{ type: 'text' as const, text }], details: {} };
       } catch (err: unknown) {
         const text =
@@ -360,7 +362,8 @@ export async function saveConversationNote(
   body = ensureDateH1(body, date);
 
   fs.writeFileSync(dayPath, body.trimEnd() + '\n', 'utf8');
-  runUpdateAndEmbed(config);
+  const qmd = createChatsQmd(config);
+  qmd.runUpdateAndEmbed();
 
   function ensureDateH1(body: string, date: string): string {
     const h1 = `# ${date}`;
