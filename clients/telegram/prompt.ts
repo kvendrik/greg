@@ -1,6 +1,10 @@
 import { Bot, type Context } from 'grammy';
 import { FileFlavor } from '@grammyjs/files';
-import { createSession, type Session, type PromptInput } from '../agent-sdk';
+import {
+  Session,
+  type PromptInput,
+  type Callbacks,
+} from '../../service/server/sdk/sdk';
 import { escapeMarkdownV2, getTelegramEnv } from './utilities';
 import pc from 'picocolors';
 
@@ -37,12 +41,78 @@ function createSendTypingAction(ctx: BotContext) {
   };
 }
 
+interface State {
+  working: boolean;
+  ctx: BotContext | null;
+  typingAction: ReturnType<typeof createSendTypingAction> | null;
+  buffer: string;
+  log: string;
+  initiatedBy: 'user' | 'agent' | null;
+}
+
 export async function createPromper(bot: Bot<BotContext>) {
   const sessions = new Map<number | 'main', Session>();
+  let state: State = emptyState();
+
+  const callbacks: Callbacks = {
+    onTurnStart: (input: PromptInput) => {
+      state.working = true;
+      state.buffer = '';
+
+      if (state.initiatedBy === null) {
+        state.initiatedBy = 'agent';
+        state.log = `[Agent initiated turn] Sending response to user...`;
+      }
+    },
+    onThinking: () => {},
+    onContent: (chunk: string) => {
+      state.buffer += chunk;
+    },
+    onToolcall: async () => {
+      if (state.buffer.trim() !== '') {
+        process.stdout.write(`\n\n${state.log} (partial response)`);
+        const text = state.buffer;
+        state.buffer = '';
+        await send(text);
+      }
+    },
+    onTurnDone: async () => {
+      state.typingAction?.stop();
+      if (state.buffer.trim() !== '') {
+        console.log(`\n\n${state.log}`);
+        console.log(`"${state.buffer}"`);
+        await send(state.buffer);
+      }
+      state.buffer = '';
+      process.stdout.write(`done. ${pc.green('✓')}\n`);
+      state = emptyState();
+    },
+    onTurnStop: async () => {
+      state.typingAction?.stop();
+      await send('Stopped.');
+      state.buffer = '';
+      process.stdout.write(`stopped.\n`);
+      state = emptyState();
+    },
+    onError: async (error: string) => {
+      if (error) {
+        console.error(pc.red(`Error: ${error}`));
+        state.typingAction?.stop();
+        await send(error);
+      }
+      state = emptyState();
+    },
+  };
 
   return async function prompt(input: PromptInput, ctx?: BotContext) {
+    if (state.working) {
+      throw new Error('Already working');
+    }
+
     if (!sessions.has('main')) {
-      sessions.set('main', await createSession());
+      const mainSession = await Session.create();
+      mainSession.listen(callbacks);
+      sessions.set('main', mainSession);
     }
 
     const messageThreadId = ctx?.message?.message_thread_id ?? null;
@@ -54,7 +124,8 @@ export async function createPromper(bot: Bot<BotContext>) {
       if (threadSession) {
         session = threadSession;
       } else {
-        session = await createSession();
+        session = await Session.create();
+        session.listen(callbacks);
         sessions.set(messageThreadId, session);
       }
     }
@@ -67,54 +138,34 @@ export async function createPromper(bot: Bot<BotContext>) {
 
     console.log(`\n\nPrompting: "${preview}"`);
 
-    const message = `Sending response to ${ctx ? ctx.from?.username : 'user'}...`;
-    let response = '';
-
     typing?.start();
 
-    await session.prompt(input, {
-      onThinking: () => {},
-      onContent: (chunk: string) => {
-        response += chunk;
-      },
-      onToolcall: async () => {
-        if (response.trim() !== '') {
-          process.stdout.write(`\n\n${message} (partial response)`);
-          const text = response;
-          response = '';
-          await send(text);
-        }
-      },
-      onDone: async () => {
-        typing?.stop();
-        if (response.trim() !== '') {
-          console.log(`\n\n${message}`);
-          console.log(`"${response}"`);
-          await send(response);
-        }
-        response = '';
-        process.stdout.write(`done. ${pc.green('✓')}\n`);
-      },
-      onStop: async () => {
-        typing?.stop();
-        await send('Stopped.');
-        response = '';
-        process.stdout.write(`stopped.\n`);
-      },
-      onError: async (error: string) => {
-        if (error) {
-          console.error(pc.red(`Error: ${error}`));
-          typing?.stop();
-          await send(error);
-        }
-        response = '';
-      },
-    });
+    state = {
+      working: true,
+      ctx: ctx ?? null,
+      typingAction: typing ? typing : null,
+      buffer: '',
+      log: `Sending response to ${ctx ? ctx.from?.username : 'user'}...`,
+      initiatedBy: 'user',
+    };
 
-    function send(text: string) {
-      const escaped = escapeMarkdownV2(text);
-      if (ctx) return ctx.reply(escaped);
-      return bot.api.sendMessage(senderId, escaped);
-    }
+    await session.prompt(input);
   };
+
+  function emptyState(): State {
+    return {
+      working: false,
+      ctx: null,
+      typingAction: null,
+      buffer: '',
+      log: '',
+      initiatedBy: null,
+    };
+  }
+
+  function send(text: string, ctx?: BotContext) {
+    const escaped = escapeMarkdownV2(text);
+    if (ctx) return ctx.reply(escaped);
+    return bot.api.sendMessage(senderId, escaped);
+  }
 }
