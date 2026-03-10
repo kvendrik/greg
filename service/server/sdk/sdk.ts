@@ -25,7 +25,7 @@ export class Session {
     resolve: () => void;
     reject: (error: Error) => void;
   } | null = null;
-  private callbacks: Callbacks = {};
+  private callbacks: Map<string, Callbacks> = new Map();
 
   private constructor(id: string) {
     this.id = id;
@@ -35,8 +35,8 @@ export class Session {
     await this.ensureSocket();
   }
 
-  listen(callbacks: Callbacks): void {
-    this.callbacks = callbacks;
+  listen(id: string, callbacks: Callbacks): void {
+    this.callbacks.set(id, callbacks);
   }
 
   private resetSocket(): void {
@@ -44,9 +44,37 @@ export class Session {
     this.socketReadyPromise = null;
   }
 
+  private getCallbacks(): Callbacks {
+    const callbacks = Array.from(this.callbacks.values());
+    return {
+      onTurnStart: (prompt: PromptInput) => {
+        callbacks.forEach((callback) => callback.onTurnStart?.(prompt));
+      },
+      onContent: (chunk: string) => {
+        callbacks.forEach((callback) => callback.onContent?.(chunk));
+      },
+      onThinking: (chunk: string) => {
+        callbacks.forEach((callback) => callback.onThinking?.(chunk));
+      },
+      onToolcall: (name: string, args: Record<string, unknown>) => {
+        callbacks.forEach((callback) => callback.onToolcall?.(name, args));
+      },
+      onTurnDone: () => {
+        callbacks.forEach((callback) => callback.onTurnDone?.());
+      },
+      onTurnStop: () => {
+        callbacks.forEach((callback) => callback.onTurnStop?.());
+      },
+      onError: (error: string) => {
+        callbacks.forEach((callback) => callback.onError?.(error));
+      },
+    };
+  }
+
   private attachSocketListeners(ws: WebSocket): void {
     ws.addEventListener('message', (event) => {
-      const { callbacks } = this;
+      const callbacks = this.getCallbacks();
+
       try {
         const data = JSON.parse(String(event.data)) as {
           type: string;
@@ -103,7 +131,7 @@ export class Session {
     });
 
     ws.addEventListener('error', (event) => {
-      const callbacks = this.callbacks;
+      const callbacks = this.getCallbacks();
       if (this.pendingTurn) {
         const message =
           event instanceof ErrorEvent
@@ -117,7 +145,7 @@ export class Session {
     });
 
     ws.addEventListener('close', () => {
-      const callbacks = this.callbacks;
+      const callbacks = this.getCallbacks();
       if (this.pendingTurn) {
         const message = 'Connection closed';
         callbacks.onError?.(message);
@@ -208,13 +236,12 @@ export class Session {
     });
   }
 
-  static async create(idSuffix?: string): Promise<Session> {
+  static async create(clientId: string): Promise<Session> {
     const base = getBase();
-    const hasSuffix = idSuffix != null && idSuffix.trim() !== '';
     const res = await fetch(`${base}/sessions/new`, {
       method: 'POST',
-      headers: hasSuffix ? { 'Content-Type': 'application/json' } : undefined,
-      body: hasSuffix ? JSON.stringify({ idSuffix }) : undefined,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId }),
     });
     if (!res.ok) {
       const text = await res.text();

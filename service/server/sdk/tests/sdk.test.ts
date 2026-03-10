@@ -29,7 +29,7 @@ describe('agent SDK', () => {
 
   describe('createSession()', () => {
     it('creates and destroys a session', async () => {
-      const session = await Session.create();
+      const session = await Session.create('test');
       expect(session.id).toBeTruthy();
       const destroyed = await session.destroy();
       expect(destroyed).toBe(true);

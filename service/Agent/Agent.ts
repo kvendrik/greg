@@ -34,7 +34,7 @@ export class Agent {
   private lastModel: Model<Api> | null = null;
   private readonly primaryModel: Model<Api>;
   private readonly config: AgentConfig;
-  private callbacks: Callbacks = {};
+  private callbacks: Map<string, Callbacks> = new Map();
 
   private constructor(core: CoreAgent, config: AgentConfig) {
     this.core = core;
@@ -53,12 +53,39 @@ export class Agent {
     this.abortController = null;
   }
 
-  listen(callbacks: Callbacks): void {
-    this.callbacks = callbacks;
+  listen(id: string, callbacks: Callbacks): void {
+    this.callbacks.set(id, callbacks);
+  }
+
+  private getCallbacks(): Callbacks {
+    const callbacks = Array.from(this.callbacks.values());
+    return {
+      onTurnStart: (prompt: PromptInput) => {
+        callbacks.forEach((callback) => callback.onTurnStart?.(prompt));
+      },
+      onContent: (chunk: string) => {
+        callbacks.forEach((callback) => callback.onContent?.(chunk));
+      },
+      onThinking: (chunk: string) => {
+        callbacks.forEach((callback) => callback.onThinking?.(chunk));
+      },
+      onToolcall: (name: string, args: Record<string, unknown>) => {
+        callbacks.forEach((callback) => callback.onToolcall?.(name, args));
+      },
+      onTurnDone: () => {
+        callbacks.forEach((callback) => callback.onTurnDone?.());
+      },
+      onTurnStop: () => {
+        callbacks.forEach((callback) => callback.onTurnStop?.());
+      },
+      onError: (error: string) => {
+        callbacks.forEach((callback) => callback.onError?.(error));
+      },
+    };
   }
 
   async prompt(input: PromptInput): Promise<void> {
-    const { callbacks } = this;
+    const callbacks = this.getCallbacks();
 
     const parsed = parseCommands({
       content: input.content,
