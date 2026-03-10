@@ -26,6 +26,7 @@ type WebSocketData = {
 };
 
 let server: Server<WebSocketData> | null = null;
+const activeSessionIds = new Set<string>();
 
 export function startServer(port = Number(config.port)) {
   if (server) {
@@ -45,8 +46,31 @@ export function startServer(port = Number(config.port)) {
         return Response.json({ status: 'ok' });
       }
 
+      if (pathname === '/sessions' && method === 'GET') {
+        return Response.json({
+          sessions: session.listIds(),
+          activeSessions: Array.from(activeSessionIds),
+        });
+      }
+
       if (pathname === '/sessions/new' && method === 'POST') {
-        const newSession = await session.create();
+        let idSuffix: string | undefined;
+        try {
+          const bodyText = await req.text();
+          if (bodyText) {
+            const parsed = JSON.parse(bodyText) as { idSuffix?: unknown };
+            if (
+              typeof parsed.idSuffix === 'string' &&
+              parsed.idSuffix.trim() !== ''
+            ) {
+              idSuffix = parsed.idSuffix;
+            }
+          }
+        } catch {
+          // ignore malformed body, fall back to random ID
+        }
+
+        const newSession = await session.create(idSuffix);
         return new Response(JSON.stringify({ id: newSession.id }), {
           status: 201,
           headers: { 'Content-Type': 'application/json' },
@@ -81,6 +105,7 @@ export function startServer(port = Number(config.port)) {
       data: {} as WebSocketData,
       open(ws) {
         const { sessionId } = ws.data;
+        activeSessionIds.add(sessionId);
         const existingSession = session.get(sessionId);
 
         if (!existingSession) {
@@ -190,6 +215,10 @@ export function startServer(port = Number(config.port)) {
             }
           }
         }
+      },
+      close(ws) {
+        const { sessionId } = ws.data;
+        activeSessionIds.delete(sessionId);
       },
     },
   });

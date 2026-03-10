@@ -35,10 +35,6 @@ export class Session {
     this.callbacks = callbacks;
   }
 
-  static agentOnline() {
-    return ping();
-  }
-
   private resetSocket(): void {
     this.socket = null;
     this.socketReadyPromise = null;
@@ -176,7 +172,11 @@ export class Session {
     }
     this.resetSocket();
 
-    return destroySession(this.id);
+    const res = await fetch(`${getBase()}/sessions/${this.id}`, {
+      method: 'DELETE',
+    });
+
+    return res.ok;
   }
 
   async prompt(input: PromptInput): Promise<void> {
@@ -202,9 +202,14 @@ export class Session {
     });
   }
 
-  static async create(): Promise<Session> {
+  static async create(idSuffix?: string): Promise<Session> {
     const base = getBase();
-    const res = await fetch(`${base}/sessions/new`, { method: 'POST' });
+    const hasSuffix = idSuffix != null && idSuffix.trim() !== '';
+    const res = await fetch(`${base}/sessions/new`, {
+      method: 'POST',
+      headers: hasSuffix ? { 'Content-Type': 'application/json' } : undefined,
+      body: hasSuffix ? JSON.stringify({ idSuffix }) : undefined,
+    });
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`Failed to create session: ${res.status} ${text}`);
@@ -214,7 +219,7 @@ export class Session {
   }
 }
 
-async function ping(): Promise<boolean> {
+export async function ping() {
   try {
     const res = await fetch(`${getBase()}/ping`);
     return res.ok;
@@ -223,11 +228,26 @@ async function ping(): Promise<boolean> {
   }
 }
 
-async function destroySession(sessionId: string): Promise<boolean> {
-  const res = await fetch(`${getBase()}/sessions/${sessionId}`, {
-    method: 'DELETE',
-  });
-  return res.ok;
-}
+export async function listSessions() {
+  if (!(await ping())) {
+    throw new Error('Agent is not online');
+  }
 
-export const pingAgent = ping;
+  const response = await fetch(`${getBase()}/sessions`);
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch sessions: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const data = (await response.json()) as {
+    sessions?: string[];
+  };
+
+  if (!data.sessions) {
+    throw new Error('Failed to fetch sessions: invalid response');
+  }
+
+  return data.sessions;
+}
