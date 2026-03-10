@@ -2,29 +2,28 @@ import fs from 'node:fs';
 import net from 'node:net';
 import readline from 'node:readline';
 
-type TaskRequest = { task: string; [key: string]: unknown };
+type TaskRequest = { task: string; data: unknown; [key: string]: unknown };
 
 export class TaskChannel<D> {
   private readonly socketPath: string;
-  private pendingMessageConsumer: ((text: string, details?: D) => void) | null =
-    null;
-  private handlers: Record<string, (text: string) => Promise<unknown>> = {};
+  private pendingMessageConsumer: ((data: D) => void) | null = null;
+  private handlers: Record<string, (data: D) => Promise<unknown>> = {};
 
   constructor(socketPath: string) {
     this.socketPath = socketPath;
   }
 
   /** Register how to send the prompt to the user for the task. */
-  onTask(task: string, callback: (text: string) => Promise<unknown>): void {
+  onTask(task: string, callback: (data: D) => Promise<unknown>): void {
     this.handlers[task] = callback;
   }
 
   /** Returns whether the message was consumed by a pending. */
-  onIncomingMessage(text: string, details: D): { handledByChannel: boolean } {
+  onIncomingMessage(data: D): { handledByChannel: boolean } {
     if (!this.pendingMessageConsumer) return { handledByChannel: false };
     const consumer = this.pendingMessageConsumer;
     this.pendingMessageConsumer = null;
-    consumer(text, details);
+    consumer(data);
     return { handledByChannel: true };
   }
 
@@ -35,11 +34,7 @@ export class TaskChannel<D> {
   }
 
   /** Send an request to a running service; returns the user's reply. */
-  static send(
-    task: string,
-    prompt: string,
-    socketPath: string
-  ): Promise<string> {
+  static send<D>(task: string, data: D, socketPath: string): Promise<string> {
     return new Promise((resolve, reject) => {
       let settled = false;
       const once = (fn: () => void) => {
@@ -48,7 +43,7 @@ export class TaskChannel<D> {
         fn();
       };
       const socket = net.createConnection(socketPath, () => {
-        const request = JSON.stringify({ task, prompt }) + '\n';
+        const request = JSON.stringify({ task, data }) + '\n';
         socket.write(request);
       });
       let buffer = '';
@@ -92,7 +87,7 @@ export class TaskChannel<D> {
     });
   }
 
-  private setPendingMessageConsumer(fn: ((text: string) => void) | null): void {
+  private setPendingMessageConsumer(fn: ((data: D) => void) | null): void {
     this.pendingMessageConsumer = fn;
   }
 
@@ -113,35 +108,16 @@ export class TaskChannel<D> {
     request: TaskRequest,
     respond: (payload: unknown) => void
   ): void {
-    const prompt = (request as { prompt?: string }).prompt;
-    if (typeof prompt !== 'string') {
-      respond({ task, error: 'Missing or invalid prompt' });
-      return;
-    }
     const handler = this.handlers[task];
+
     if (!handler) {
       respond({ task, error: 'No handler registered' });
       return;
     }
-    if (task === 'await-reply') {
-      // if (this.pendingMessageConsumer) {
-      //   respond({
-      //     task,
-      //     error: 'Another task is already in progress',
-      //   });
-      //   return;
-      // }
-      this.setPendingMessageConsumer((text) => {
-        respond({ task, reply: text });
-      });
-      handler(prompt).catch((err) => {
-        this.setPendingMessageConsumer(null);
-        respond({ task, error: String(err) });
-      });
-      return;
-    }
 
-    handler(prompt)
+    const payload = request.data as D;
+
+    handler(payload)
       .then((result) => {
         const reply =
           typeof result === 'string' ? result : result == null ? '' : undefined;

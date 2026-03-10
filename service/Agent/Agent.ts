@@ -4,7 +4,7 @@ import { compactContext, deriveContextTokens } from './compaction';
 import { listCommands, parseCommands } from './commands';
 import { get as getTools } from './tools';
 import { formatDate, getWorkspacePath } from './utilities/index';
-import type { AgentConfig } from './types';
+import type { AgentConfig, ToolContext } from './types';
 import pc from 'picocolors';
 
 export type Callbacks = Partial<{
@@ -59,6 +59,7 @@ export class Agent {
 
   async prompt(input: PromptInput): Promise<void> {
     const { callbacks } = this;
+
     const parsed = parseCommands({
       content: input.content,
       currentModel: this.core.state.model ?? this.primaryModel,
@@ -115,7 +116,7 @@ export class Agent {
           `🧠 Model: ${this.lastModel ? this.lastModel.name : 'nothing sent yet'}`,
           `💭 Thinking: ${thinkingLevel}`,
           contextLine,
-          `🕵️‍♂️ Busy: ${this.abortController !== null ? 'Yes (send /stop to stop)' : 'No. Ready for a new task.'}`,
+          `🕵️‍♂️ Busy: ${!this.abortController ? 'Yes (send /stop to stop)' : 'No. Ready for a new task.'}`,
           `\nOptions given for this prompt:`,
           `- Model: ${model.name}`,
           `- Thinking: ${thinkingLevel}`,
@@ -127,10 +128,26 @@ export class Agent {
       return;
     }
 
-    if (this.abortController !== null) {
-      callbacks.onError?.(
-        'Working on your previous request. Send /stop to abort.'
-      );
+    const images = input.images ?? [];
+    const imageContents: ImageContent[] = images.map((img) => ({
+      type: 'image' as const,
+      data: img.data,
+      mimeType: img.mimeType,
+    }));
+
+    if (this.core.state.isStreaming) {
+      this.core.followUp({
+        role: 'user',
+        content: [
+          ...imageContents,
+          {
+            type: 'text',
+            text: input.content,
+          },
+        ],
+        timestamp: Date.now(),
+      });
+      callbacks.onTurnDone?.();
       return;
     }
 
@@ -210,13 +227,6 @@ export class Agent {
       { once: true }
     );
 
-    const images = input.images ?? [];
-    const imageContents: ImageContent[] = images.map((img) => ({
-      type: 'image' as const,
-      data: img.data,
-      mimeType: img.mimeType,
-    }));
-
     callbacks.onTurnStart?.(input);
 
     try {
@@ -277,40 +287,11 @@ export class Agent {
     }
   }
 
-  static async create(
-    config: AgentConfig,
-    options: {
-      addToTranscript: (content: string) => void;
-    }
-  ): Promise<Agent> {
+  static async create(toolContext: ToolContext): Promise<Agent> {
+    const { config } = toolContext;
+
     const conversationStartIso = new Date().toISOString();
-    const tools = await getTools(conversationStartIso, config, options);
-    const system = `
-You are a helpful personal assistant that runs on my personal computer and talks to me through a chat interface.
-Answer with short and conversational answers.
-You have control over my computer through several tools and skills.
-
-You must never make up or assume facts, behaviors, or code. If you are missing information, unsure, or something is ambiguous, either ask me a concise clarifying question or explicitly say that you do not know or cannot determine the answer. Prefer using your tools and reading from the actual environment over guessing, and do not rely on later corrections from me.
-
-${tools.instructions}
-
-## Environment
-- The code you're running on is at: ${process.cwd()}.
-- Your workspace is at: ${getWorkspacePath(config)}. This is where you store your memory and notes.
-
-### Error reporting
-If any tool call returns an error, always explicitly tell the user:
-- What tool/command failed
-- What the error was
-
-Do not silently skip, retry without mentioning it, or paper over failures.
-
-### Restarting yourself
-If you ever need to fully restart yourself (for example after configuration changes or if you are stuck), you can call the \`exec\` tool with the command \`greg restart\`. Before doing so, you MUST: (1) call \`save_conversation_note\` with a concise summary of the current conversation so you can later reload it and know where you left off, (2) tell the user explicitly that you are about to restart, then (3) run the restart command.
-
-### Logs
-Your logs are available through \`greg logs\`. Run \`greg logs --lines <number>\` to see the last <number> lines.
-`;
+    const tools = await getTools(conversationStartIso, toolContext);
 
     const primaryModel = config.models.find(
       (model) => model.role === 'primary'
@@ -318,7 +299,7 @@ Your logs are available through \`greg logs\`. Run \`greg logs --lines <number>\
 
     const core = new CoreAgent({
       initialState: {
-        systemPrompt: system,
+        systemPrompt: getSystemPrompt(tools.instructions, config),
         model: primaryModel,
         thinkingLevel: 'medium',
         tools: tools.tools,
@@ -341,4 +322,36 @@ Your logs are available through \`greg logs\`. Run \`greg logs --lines <number>\
 
     return new Agent(core, config);
   }
+}
+
+function getSystemPrompt(
+  toolInstructions: string,
+  config: AgentConfig
+): string {
+  return `
+You are a helpful personal assistant that runs on my personal computer and talks to me through a chat interface.
+Answer with short and conversational answers.
+You have control over my computer through several tools and skills.
+
+You must never make up or assume facts, behaviors, or code. If you are missing information, unsure, or something is ambiguous, either ask me a concise clarifying question or explicitly say that you do not know or cannot determine the answer. Prefer using your tools and reading from the actual environment over guessing, and do not rely on later corrections from me.
+
+${toolInstructions}
+
+## Environment
+- The code you're running on is at: ${process.cwd()}.
+- Your workspace is at: ${getWorkspacePath(config)}. This is where you store your memory and notes.
+
+### Error reporting
+If any tool call returns an error, always explicitly tell the user:
+- What tool/command failed
+- What the error was
+
+Do not silently skip, retry without mentioning it, or paper over failures.
+
+### Restarting yourself
+If you ever need to fully restart yourself (for example after configuration changes or if you are stuck), you can call the \`exec\` tool with the command \`greg restart\`. Before doing so, you MUST: (1) call \`save_conversation_note\` with a concise summary of the current conversation so you can later reload it and know where you left off, (2) tell the user explicitly that you are about to restart, then (3) run the restart command.
+
+### Logs
+Your logs are available through \`greg logs\`. Run \`greg logs --lines <number>\` to see the last <number> lines.
+`;
 }

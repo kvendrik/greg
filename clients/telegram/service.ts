@@ -10,7 +10,7 @@ import {
   getTelegramEnv,
   telegramAwaitSocketPath,
 } from './utilities';
-import { TaskChannel } from './TaskChannel';
+import { TaskChannel } from '../TaskChannel';
 
 const env = getTelegramEnv();
 const botToken = env.botToken;
@@ -40,35 +40,36 @@ function rejectUnauthorized(ctx: BotContext, label: string): void {
 }
 
 const taskChannel = new TaskChannel<{
+  text: string;
   messageThreadId?: number;
 }>(telegramAwaitSocketPath);
 
 let lastMessageThreadId: number | null = null;
 
-taskChannel.onTask('await-reply', async (text) => {
+taskChannel.onTask('await-reply', async ({ text }) => {
   const escaped = escapeMarkdownV2(text);
   await bot.api.sendMessage(senderId, escaped, {
     message_thread_id: lastMessageThreadId ?? undefined,
   });
 });
 
-taskChannel.onTask('send-message', async (text) => {
+taskChannel.onTask('send-message', async ({ text }) => {
   const escaped = escapeMarkdownV2(text);
   await bot.api.sendMessage(senderId, escaped, {
     message_thread_id: lastMessageThreadId ?? undefined,
   });
 });
 
-taskChannel.onTask('edit-topic', async (raw) => {
+taskChannel.onTask('edit-topic', async ({ text }) => {
   if (!lastMessageThreadId) {
     console.warn('edit-topic requested but lastMessageThreadId is not set');
     return;
   }
-  let title = raw;
+  let title = text;
   let emoji: string | undefined;
 
   try {
-    const parsed = JSON.parse(raw as string) as {
+    const parsed = JSON.parse(text as string) as {
       title?: unknown;
       emoji?: unknown;
     };
@@ -102,7 +103,8 @@ bot.on('message:text', async (ctx) => {
   lastMessageThreadId = ctx.message.message_thread_id ?? null;
 
   if (
-    taskChannel.onIncomingMessage(text, {
+    taskChannel.onIncomingMessage({
+      text,
       messageThreadId: ctx.message.message_thread_id,
     }).handledByChannel
   )

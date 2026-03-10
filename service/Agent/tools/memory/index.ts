@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
-import type { AgentConfig } from '../../types';
+import type { AgentConfig, ToolContext } from '../../types';
 import { formatDate, getWorkspacePath } from '../../utilities';
 import { QMD } from './qmd';
 
@@ -520,7 +520,8 @@ function createGetIdentityTool(config: AgentConfig): AgentTool {
   };
 }
 
-export function getTools(config: AgentConfig): AgentTool[] {
+export function getTools(context: ToolContext): AgentTool[] {
+  const config = context.config;
   return [
     createUpdateUserMemoryTool(config),
     createGetUserMemoryTool(config),

@@ -3,11 +3,13 @@ import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { Command } from 'commander';
 import { name, description, version } from '../package.json';
-import { Session, listSessions } from '../service/server/sdk/sdk';
+import * as sdk from '../service/server/sdk/sdk';
+import { TaskChannel } from '../clients/TaskChannel';
 import { validate } from '../config';
 import { discoverSkills } from '../service/Agent/tools/skills';
 import { sendCommand } from '../clients/telegram/send-message';
 import pc from 'picocolors';
+import fs from 'node:fs';
 
 const projectRoot = path.join(import.meta.dirname, '..');
 const program = new Command();
@@ -118,6 +120,7 @@ async function runServiceStart(
     spawnSync('bun', ['run', startScript], {
       stdio: 'inherit',
       cwd: projectRoot,
+      env: { ...process.env },
     });
   }
 }
@@ -635,7 +638,7 @@ program
       .description('List known session IDs')
       .action(async () => {
         try {
-          const sessionIds = await listSessions();
+          const sessionIds = await sdk.listSessions();
           if (!sessionIds.length) {
             console.log('No sessions found.');
             return;
@@ -656,7 +659,7 @@ program
       .description('Create a new session')
       .action(async () => {
         try {
-          const session = await Session.create();
+          const session = await sdk.Session.create();
           console.log(pc.green(`Session created: ${session.id}`));
         } catch (error) {
           const message =
@@ -670,33 +673,91 @@ program
     new Command('prompt')
       .description('Send a prompt to an existing session')
       .argument('<sessionId>', 'ID of the session to prompt')
-      .argument('[text...]', 'Prompt text (defaults to stdin if omitted)')
-      .action(async (sessionId: string, textParts: string[]) => {
-        const promptTextFromArgs = textParts.join(' ').trim();
+      .argument('<text>', 'Prompt text')
+      .action(async (sessionId: string, promptText: string) => {
+        if (!promptText) {
+          console.error(pc.red('No prompt text provided.'));
+          process.exitCode = 1;
+          return;
+        }
 
-        const readStdin = async (): Promise<string> => {
-          return new Promise((resolve, reject) => {
-            let data = '';
-            process.stdin.setEncoding('utf8');
-            process.stdin.on('data', (chunk) => {
-              data += chunk;
-            });
-            process.stdin.on('end', () => resolve(data.trim()));
-            process.stdin.on('error', (err) => reject(err));
-          });
-        };
+        const session = await sdk.Session.existing(sessionId);
+        await session.connect();
 
-        try {
-          const promptText =
-            promptTextFromArgs !== '' ? promptTextFromArgs : await readStdin();
+        let buffer = '';
 
-          if (!promptText) {
-            console.error(pc.red('No prompt text provided.'));
-            process.exitCode = 1;
-            return;
+        session.listen({
+          onTurnStart() {
+            buffer = '';
+          },
+          onThinking(chunk) {
+            process.stdout.write(pc.gray(chunk));
+          },
+          onContent(chunk) {
+            buffer += chunk;
+            process.stdout.write(chunk);
+          },
+          onToolcall(name, args) {
+            const label =
+              args && Object.keys(args).length
+                ? `${name}(${JSON.stringify(args)})`
+                : name;
+            process.stdout.write(`\n${pc.gray(`[toolcall] ${label}`)}\n`);
+          },
+          onTurnDone() {
+            process.stdout.write('\n');
+            process.exit(0);
+          },
+          onTurnStop() {
+            process.stdout.write(pc.yellow('\n[stopped]\n'));
+          },
+          onError(error) {
+            console.error(pc.red(`\nError: ${error}`));
+            process.exit(1);
+          },
+        });
+
+        await session.prompt({ content: promptText, images: [] });
+      })
+  )
+  .addCommand(
+    new Command('update')
+      .description(
+        'Send a prompt to an existing session. Only works if the `DEBUG` env variable is set when starting the agent service.'
+      )
+      .argument('<sessionId>', 'ID of the session to prompt')
+      .argument('<prompt>', 'Prompt text')
+      .option(
+        '-t, --timeout <number>',
+        'Timeout before update is sent in seconds'
+      )
+      .action(
+        async (
+          sessionId: string,
+          promptText: string,
+          { timeout: timeoutSeconds = 0 }: { timeout?: number }
+        ) => {
+          const totalSeconds = Number(timeoutSeconds) || 0;
+          const timeoutMs = totalSeconds * 1000;
+
+          const socketPath = path.join(
+            projectRoot,
+            'service',
+            '.cli-socket.sock'
+          );
+
+          if (!fs.existsSync(socketPath)) {
+            console.error(
+              pc.red(
+                'Socket file not found. Make sure you started the agent with DEBUG=1'
+              )
+            );
+            process.exit(1);
           }
 
-          const session = new Session(sessionId);
+          const session = await sdk.Session.existing(sessionId);
+          await session.connect();
+
           let buffer = '';
 
           session.listen({
@@ -730,14 +791,36 @@ program
             },
           });
 
-          await session.prompt({ content: promptText, images: [] });
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          console.error(pc.red(message));
-          process.exitCode = 1;
+          if (totalSeconds > 0) {
+            if (totalSeconds > 2) {
+              let remaining = totalSeconds;
+              const intervalId = setInterval(() => {
+                remaining -= 1;
+                if (remaining <= 0) {
+                  clearInterval(intervalId);
+                  return;
+                }
+                console.log(`${remaining} seconds left`);
+              }, 1000);
+            }
+            setTimeout(async () => {
+              await TaskChannel.send(
+                'force-update',
+                { sessionId, text: promptText },
+                socketPath
+              );
+              process.exit(0);
+            }, timeoutMs);
+          } else {
+            await TaskChannel.send(
+              'force-update',
+              { sessionId, text: promptText },
+              socketPath
+            );
+            process.exit(0);
+          }
         }
-      })
+      )
   );
 
 program.parse();

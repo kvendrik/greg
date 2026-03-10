@@ -2,7 +2,7 @@ import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import { spawn } from 'child_process';
 import { isSafe, available as isGuardAvailable } from './utilities/guard/guard';
-import type { AgentConfig } from '../types';
+import type { ToolContext } from '../types';
 import { evaluatePolicy } from './utilities/guard/policy/policy';
 import { getAllowlistForCommand } from './utilities/guard/policy/allowlist';
 import pc from 'picocolors';
@@ -10,14 +10,12 @@ import pc from 'picocolors';
 export async function runExec(
   params: { command: string },
   signal: AbortSignal,
-  config: AgentConfig,
-  options: {
-    addToTranscript: (content: string) => void;
-  }
+  context: ToolContext
 ): Promise<string> {
   const { command } = params;
+  const { config } = context;
 
-  const policy = await evaluatePolicy('exec', { command }, config, options);
+  const policy = await evaluatePolicy('exec', { command }, context);
 
   if (!policy.allowed) {
     return policy.reason;
@@ -110,12 +108,7 @@ export async function runExec(
   });
 }
 
-export function getExecTools(
-  config: AgentConfig,
-  options: {
-    addToTranscript: (content: string) => void;
-  }
-): AgentTool[] {
+export function getExecTools(context: ToolContext): AgentTool[] {
   return [
     {
       name: 'exec',
@@ -129,8 +122,7 @@ export function getExecTools(
         const text = await runExec(
           { command },
           signal ?? new AbortController().signal,
-          config,
-          options
+          context
         );
         return { content: [{ type: 'text' as const, text }], details: {} };
       },

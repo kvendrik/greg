@@ -13,4 +13,4 @@ classifier/classifier
 classifier/models/
 
 # Telegram service await-reply socket (MCP-style)
-clients/telegram/.telegram-await.sock
+/**/*.sock

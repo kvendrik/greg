@@ -7,7 +7,7 @@ import {
   getTelegramEnv,
   telegramAwaitSocketPath,
 } from './utilities';
-import { TaskChannel } from './TaskChannel';
+import { TaskChannel } from '../TaskChannel';
 
 export const sendCommand = new Command('send');
 

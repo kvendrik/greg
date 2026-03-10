@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import { dirname as getDirname } from 'node:path';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
-import type { AgentConfig } from '../types';
+import type { ToolContext } from '../types';
 
 type PatchOperation = 'add' | 'update';
 
@@ -175,7 +175,7 @@ export async function applyPatchString(
   return { filePath: parsed.filePath };
 }
 
-export function getFilesTools(_config: AgentConfig): AgentTool[] {
+export function getFilesTools(_context: ToolContext): AgentTool[] {
   return [
     {
       name: 'patch_file',
