@@ -1,6 +1,6 @@
 import { Bot } from 'grammy';
 import { hydrateFiles } from '@grammyjs/files';
-import { Session, ping } from '../../service/server/sdk/sdk';
+import { ping } from '../../service/server/sdk/sdk';
 import { createPromper, type BotContext } from './prompt';
 import { pipeline } from '@xenova/transformers';
 import ffmpeg from 'fluent-ffmpeg';

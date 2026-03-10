@@ -110,12 +110,15 @@ export async function createPromper(bot: Bot<BotContext>) {
     }
 
     if (!sessions.has('main')) {
-      const mainSession = await Session.create('telegram-main');
-      mainSession.listen(callbacks);
+      const mainSession = await Session.create('tg');
+      await mainSession.connect();
+      mainSession.listen('tg', callbacks);
       sessions.set('main', mainSession);
     }
 
-    const messageThreadId = ctx?.message?.message_thread_id ?? null;
+    // TODO: I've turned off threaded mode for now
+    const messageThreadId = null; //ctx?.message?.message_thread_id ?? null;
+
     let session = sessions.get('main')!;
 
     if (messageThreadId) {
@@ -124,8 +127,9 @@ export async function createPromper(bot: Bot<BotContext>) {
       if (threadSession) {
         session = threadSession;
       } else {
-        session = await Session.create(`telegram-thread-${messageThreadId}`);
-        session.listen(callbacks);
+        session = await Session.create('tg');
+        await session.connect();
+        session.listen('tg', callbacks);
         sessions.set(messageThreadId, session);
       }
     }

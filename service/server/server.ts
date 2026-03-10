@@ -5,6 +5,7 @@ import pc from 'picocolors';
 import config from '../../.greg';
 import type { PromptInput } from '../Agent/Agent';
 import { createSender, parsePromptBody } from './utilities';
+import { createUUID } from '../utilities';
 
 type SessionWebSocketMessage =
   | { type: 'prompt'; prompt: PromptInput }
@@ -54,23 +55,23 @@ export function startServer(port = Number(config.port)) {
       }
 
       if (pathname === '/sessions/new' && method === 'POST') {
-        let idSuffix: string | undefined;
+        let clientId: string | undefined;
         try {
           const bodyText = await req.text();
           if (bodyText) {
-            const parsed = JSON.parse(bodyText) as { idSuffix?: unknown };
+            const parsed = JSON.parse(bodyText) as { clientId?: unknown };
             if (
-              typeof parsed.idSuffix === 'string' &&
-              parsed.idSuffix.trim() !== ''
+              typeof parsed.clientId === 'string' &&
+              parsed.clientId.trim() !== ''
             ) {
-              idSuffix = parsed.idSuffix;
+              clientId = parsed.clientId;
             }
           }
         } catch {
           // ignore malformed body, fall back to random ID
         }
 
-        const newSession = await session.create(idSuffix ?? '');
+        const newSession = await session.create(clientId ?? '');
         return new Response(JSON.stringify({ id: newSession.id }), {
           status: 201,
           headers: { 'Content-Type': 'application/json' },
@@ -106,6 +107,7 @@ export function startServer(port = Number(config.port)) {
       open(ws) {
         const { sessionId } = ws.data;
         activeSessionIds.add(sessionId);
+
         const existingSession = session.get(sessionId);
 
         if (!existingSession) {
@@ -119,7 +121,7 @@ export function startServer(port = Number(config.port)) {
 
         const sender = createSender<AgentEvent>(ws);
 
-        existingSession.listen({
+        existingSession.listen(createUUID(), {
           onTurnStart(prompt) {
             sender.send({ type: 'turn_start', prompt });
           },

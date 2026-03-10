@@ -659,7 +659,7 @@ program
       .description('Create a new session')
       .action(async () => {
         try {
-          const session = await sdk.Session.create();
+          const session = await sdk.Session.create('cli');
           console.log(pc.green(`Session created: ${session.id}`));
         } catch (error) {
           const message =
@@ -731,6 +731,10 @@ program
         '-t, --timeout <number>',
         'Timeout before update is sent in seconds'
       )
+      .option(
+        '-c, --capture',
+        'Whether the CLI should capture the output or leave it to the already registered client'
+      )
       .action(
         async (
           sessionId: string,
@@ -760,7 +764,7 @@ program
 
           let buffer = '';
 
-          session.listen({
+          session.listen('cli', {
             onTurnStart() {
               buffer = '';
             },

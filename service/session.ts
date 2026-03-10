@@ -7,7 +7,7 @@ import path from 'node:path';
 
 export type Session = {
   working: boolean;
-  listen(callbacks: Callbacks): void;
+  listen(id: string, callbacks: Callbacks): void;
   abort(): void;
   prompt(input: PromptInput): Promise<void>;
   id: string;
@@ -34,8 +34,8 @@ export async function create(idSuffix: string): Promise<Session> {
   const session: Session = {
     id: sessionId,
     working: agent.working,
-    listen: (callbacks: Callbacks) =>
-      agent.listen(transcripter.proxy(callbacks, agent)),
+    listen: (id: string, callbacks: Callbacks) =>
+      agent.listen(id, transcripter.proxy(callbacks, agent)),
     abort: agent.abort.bind(agent),
     prompt: agent.prompt.bind(agent),
     delete() {
