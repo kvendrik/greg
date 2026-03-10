@@ -1,2 +1,2 @@
 export type { AgentConfig } from './types';
-export { Agent, type PromptOptions, type PromptInput } from './Agent';
+export { Agent, type Callbacks, type PromptInput } from './Agent';

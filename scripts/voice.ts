@@ -43,7 +43,7 @@ async function callGregWithText(
         'Greg agent is not running or unreachable. Please start the agent server first.'
       )
     );
-    return null;
+    return;
   }
 
   console.log(pc.cyan('Sending transcription to Greg...'));
@@ -562,7 +562,7 @@ async function main(
   voiceId: string,
   session: Session
 ): Promise<void> {
-  await waitForHeyGreg(deviceIndex, voiceId);
+  //await waitForHeyGreg(deviceIndex, voiceId);
 
   const transcript = await realtimeTranscribeFromMic(deviceIndex);
 
@@ -577,7 +577,7 @@ async function main(
   await callGregWithText(session, transcript, voiceId);
 
   console.log(pc.green('\n\nNext turn...'));
-  main(deviceIndex, voiceId, session);
+  await main(deviceIndex, voiceId, session);
 }
 
 async function chooseMicrophoneIndex(): Promise<number> {

@@ -7,15 +7,19 @@ import { formatDate, getWorkspacePath } from './utilities/index';
 import type { AgentConfig } from './types';
 import pc from 'picocolors';
 
-export type PromptOptions = {
+export type Callbacks = Partial<{
+  onTurnStart: (prompt: PromptInput) => void;
+
   onContent: (chunk: string) => void;
   onThinking: (chunk: string) => void;
-  onDone: () => void;
+
   onToolcall: (name: string, args: Record<string, unknown>) => void;
   onToolcallResult?: (name: string, result: string) => void;
-  onError: (err: string) => void;
-  onStop: () => void;
-};
+
+  onTurnDone: () => void;
+  onTurnStop: () => void;
+  onError: (error: string) => void;
+}>;
 
 type Image = {
   data: string;
@@ -30,14 +34,13 @@ export class Agent {
   private lastModel: Model<Api> | null = null;
   private readonly primaryModel: Model<Api>;
   private readonly config: AgentConfig;
+  private callbacks: Callbacks = {};
 
-  private constructor(
-    core: CoreAgent,
-    primaryModel: Model<Api>,
-    config: AgentConfig
-  ) {
+  private constructor(core: CoreAgent, config: AgentConfig) {
     this.core = core;
-    this.primaryModel = primaryModel;
+    this.primaryModel = config.models.find(
+      (model) => model.role === 'primary'
+    )!.model;
     this.config = config;
   }
 
@@ -50,18 +53,12 @@ export class Agent {
     this.abortController = null;
   }
 
-  async prompt(
-    input: PromptInput,
-    {
-      onContent,
-      onThinking,
-      onToolcall,
-      onToolcallResult,
-      onDone,
-      onError,
-      onStop,
-    }: PromptOptions
-  ): Promise<void> {
+  listen(callbacks: Callbacks): void {
+    this.callbacks = callbacks;
+  }
+
+  async prompt(input: PromptInput): Promise<void> {
+    const { callbacks } = this;
     const parsed = parseCommands({
       content: input.content,
       currentModel: this.core.state.model ?? this.primaryModel,
@@ -70,27 +67,29 @@ export class Agent {
     });
 
     if (parsed.status === 'error') {
-      onError(parsed.message);
+      callbacks.onError?.(parsed.message);
       return;
     }
 
     if (parsed.result.stopRequested) {
       if (this.abortController === null) {
-        onContent('Nothing to stop.');
-        onDone();
+        callbacks.onContent?.('Nothing to stop.');
+        callbacks.onTurnDone?.();
         return;
       }
 
       this.abortController.abort();
       this.abortController = null;
-      onDone();
+      callbacks.onTurnDone?.();
       return;
     }
 
     if (parsed.result.helpRequested) {
       const commands = listCommands(this.config);
-      onContent(['Available commands:', '', ...commands].join('\n'));
-      onDone();
+      callbacks.onContent?.(
+        ['Available commands:', '', ...commands].join('\n')
+      );
+      callbacks.onTurnDone?.();
       return;
     }
 
@@ -110,7 +109,7 @@ export class Agent {
       } catch {
         contextLine = '📊 Tokens: unknown';
       }
-      onContent(
+      callbacks.onContent?.(
         [
           'Status:',
           `🧠 Model: ${this.lastModel ? this.lastModel.name : 'nothing sent yet'}`,
@@ -124,12 +123,14 @@ export class Agent {
           .filter(Boolean)
           .join('\n')
       );
-      onDone();
+      callbacks.onTurnDone?.();
       return;
     }
 
     if (this.abortController !== null) {
-      onError('Working on your previous request. Send /stop to abort.');
+      callbacks.onError?.(
+        'Working on your previous request. Send /stop to abort.'
+      );
       return;
     }
 
@@ -156,13 +157,13 @@ export class Agent {
             event.assistantMessageEvent.type === 'text_delta' &&
             event.assistantMessageEvent.delta.trim() !== ''
           ) {
-            onContent(event.assistantMessageEvent.delta);
+            callbacks.onContent?.(event.assistantMessageEvent.delta);
           } else if (event.assistantMessageEvent.type === 'thinking_delta') {
-            onThinking(event.assistantMessageEvent.delta);
+            callbacks.onThinking?.(event.assistantMessageEvent.delta);
           }
           break;
         case 'tool_execution_start':
-          onToolcall(
+          callbacks.onToolcall?.(
             event.toolName,
             (event as { args?: Record<string, unknown> }).args ?? {}
           );
@@ -174,11 +175,14 @@ export class Agent {
           break;
         case 'tool_execution_end':
           console.info(pc.gray(JSON.stringify(event.result)));
-          onToolcallResult?.(event.toolName, JSON.stringify(event.result));
+          callbacks.onToolcallResult?.(
+            event.toolName,
+            JSON.stringify(event.result)
+          );
           break;
         case 'agent_end':
           console.info(pc.green('Done.\n'));
-          onDone();
+          callbacks.onTurnDone?.();
           break;
         default:
           break;
@@ -192,7 +196,7 @@ export class Agent {
     if (signal?.aborted) {
       aborted = true;
       this.core.abort();
-      onStop();
+      callbacks.onTurnStop?.();
       return;
     }
 
@@ -201,7 +205,7 @@ export class Agent {
       () => {
         aborted = true;
         this.core.abort();
-        onStop();
+        callbacks.onTurnStop?.();
       },
       { once: true }
     );
@@ -212,6 +216,8 @@ export class Agent {
       data: img.data,
       mimeType: img.mimeType,
     }));
+
+    callbacks.onTurnStart?.(input);
 
     try {
       await this.core.prompt(messageWithMeta, imageContents);
@@ -230,7 +236,7 @@ export class Agent {
             this.config.models.find((model) => model.role === 'fallback')
               ?.model ?? null;
           if (!fallbackModel) {
-            onError(`No fallback model found in config.models.`);
+            callbacks.onError?.(`No fallback model found in config.models.`);
             return;
           }
           console.info(
@@ -242,7 +248,7 @@ export class Agent {
           this.core.replaceMessages(this.core.state.messages.slice(0, -1));
           await this.core.continue();
         } else {
-          onError(this.core.state.error);
+          callbacks.onError?.(this.core.state.error);
         }
       }
     } catch (err) {
@@ -260,7 +266,7 @@ export class Agent {
       if (isAbortLikeError) {
         aborted = true;
       } else {
-        onError(message);
+        callbacks.onError?.(message);
       }
     } finally {
       if (aborted) {
@@ -333,6 +339,6 @@ Your logs are available through \`greg logs\`. Run \`greg logs --lines <number>\
         compactContext(messages, signal, config),
     });
 
-    return new Agent(core, primaryModel, config);
+    return new Agent(core, config);
   }
 }

@@ -28,7 +28,6 @@
     "guard:restart": "pm2 restart greg:guard",
     "guard:logs": "pm2 logs greg:guard",
     "guard:test": "bun run service/Agent/tools/utilities/guard/tests/guard.test.ts",
-    "voice": "bun run scripts/voice.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },

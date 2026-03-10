@@ -143,35 +143,37 @@ const server = http.createServer((req, res) => {
 
         req.socket.setTimeout(0);
 
+        existingSession.listen({
+          onContent(chunk) {
+            res.write(JSON.stringify({ type: 'content', chunk }) + '\n');
+          },
+          onThinking(chunk) {
+            res.write(JSON.stringify({ type: 'thinking', chunk }) + '\n');
+          },
+          onToolcall(name, args) {
+            res.write(
+              JSON.stringify({
+                type: 'toolcall',
+                name,
+                args: JSON.stringify(args),
+              }) + '\n'
+            );
+          },
+          onTurnDone() {
+            res.end(JSON.stringify({ type: 'done' }) + '\n');
+          },
+          onTurnStop() {
+            res.end(JSON.stringify({ type: 'stopped' }) + '\n');
+          },
+          onError(err) {
+            if (!res.writableEnded) {
+              res.end(JSON.stringify({ type: 'error', error: err }) + '\n');
+            }
+          },
+        });
+
         try {
-          await existingSession.prompt(userPrompt, {
-            onContent(chunk) {
-              res.write(JSON.stringify({ type: 'content', chunk }) + '\n');
-            },
-            onThinking(chunk) {
-              res.write(JSON.stringify({ type: 'thinking', chunk }) + '\n');
-            },
-            onToolcall(name, args) {
-              res.write(
-                JSON.stringify({
-                  type: 'toolcall',
-                  name,
-                  args: JSON.stringify(args),
-                }) + '\n'
-              );
-            },
-            onDone() {
-              res.end(JSON.stringify({ type: 'done' }) + '\n');
-            },
-            onStop() {
-              res.end(JSON.stringify({ type: 'stopped' }) + '\n');
-            },
-            onError(err) {
-              if (!res.writableEnded) {
-                res.end(JSON.stringify({ type: 'error', error: err }) + '\n');
-              }
-            },
-          });
+          await existingSession.prompt(userPrompt);
         } catch (err) {
           if (
             err instanceof APIUserAbortError ||
