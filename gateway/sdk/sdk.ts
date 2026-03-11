@@ -1,6 +1,6 @@
 import config from '../../.greg';
 import type { PromptInput, Callbacks } from '../../agent';
-import { createUUID } from '../session/utilities';
+import { createUUID } from '../sessions/utilities';
 
 let overrideBaseUrl: string | null = null;
 

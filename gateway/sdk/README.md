@@ -1,13 +1,18 @@
 ```ts
 import {
+  ping as pingAgent,
   Session,
-} from 'agent/Agent/sdk';
+} from './gateway/sdk';
 
-if (!(await Session.agentOnline())) {
+if (!(await pingAgent())) {
   throw new Error('Agent not online'):
 }
 
-const session = await Session.create();
+// connects to main session. To create a new
+// session use Session.create()
+const session = await Session.existing('main');
+
+await session.connect();
 
 session.listen({
   onThinking(chunk) {},

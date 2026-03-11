@@ -1,7 +1,7 @@
 import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import type { ServerWebSocket } from 'bun';
-import type { PromptInput } from '../Agent/Agent';
+import type { PromptInput } from '../agent';
 
 export type ParsedPromptResult =
   | { ok: true; value: PromptInput }
@@ -65,4 +65,3 @@ export function createSender<D>(
     },
   };
 }
-

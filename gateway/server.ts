@@ -1,11 +1,10 @@
 import { serve, type Server, type ServerWebSocket } from 'bun';
 import { APIUserAbortError } from '@anthropic-ai/sdk';
-import * as session from './session/session';
 import pc from 'picocolors';
 import config from '../.greg';
 import type { PromptInput } from '../agent';
 import { createSender, parsePromptBody } from './utilities';
-import { createUUID } from './session/utilities';
+import * as sessions from './sessions';
 
 type SessionWebSocketMessage =
   | { type: 'prompt'; prompt: PromptInput }
@@ -26,6 +25,8 @@ type WebSocketData = {
   sessionId: string;
 };
 
+type SessionIdParams = { params: { id: string } };
+
 let server: Server<WebSocketData> | null = null;
 const activeSessionIds = new Set<string>();
 
@@ -36,84 +37,93 @@ export async function startServer(port = Number(config.port)) {
 
   server = serve<WebSocketData>({
     port,
-    async fetch(req, bunServer) {
-      const url = new URL(req.url);
-      const pathname = url.pathname;
-      const method = req.method;
-
-      console.log(pc.gray(`[${method}] ${pathname}`));
-
-      if (pathname === '/ping' && method === 'GET') {
-        return Response.json({ status: 'ok' });
-      }
-
-      if (pathname === '/sessions' && method === 'GET') {
-        return Response.json({
-          sessions: session.listIds(),
-          activeSessions: Array.from(activeSessionIds),
-        });
-      }
-
-      if (pathname === '/sessions/new' && method === 'POST') {
-        let clientId: string | undefined;
-        try {
-          const bodyText = await req.text();
-          if (bodyText) {
-            const parsed = JSON.parse(bodyText) as { clientId?: unknown };
-            if (
-              typeof parsed.clientId === 'string' &&
-              parsed.clientId.trim() !== ''
-            ) {
-              clientId = parsed.clientId;
+    routes: {
+      '/ping': {
+        GET: (req: Request) => {
+          logRequest(req);
+          return Response.json({ status: 'ok' });
+        },
+      },
+      '/sessions': {
+        GET: (req: Request) => {
+          logRequest(req);
+          return Response.json({
+            sessions: sessions.list(),
+            activeSessions: Array.from(activeSessionIds),
+          });
+        },
+      },
+      '/sessions/new': {
+        POST: async (req: Request) => {
+          logRequest(req);
+          let clientId: string | undefined;
+          try {
+            const bodyText = await req.text();
+            if (bodyText) {
+              const parsed = JSON.parse(bodyText) as { clientId?: unknown };
+              if (
+                typeof parsed.clientId === 'string' &&
+                parsed.clientId.trim() !== ''
+              ) {
+                clientId = parsed.clientId;
+              }
             }
+          } catch {
+            // ignore malformed body, fall back to random ID
           }
-        } catch {
-          // ignore malformed body, fall back to random ID
-        }
 
-        const newSession = await session.create(
-          createUUID() + (clientId ? `-${clientId}` : '')
-        );
+          const newSession = await sessions.load(
+            sessions.createUUID() + (clientId ? `-${clientId}` : '')
+          );
 
-        return new Response(JSON.stringify({ id: newSession.id }), {
-          status: 201,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-
-      const sessionMatch = pathname.match(/^\/sessions\/([^/]+)$/);
-
-      if (sessionMatch && method === 'DELETE') {
-        const id = sessionMatch[1];
-        const existingSession = session.get(id);
-        if (existingSession) {
-          existingSession.delete();
-        }
-        return new Response(null, { status: 204 });
-      }
-
-      if (sessionMatch && method === 'GET') {
-        const id = sessionMatch[1];
-        const success = bunServer.upgrade(req, {
-          data: { sessionId: id },
-        });
-        if (success) {
-          return;
-        }
-        return new Response('WebSocket upgrade failed', { status: 500 });
-      }
-
+          return new Response(JSON.stringify({ id: newSession.id }), {
+            status: 201,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        },
+      },
+      '/sessions/:id': {
+        GET: (req: Request & SessionIdParams, bunServer: Server<WebSocketData>) => {
+          logRequest(req);
+          const { id } = req.params;
+          if (!id) {
+            return new Response('Not found', { status: 404 });
+          }
+          const success = bunServer.upgrade(req, {
+            data: { sessionId: id },
+          });
+          if (success) {
+            return undefined;
+          }
+          return new Response('WebSocket upgrade failed', { status: 500 });
+        },
+        DELETE: (req: Request & SessionIdParams) => {
+          logRequest(req);
+          const { id } = req.params;
+          if (!id) {
+            return new Response('Not found', { status: 404 });
+          }
+          if (sessions.exists(id)) {
+            sessions.destroy(id);
+          }
+          return new Response(null, { status: 204 });
+        },
+      },
+      '/*': (req: Request) => {
+        logRequest(req);
+        return new Response('Not found', { status: 404 });
+      },
+    },
+    fetch(req) {
       return new Response('Not found', { status: 404 });
     },
     websocket: {
       data: {} as WebSocketData,
-      open(ws) {
+      async open(ws) {
         const { sessionId } = ws.data;
         activeSessionIds.add(sessionId);
 
-        const existingSession = session.get(sessionId);
-
-        if (!existingSession) {
+        if (!sessions.exists(sessionId)) {
           createSender<AgentEvent>(ws).send({
             type: 'error',
             error: 'Session not found',
@@ -122,6 +132,7 @@ export async function startServer(port = Number(config.port)) {
           return;
         }
 
+        const existingSession = await sessions.load(sessionId);
         const sender = createSender<AgentEvent>(ws);
 
         existingSession.listen({
@@ -154,9 +165,8 @@ export async function startServer(port = Number(config.port)) {
       },
       async message(ws: ServerWebSocket<WebSocketData>, rawMessage) {
         const { sessionId } = ws.data;
-        const existingSession = session.get(sessionId);
 
-        if (!existingSession) {
+        if (!sessions.exists(sessionId)) {
           createSender<AgentEvent>(ws).send({
             type: 'error',
             error: 'Session not found',
@@ -182,13 +192,15 @@ export async function startServer(port = Number(config.port)) {
           return;
         }
 
+        const existingSession = await sessions.load(sessionId);
+
         if (message.type === 'abort') {
           existingSession.abort();
           return;
         }
 
         if (message.type === 'delete') {
-          existingSession.delete();
+          sessions.destroy(sessionId);
           sender.send({ type: 'deleted' });
           ws.close(1000, 'Session deleted');
           return;
@@ -239,8 +251,12 @@ export async function startServer(port = Number(config.port)) {
   console.log(`Listening on port ${server.port}`);
   console.log('Ctrl+C to stop');
 
-  console.log('Creating main session...');
-  await session.create('main');
+  console.log('Loading main session...');
+  await sessions.load('main');
 
   return server;
+}
+
+function logRequest(req: Request) {
+  console.log(pc.gray(`[${req.method}] ${new URL(req.url).pathname}`));
 }

@@ -86,9 +86,8 @@ export class TelegramGateway {
 
     this.taskChannel.listen();
     this.bot.start();
-    console.log('Ready.');
 
-    await this.sendStartupGreeting();
+    console.log('Ready.');
   }
 
   private isAllowedSender(ctx: BotContext): boolean {
@@ -294,16 +293,6 @@ export class TelegramGateway {
       mimeType: 'image/jpeg' as const,
     }));
     await this.prompt({ content: caption, images }, replyCtx);
-  }
-
-  private async sendStartupGreeting(): Promise<void> {
-    if (await ping()) {
-      await this.prompt({
-        content:
-          'You just started. Check recent notes for context and greet me.',
-        images: [],
-      });
-    }
   }
 }
 

@@ -1,25 +1,16 @@
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import type {
-  AssistantMessage,
-  StopReason,
-  TextContent,
-  ThinkingContent,
-  ToolResultMessage,
-  Usage,
-} from '@mariozechner/pi-ai';
-import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 import config from '../../../.greg';
 import { getWorkspacePath } from '../../../agent/utilities';
-import type { Agent, PromptInput, Callbacks } from '../../../agent';
+import type { Agent, Callbacks } from '../../../agent';
 
 export type StorageSession = {
   messages: AgentMessage[];
   proxy: (callbacks: Callbacks, agent: Agent) => Callbacks;
 };
 
-const sessionsDir = path.join(getWorkspacePath(config), 'sessions');
+export const sessionsDir = path.join(getWorkspacePath(config), 'sessions');
 fs.mkdirSync(sessionsDir, { recursive: true });
 
 export function list() {
@@ -34,7 +25,7 @@ export function exists(sessionId: string): boolean {
   return fs.existsSync(sessionPath);
 }
 
-export function delete(sessionId: string): void {
+export function destroy(sessionId: string): void {
   const sessionPath = path.join(sessionsDir, `${sessionId}.jsonl`);
   fs.unlinkSync(sessionPath);
 }
@@ -45,6 +36,15 @@ export function create(sessionId: string): StorageSession {
   return load(sessionId);
 }
 
+function parseMessages(sessionPath: string): AgentMessage[] {
+  const content = fs.readFileSync(sessionPath, 'utf-8');
+  return content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as AgentMessage);
+}
+
 export function load(sessionId: string): StorageSession {
   const sessionPath = path.join(sessionsDir, `${sessionId}.jsonl`);
 
@@ -53,7 +53,7 @@ export function load(sessionId: string): StorageSession {
   }
 
   return {
-    messages: [],
+    messages: parseMessages(sessionPath),
     proxy: (callbacks: Callbacks, agent: Agent): Callbacks => {
       const boundCallbacks = Object.entries(callbacks).reduce(
         (acc, [key, callback]) => ({
@@ -65,13 +65,14 @@ export function load(sessionId: string): StorageSession {
 
       return {
         ...boundCallbacks,
-        onTurnDone: (messages?: AgentMessage[]) => {
-          if (!messages) {
+        onTurnDone: (newMessages?: AgentMessage[]) => {
+          if (!newMessages) {
             return;
           }
-          const jsonl = messages.map((m) => JSON.stringify(m)).join('\n');
-          fs.writeFileSync(sessionPath, jsonl);
-          callbacks.onTurnDone?.(messages);
+          const jsonl = newMessages.map((m) => JSON.stringify(m)).join('\n');
+          const toAppend = jsonl ? '\n' + jsonl : '';
+          fs.appendFileSync(sessionPath, toAppend);
+          callbacks.onTurnDone?.(newMessages);
         },
       };
     },
