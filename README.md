@@ -80,16 +80,16 @@ uv sync
 bun install
 bun link
 
-greg start
+greg gateway start
 ```
 
 4. Then pick how you want to interact with Greg! Easiest way is to use the CLI:
 
 ```
-greg cli
+greg gateway sessions create
 ```
 
-When used to the agent you can start using Telegram to communicate. Running
+When used to the gateway you can start using Telegram to communicate. Running
 the `greg telegram` command will tell you how to set it up.
 
 ## 🔨 Skills

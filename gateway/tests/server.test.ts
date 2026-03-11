@@ -2,12 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { startServer } from '../server';
 import WebSocket from 'ws';
 
-let server: ReturnType<typeof startServer>;
+let server: Awaited<ReturnType<typeof startServer>>;
 let baseUrl: string;
 let wsBaseUrl: string;
 
 beforeAll(async () => {
-  server = startServer(0);
+  server = await startServer(0);
 
   const port = server.port;
   baseUrl = `http://127.0.0.1:${port}`;

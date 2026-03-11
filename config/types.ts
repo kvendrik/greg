@@ -1,4 +1,4 @@
-import { AgentConfig } from '../service/Agent/types';
+import { AgentConfig } from '../agent/types';
 
 export interface Config extends AgentConfig {
   clients?: {

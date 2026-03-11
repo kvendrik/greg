@@ -4,7 +4,7 @@ import {
   Session,
   type PromptInput,
   type Callbacks,
-} from '../../service/server/sdk/sdk';
+} from '../../gateway/sdk/sdk';
 import { escapeMarkdownV2, getTelegramEnv } from './utilities';
 import pc from 'picocolors';
 
@@ -110,16 +110,16 @@ export async function createPromper(bot: Bot<BotContext>) {
     }
 
     if (!sessions.has('main')) {
-      const mainSession = await Session.create('tg');
+      const mainSession = await Session.existing('main');
       await mainSession.connect();
-      mainSession.listen('tg', callbacks);
+      mainSession.listen(callbacks);
       sessions.set('main', mainSession);
     }
 
+    let session = sessions.get('main')!;
+
     // TODO: I've turned off threaded mode for now
     const messageThreadId = null; //ctx?.message?.message_thread_id ?? null;
-
-    let session = sessions.get('main')!;
 
     if (messageThreadId) {
       const threadSession = sessions.get(messageThreadId) ?? null;
@@ -129,7 +129,7 @@ export async function createPromper(bot: Bot<BotContext>) {
       } else {
         session = await Session.create('tg');
         await session.connect();
-        session.listen('tg', callbacks);
+        session.listen(callbacks);
         sessions.set(messageThreadId, session);
       }
     }

@@ -54,3 +54,26 @@ With no `-http` flag, the first argument (or all arguments joined with spaces) i
   - Request: JSON body `{"text": "<string>"}`. No size limit; the server chunks long text internally at 4096 bytes (without splitting UTF-8 runes) and runs the model on each chunk.
   - Response: JSON `{"injection": <bool>, "score": <0-1>, "label": "INJECTION"|"LEGITIMATE", "latency_ms": <float>}`. The whole text is considered an injection if any chunk scores at or above the threshold; `score` is the maximum score across chunks.
   - Errors: 400 for missing/invalid body or empty `text`, 405 for non-POST, 500 on model or pipeline errors.
+
+## Programmatic usage
+
+You can start the classifier HTTP service from Node.js and get a `stop()` function to shut it down:
+
+```ts
+import { start } from './classifier';
+
+// Start the classifier in a subprocess (default port 7234)
+const stop = start();
+
+// Or specify a custom port and extra env vars
+// const stop = start({ port: 8123, env: { PORT: '8123' } });
+
+// Later, when you want to stop the classifier:
+stop();
+```
+
+The `start()` function:
+
+- **Spawns** the compiled `classifier` binary with the `--http` flag.
+- **Optionally** passes `-port <number>` when you provide `port`.
+- **Returns** a `stop()` function that terminates the subprocess (and its process group on POSIX).

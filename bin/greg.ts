@@ -3,10 +3,10 @@ import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { Command } from 'commander';
 import { name, description, version } from '../package.json';
-import * as sdk from '../service/server/sdk/sdk';
+import * as sdk from '../gateway/sdk/sdk';
 import { TaskChannel } from '../clients/TaskChannel';
 import { validate } from '../config';
-import { discoverSkills } from '../service/Agent/tools/skills';
+import { discoverSkills } from '../agent/Agent/tools/skills';
 import { sendCommand } from '../clients/telegram/send-message';
 import pc from 'picocolors';
 import fs from 'node:fs';
@@ -309,9 +309,9 @@ program
   )
   .version(version);
 
-const agentServiceConfig: ServiceConfig = {
-  name: 'agent',
-  description: 'Manage Greg (start, stop, restart, status, logs)',
+const gatewayServiceConfig: ServiceConfig = {
+  name: 'gateway',
+  description: 'Manage Greg gateway (start, stop, restart, status, logs)',
   pm2ProcessName: 'greg',
   scripts: {
     start: 'agent',
@@ -319,120 +319,25 @@ const agentServiceConfig: ServiceConfig = {
     restart: 'agent:restart',
     logs: 'agent:logs',
   },
-  label: '🤖 Agent',
-  logsHint: 'Greg is already running. Run `greg agent logs` to see the logs.',
+  label: '🌉 Gateway',
+  logsHint: 'Greg is already running. Run `greg gateway logs` to see the logs.',
   checkPm2BeforeStart: true,
   descriptions: {
-    start: 'Starts Greg',
-    status: "Gets Greg's status",
-    stop: 'Stops Greg',
-    restart: 'Restarts Greg',
-    logs: "Shows Greg's logs",
+    start: 'Starts Greg gateway',
+    status: 'Gets Greg gateway status',
+    stop: 'Stops Greg gateway',
+    restart: 'Restarts Greg gateway',
+    logs: 'Shows Greg gateway logs',
   },
 };
 
-const telegramServiceConfig: ServiceConfig = {
-  name: 'telegram',
-  description: 'Talk to Greg via Telegram',
-  pm2ProcessName: 'greg:telegram',
-  scripts: {
-    start: 'clients:telegram:start',
-    stop: 'clients:telegram:stop',
-    restart: 'clients:telegram:restart',
-    logs: 'clients:telegram:logs',
-  },
-  label: '📱 Telegram',
-  logsHint:
-    'Telegram client is already running. Run `greg telegram logs` to see the logs.',
-  checkPm2BeforeStart: true,
-  descriptions: {
-    start: 'Start the Telegram client',
-    status: 'Show whether the Telegram client is running',
-    stop: 'Stop the Telegram client',
-    restart: 'Restart the Telegram client',
-    logs: "Show the Telegram client's logs",
-  },
-  statusExtra: async () => {
-    const { default: config } = await import('../.greg');
-    const enabled = config.clients?.telegram ?? false;
-    console.log(`Enabled: ${enabled ? 'yes' : 'no'}`);
-  },
-};
+const allServiceConfigs: ServiceConfig[] = [gatewayServiceConfig];
 
-const guardServiceConfig: ServiceConfig = {
-  name: 'guard',
-  description: 'Manage the prompt-injection guard',
-  pm2ProcessName: 'greg:guard',
-  scripts: {
-    start: {
-      cmd: 'guard:start',
-      getEnv: async (): Promise<Record<string, string>> => {
-        const { default: config } = await import('../.greg');
-        return config.tools?.guard?.port != null
-          ? { PORT: String(config.tools.guard.port) }
-          : ({} as Record<string, string>);
-      },
-    },
-    stop: 'guard:stop',
-    restart: 'guard:restart',
-    logs: 'guard:logs',
-  },
-  label: '💂 Guard',
-  logsHint: 'Guard is already running. Run `greg guard logs` to see the logs.',
-  checkPm2BeforeStart: true,
-  descriptions: {
-    start: 'Start the guard classifier service',
-    status:
-      'Show whether the guard is enabled in config and if the service is running',
-    stop: 'Stop the guard classifier service',
-    restart: 'Restart the guard classifier service',
-    logs: "Show the guard's logs",
-  },
-  statusExtra: async () => {
-    const { default: config } = await import('../.greg');
-    const enabled = config.tools?.guard?.enabled ?? false;
-    console.log(`Enabled: ${enabled ? 'yes' : 'no'}`);
-  },
-};
+const serviceConfigsStartOrder: ServiceConfig[] = [gatewayServiceConfig];
 
-const jobsScheduleServiceConfig: ServiceConfig = {
-  name: 'jobs:schedule',
-  description: 'Manage the jobs schedule',
-  pm2ProcessName: 'greg:jobs',
-  scripts: {
-    start: 'jobs:schedule',
-    stop: 'jobs:schedule:stop',
-    restart: 'jobs:schedule:restart',
-    logs: 'jobs:schedule:logs',
-  },
-  label: '📅 Jobs Scheduler',
-  logsHint:
-    'Jobs schedule is already running. Run `greg jobs:schedule logs` to see the logs.',
-  checkPm2BeforeStart: true,
-  descriptions: {
-    start: 'Start the jobs schedule',
-    status: 'Show whether the jobs schedule is running',
-    stop: 'Stop the jobs schedule',
-    restart: 'Restart the jobs schedule',
-    logs: "Show the jobs schedule's logs",
-  },
-};
-
-const allServiceConfigs: ServiceConfig[] = [
-  agentServiceConfig,
-  telegramServiceConfig,
-  guardServiceConfig,
-  jobsScheduleServiceConfig,
-];
-
-const serviceConfigsStartOrder: ServiceConfig[] = [
-  guardServiceConfig,
-  agentServiceConfig,
-  jobsScheduleServiceConfig,
-  telegramServiceConfig,
-];
-
-program.addCommand(createServiceCommand(agentServiceConfig));
+const gatewayCommand = createServiceCommand(gatewayServiceConfig);
+gatewayCommand.alias('gw');
+program.addCommand(gatewayCommand);
 
 program
   .command('memory')
@@ -450,9 +355,11 @@ program
       })
   );
 
-const telegramCmd = createServiceCommand(telegramServiceConfig);
-telegramCmd.addCommand(sendCommand);
-program.addCommand(telegramCmd);
+program
+  .command('telegram')
+  .alias('tg')
+  .description('Telegram messaging tools')
+  .addCommand(sendCommand);
 
 program
   .command('config')
@@ -544,8 +451,6 @@ program
       cwd: projectRoot,
     }).on('exit', (code) => process.exit(code ?? 0));
   });
-
-program.addCommand(createServiceCommand(guardServiceConfig));
 
 program
   .command('logs')
@@ -764,7 +669,7 @@ program
 
           let buffer = '';
 
-          session.listen('cli', {
+          session.listen({
             onTurnStart() {
               buffer = '';
             },

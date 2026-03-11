@@ -3,9 +3,10 @@ import type { Model, Api, ImageContent } from '@mariozechner/pi-ai';
 import { compactContext, deriveContextTokens } from './compaction';
 import { listCommands, parseCommands } from './commands';
 import { get as getTools } from './tools';
-import { formatDate, getWorkspacePath } from './utilities/index';
+import { formatDate, getWorkspacePath } from './utilities';
 import type { AgentConfig, ToolContext } from './types';
 import pc from 'picocolors';
+import { createUUID } from '../gateway/session/utilities';
 
 export type Callbacks = Partial<{
   onTurnStart: (prompt: PromptInput) => void;
@@ -16,7 +17,7 @@ export type Callbacks = Partial<{
   onToolcall: (name: string, args: Record<string, unknown>) => void;
   onToolcallResult?: (name: string, result: string) => void;
 
-  onTurnDone: () => void;
+  onTurnDone: (messages: AgentMessage[]) => void;
   onTurnStop: () => void;
   onError: (error: string) => void;
 }>;
@@ -53,8 +54,10 @@ export class Agent {
     this.abortController = null;
   }
 
-  listen(id: string, callbacks: Callbacks): void {
+  listen(callbacks: Callbacks): string {
+    const id = createUUID();
     this.callbacks.set(id, callbacks);
+    return id;
   }
 
   private getCallbacks(): Callbacks {
@@ -72,8 +75,8 @@ export class Agent {
       onToolcall: (name: string, args: Record<string, unknown>) => {
         callbacks.forEach((callback) => callback.onToolcall?.(name, args));
       },
-      onTurnDone: () => {
-        callbacks.forEach((callback) => callback.onTurnDone?.());
+      onTurnDone: (messages: AgentMessage[]) => {
+        callbacks.forEach((callback) => callback.onTurnDone?.(messages));
       },
       onTurnStop: () => {
         callbacks.forEach((callback) => callback.onTurnStop?.());

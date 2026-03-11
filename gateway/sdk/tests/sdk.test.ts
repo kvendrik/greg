@@ -1,22 +1,26 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { startServer } from '../../server';
-import config from '../../../../.greg';
 import {
   ping,
   Session,
+  setBaseUrlForTests,
   setWebSocketFactory,
   type Callbacks,
   type PromptInput,
 } from '../sdk';
 
-let server: ReturnType<typeof startServer>;
+let server: Awaited<ReturnType<typeof startServer>>;
 
-beforeAll(() => {
-  server = startServer(Number(config.port));
+beforeAll(async () => {
+  // Start the gateway server on a dynamic port so tests don't depend on
+  // the global .greg port, then point the SDK at that URL explicitly.
+  server = await startServer(0);
+  setBaseUrlForTests(`http://127.0.0.1:${server.port}`);
 });
 
 afterAll(() => {
   server.stop();
+  setBaseUrlForTests(null);
 });
 
 describe('agent SDK', () => {
@@ -98,7 +102,8 @@ describe('agent SDK', () => {
       );
 
       try {
-        const session = await Session.create();
+        const session = await Session.create('test');
+        await session.connect();
 
         let startCalled = false;
         let doneCalled = false;

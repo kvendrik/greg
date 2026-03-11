@@ -1,7 +1,7 @@
 ```ts
 import {
   Session,
-} from 'service/Agent/sdk';
+} from 'agent/Agent/sdk';
 
 if (!(await Session.agentOnline())) {
   throw new Error('Agent not online'):
