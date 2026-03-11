@@ -1,50 +1,43 @@
-import { createUUID } from './utilities';
-import config from '../.greg';
-import { Agent, type PromptInput, type Callbacks } from './Agent';
-import { createTranscripter } from './transcriber/transcriber';
-import { TaskChannel } from '../clients/TaskChannel';
+import config from '../../.greg';
+import { Agent, type PromptInput, type Callbacks } from '../../agent';
+import { createTranscripter } from './storage';
+import { TaskChannel } from '../../clients/TaskChannel';
 import path from 'node:path';
 
 export type Session = {
-  working: boolean;
-  listen(id: string, callbacks: Callbacks): void;
-  abort(): void;
-  prompt(input: PromptInput): Promise<void>;
   id: string;
+  working: boolean;
+  listen: typeof Agent.prototype.listen;
+  abort: typeof Agent.prototype.abort;
+  prompt: typeof Agent.prototype.prompt;
   delete(): void;
 };
 
-export const sessions = new Map<string, Session>();
-
-export function listIds(): string[] {
+export function list(): string[] {
   return Array.from(sessions.keys());
 }
 
-export async function create(idSuffix: string): Promise<Session> {
-  const baseId = createUUID();
-  const sessionId =
-    idSuffix && idSuffix.trim() !== '' ? `${baseId}-${idSuffix}` : baseId;
+export async function create(sessionId: string): Promise<Session> {
   const transcripter = createTranscripter(sessionId);
 
   const agent = await Agent.create({
     config,
-    addToTranscript: transcripter.add,
   });
 
   const session: Session = {
     id: sessionId,
     working: agent.working,
-    listen: (id: string, callbacks: Callbacks) =>
-      agent.listen(id, transcripter.proxy(callbacks, agent)),
+    listen: (callbacks: Callbacks) =>
+      agent.listen(transcripter.proxy(callbacks, agent)),
     abort: agent.abort.bind(agent),
     prompt: agent.prompt.bind(agent),
     delete() {
       agent.abort();
-      sessions.delete(session.id);
+      sessions.delete(sessionId);
     },
   };
 
-  sessions.set(session.id, session);
+  sessions.set(sessionId, session);
   return session;
 }
 

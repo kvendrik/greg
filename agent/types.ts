@@ -5,7 +5,6 @@ import type { GuardMethods } from './tools/utilities/guard/guard';
 
 export interface ToolContext {
   config: AgentConfig;
-  addToTranscript: (content: string) => void;
 }
 
 /**

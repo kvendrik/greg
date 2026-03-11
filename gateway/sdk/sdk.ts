@@ -1,7 +1,15 @@
-import config from '../../../.greg';
-import type { PromptInput, Callbacks } from '../../Agent/Agent';
+import config from '../../.greg';
+import type { PromptInput, Callbacks } from '../../agent';
+import { createUUID } from '../session/utilities';
+
+let overrideBaseUrl: string | null = null;
+
+export function setBaseUrlForTests(url: string | null): void {
+  overrideBaseUrl = url;
+}
 
 function getBase(): string {
+  if (overrideBaseUrl) return overrideBaseUrl;
   return `http://localhost:${config.port}`;
 }
 
@@ -35,8 +43,10 @@ export class Session {
     await this.ensureSocket();
   }
 
-  listen(id: string, callbacks: Callbacks): void {
+  listen(callbacks: Callbacks): string {
+    const id = createUUID();
     this.callbacks.set(id, callbacks);
+    return id;
   }
 
   private resetSocket(): void {

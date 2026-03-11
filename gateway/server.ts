@@ -1,11 +1,11 @@
 import { serve, type Server, type ServerWebSocket } from 'bun';
 import { APIUserAbortError } from '@anthropic-ai/sdk';
-import * as session from '../session';
+import * as session from './session/session';
 import pc from 'picocolors';
-import config from '../../.greg';
-import type { PromptInput } from '../Agent/Agent';
+import config from '../.greg';
+import type { PromptInput } from '../agent';
 import { createSender, parsePromptBody } from './utilities';
-import { createUUID } from '../utilities';
+import { createUUID } from './session/utilities';
 
 type SessionWebSocketMessage =
   | { type: 'prompt'; prompt: PromptInput }
@@ -29,7 +29,7 @@ type WebSocketData = {
 let server: Server<WebSocketData> | null = null;
 const activeSessionIds = new Set<string>();
 
-export function startServer(port = Number(config.port)) {
+export async function startServer(port = Number(config.port)) {
   if (server) {
     return server;
   }
@@ -71,7 +71,10 @@ export function startServer(port = Number(config.port)) {
           // ignore malformed body, fall back to random ID
         }
 
-        const newSession = await session.create(clientId ?? '');
+        const newSession = await session.create(
+          createUUID() + (clientId ? `-${clientId}` : '')
+        );
+
         return new Response(JSON.stringify({ id: newSession.id }), {
           status: 201,
           headers: { 'Content-Type': 'application/json' },
@@ -121,7 +124,7 @@ export function startServer(port = Number(config.port)) {
 
         const sender = createSender<AgentEvent>(ws);
 
-        existingSession.listen(createUUID(), {
+        existingSession.listen({
           onTurnStart(prompt) {
             sender.send({ type: 'turn_start', prompt });
           },
@@ -235,6 +238,9 @@ export function startServer(port = Number(config.port)) {
   );
   console.log(`Listening on port ${server.port}`);
   console.log('Ctrl+C to stop');
+
+  console.log('Creating main session...');
+  await session.create('main');
 
   return server;
 }

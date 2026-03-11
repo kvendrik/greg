@@ -1,0 +1,6 @@
+---
+description: Only create concise and to the point README files
+alwaysApply: true
+---
+
+When I ask you to create a README always create one that is to the point and concise. Use a friendly tone and use code snippets to explain concepts. Make sure that the code you write is how the module actually works.

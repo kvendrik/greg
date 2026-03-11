@@ -33,7 +33,7 @@ export async function evaluatePolicy(
 
 async function evaluateExecPolicy(
   { command }: { command: string },
-  { config, addToTranscript }: ToolContext
+  { config }: ToolContext
 ): Promise<PolicyEvaluation> {
   const parsedCommand = parseCommand(command);
   const options = getAllowlistForCommand(command, config);
@@ -48,13 +48,9 @@ async function evaluateExecPolicy(
 /once - allow Greg to run this command this time
 /always - allow Greg to run this command always${parsedCommand.segments.length === 1 ? `\n/always_cmd - always allow Greg to run "${firstCommand}"` : ''}`;
 
-    addToTranscript(`<guard>${message}`);
-
     const reply = await sendMessage(message, {
       awaitReply: true,
     });
-
-    addToTranscript(`<user_reply>${reply}</user_reply></guard>`);
 
     if (reply !== '/once' && reply !== '/always' && reply !== `/always_cmd`) {
       const reason = `Command not allowed: ${command}. Permission was denied by the user. User replied: "${reply}".`;
