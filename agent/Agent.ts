@@ -1,4 +1,7 @@
-import { Agent as CoreAgent } from '@mariozechner/pi-agent-core';
+import {
+  Agent as CoreAgent,
+  type AgentMessage,
+} from '@mariozechner/pi-agent-core';
 import type { Model, Api, ImageContent } from '@mariozechner/pi-ai';
 import { compactContext, deriveContextTokens } from './compaction';
 import { listCommands, parseCommands } from './commands';
@@ -17,7 +20,7 @@ export type Callbacks = Partial<{
   onToolcall: (name: string, args: Record<string, unknown>) => void;
   onToolcallResult?: (name: string, result: string) => void;
 
-  onTurnDone: (messages: AgentMessage[]) => void;
+  onTurnDone: (messages?: AgentMessage[]) => void;
   onTurnStop: () => void;
   onError: (error: string) => void;
 }>;
@@ -75,7 +78,7 @@ export class Agent {
       onToolcall: (name: string, args: Record<string, unknown>) => {
         callbacks.forEach((callback) => callback.onToolcall?.(name, args));
       },
-      onTurnDone: (messages: AgentMessage[]) => {
+      onTurnDone: (messages?: AgentMessage[]) => {
         callbacks.forEach((callback) => callback.onTurnDone?.(messages));
       },
       onTurnStop: () => {
@@ -229,7 +232,7 @@ export class Agent {
           break;
         case 'agent_end':
           console.info(pc.green('Done.\n'));
-          callbacks.onTurnDone?.();
+          callbacks.onTurnDone?.(event.messages);
           break;
         default:
           break;
