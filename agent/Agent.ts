@@ -9,7 +9,7 @@ import { get as getTools } from './tools';
 import { formatDate, getWorkspacePath } from './utilities';
 import type { AgentConfig, ToolContext } from './types';
 import pc from 'picocolors';
-import { createUUID } from '../gateway/session/utilities';
+import { createUUID } from '../gateway/sessions/utilities';
 
 export type Callbacks = Partial<{
   onTurnStart: (prompt: PromptInput) => void;
@@ -20,7 +20,7 @@ export type Callbacks = Partial<{
   onToolcall: (name: string, args: Record<string, unknown>) => void;
   onToolcallResult?: (name: string, result: string) => void;
 
-  onTurnDone: (messages?: AgentMessage[]) => void;
+  onTurnDone: (newMessages?: AgentMessage[]) => void;
   onTurnStop: () => void;
   onError: (error: string) => void;
 }>;
@@ -31,6 +31,10 @@ type Image = {
 };
 
 export type PromptInput = { content: string; images: Image[] };
+
+interface AgentOptions extends ToolContext {
+  messages: AgentMessage[];
+}
 
 export class Agent {
   private abortController: AbortController | null = null;
@@ -320,11 +324,9 @@ export class Agent {
     }
   }
 
-  static async create(toolContext: ToolContext): Promise<Agent> {
-    const { config } = toolContext;
-
+  static async create({ config, messages }: AgentOptions): Promise<Agent> {
     const conversationStartIso = new Date().toISOString();
-    const tools = await getTools(conversationStartIso, toolContext);
+    const tools = await getTools(conversationStartIso, { config });
 
     const primaryModel = config.models.find(
       (model) => model.role === 'primary'
@@ -336,7 +338,7 @@ export class Agent {
         model: primaryModel,
         thinkingLevel: 'medium',
         tools: tools.tools,
-        messages: [],
+        messages,
       },
       getApiKey(provider) {
         const key =
@@ -382,7 +384,7 @@ If any tool call returns an error, always explicitly tell the user:
 Do not silently skip, retry without mentioning it, or paper over failures.
 
 ### Restarting yourself
-If you ever need to fully restart yourself (for example after configuration changes or if you are stuck), you can call the \`exec\` tool with the command \`greg restart\`. Before doing so, you MUST: (1) call \`save_conversation_note\` with a concise summary of the current conversation so you can later reload it and know where you left off, (2) tell the user explicitly that you are about to restart, then (3) run the restart command.
+If you ever need to fully restart yourself (for example after configuration changes or if you are stuck), you can call the \`exec\` tool with the command \`greg restart\`. Before doing so, you MUST: (1) call \`memory_note\` with a concise summary of the current conversation so you can later reload it and know where you left off, (2) tell the user explicitly that you are about to restart, then (3) run the restart command.
 
 ### Logs
 Your logs are available through \`greg logs\`. Run \`greg logs --lines <number>\` to see the last <number> lines.

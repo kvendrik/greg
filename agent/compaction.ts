@@ -87,6 +87,7 @@ export async function compactContext(
 ): Promise<AgentMessage[]> {
   const effectiveSignal = signal ?? new AbortController().signal;
   const model = config.models.find((model) => model.role === 'primary')!.model;
+
   const getApiKey = (provider: string) => {
     const key =
       config.models.find((model) => model.model.provider === provider)?.key ??
@@ -108,6 +109,7 @@ export async function compactContext(
   const targetAfterCompact = Math.floor(contextWindow * 0.6);
 
   const currentTokens = deriveContextTokens(messages);
+
   if (currentTokens <= softLimit) {
     return messages;
   }
@@ -123,6 +125,7 @@ export async function compactContext(
 
   const toSummarize = messages.slice(0, splitIndex);
   const recent = messages.slice(splitIndex);
+
   if (toSummarize.length === 0) {
     return recent;
   }
