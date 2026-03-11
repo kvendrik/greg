@@ -14,46 +14,48 @@ import config from '../../../.greg';
 import { getWorkspacePath } from '../../../agent/utilities';
 import type { Agent, PromptInput, Callbacks } from '../../../agent';
 
-export type StorageTools = {
-  add: (content: string) => void;
+export type StorageSession = {
+  messages: AgentMessage[];
   proxy: (callbacks: Callbacks, agent: Agent) => Callbacks;
 };
 
-type BufferedAssistant = {
-  thinking: string;
-  content: string;
-  stopReason: StopReason;
-  errorMessage?: string;
-};
+const sessionsDir = path.join(getWorkspacePath(config), 'sessions');
+fs.mkdirSync(sessionsDir, { recursive: true });
 
-export function load(sessionId: string): StorageTools {
-  const sessionsDir = path.join(getWorkspacePath(config), 'sessions');
-  fs.mkdirSync(sessionsDir, { recursive: true });
+export function list() {
+  return fs
+    .readdirSync(sessionsDir)
+    .filter((file) => file.endsWith('.jsonl'))
+    .map((file) => file.replace('.jsonl', ''));
+}
 
+export function exists(sessionId: string): boolean {
+  const sessionPath = path.join(sessionsDir, `${sessionId}.jsonl`);
+  return fs.existsSync(sessionPath);
+}
+
+export function delete(sessionId: string): void {
+  const sessionPath = path.join(sessionsDir, `${sessionId}.jsonl`);
+  fs.unlinkSync(sessionPath);
+}
+
+export function create(sessionId: string): StorageSession {
+  const sessionPath = path.join(sessionsDir, `${sessionId}.jsonl`);
+  fs.writeFileSync(sessionPath, '');
+  return load(sessionId);
+}
+
+export function load(sessionId: string): StorageSession {
   const sessionPath = path.join(sessionsDir, `${sessionId}.jsonl`);
 
-  let currentTurnId: string | null = null;
-  let bufferedAssistant: BufferedAssistant | null = null;
-
-  appendUserMessage(
-    `[session-start] id=${sessionId} cwd=${getWorkspacePath(config)}`
-  );
+  if (!fs.existsSync(sessionPath)) {
+    throw new Error(`Session ${sessionId} not found`);
+  }
 
   return {
-    add: (content: string) => {
-      appendUserMessage(content);
-    },
+    messages: [],
     proxy: (callbacks: Callbacks, agent: Agent): Callbacks => {
-      const {
-        onTurnStart,
-        onThinking,
-        onContent,
-        onToolcall,
-        onToolcallResult,
-        onTurnDone,
-        onTurnStop,
-        onError,
-      } = Object.entries(callbacks).reduce(
+      const boundCallbacks = Object.entries(callbacks).reduce(
         (acc, [key, callback]) => ({
           ...acc,
           [key]: callback?.bind(agent),
@@ -62,183 +64,16 @@ export function load(sessionId: string): StorageTools {
       );
 
       return {
-        onTurnStart: (input: PromptInput) => {
-          currentTurnId = randomUUID();
-          bufferedAssistant = null;
-
-          appendUserMessage(input.content);
-
-          onTurnStart?.(input);
-        },
-        onThinking: (content: string) => {
-          if (!currentTurnId) {
-            currentTurnId = randomUUID();
+        ...boundCallbacks,
+        onTurnDone: (messages?: AgentMessage[]) => {
+          if (!messages) {
+            return;
           }
-          const buf = getOrCreateBufferedAssistant('stop');
-          buf.thinking += content;
-
-          onThinking?.(content);
-        },
-        onContent: (content: string) => {
-          if (!currentTurnId) {
-            currentTurnId = randomUUID();
-          }
-          const buf = getOrCreateBufferedAssistant('stop');
-          buf.content += content;
-
-          onContent?.(content);
-        },
-        onToolcall: (name: string, args: Record<string, unknown>) => {
-          if (!currentTurnId) {
-            currentTurnId = randomUUID();
-          }
-          // We do not persist tool call start events, only results.
-          onToolcall?.(name, args);
-        },
-        onToolcallResult: (name: string, result: string) => {
-          if (!currentTurnId) {
-            currentTurnId = randomUUID();
-          }
-
-          const toolResult: ToolResultMessage = {
-            role: 'toolResult',
-            toolCallId: currentTurnId,
-            toolName: name,
-            content: [
-              {
-                type: 'text',
-                text: result,
-              } satisfies TextContent,
-            ],
-            isError: false,
-            timestamp: Date.now(),
-          };
-
-          append(toolResult);
-
-          onToolcallResult?.(name, result);
-        },
-        onTurnDone: () => {
-          if (!currentTurnId) {
-            currentTurnId = randomUUID();
-          }
-
-          if (bufferedAssistant) {
-            bufferedAssistant.stopReason = 'stop';
-            appendAssistantMessage(bufferedAssistant);
-            bufferedAssistant = null;
-          }
-
-          onTurnDone?.();
-        },
-        onTurnStop: () => {
-          if (!currentTurnId) {
-            currentTurnId = randomUUID();
-          }
-
-          if (bufferedAssistant) {
-            bufferedAssistant.stopReason = 'aborted';
-            appendAssistantMessage(bufferedAssistant);
-            bufferedAssistant = null;
-          }
-
-          onTurnStop?.();
-        },
-        onError: (error: string) => {
-          if (!currentTurnId) {
-            currentTurnId = randomUUID();
-          }
-
-          if (!bufferedAssistant) {
-            bufferedAssistant = {
-              thinking: '',
-              content: '',
-              stopReason: 'error',
-              errorMessage: error,
-            };
-          } else {
-            bufferedAssistant.stopReason = 'error';
-            bufferedAssistant.errorMessage = error;
-          }
-
-          appendAssistantMessage(bufferedAssistant);
-          bufferedAssistant = null;
-
-          onError?.(error);
+          const jsonl = messages.map((m) => JSON.stringify(m)).join('\n');
+          fs.writeFileSync(sessionPath, jsonl);
+          callbacks.onTurnDone?.(messages);
         },
       };
     },
   };
-
-  function append(entry: AgentMessage): void {
-    const line = `${JSON.stringify(entry)}\n`;
-    fs.appendFileSync(sessionPath, line, 'utf8');
-  }
-
-  function appendUserMessage(content: string): void {
-    const userMessage: AgentMessage = {
-      role: 'user',
-      content,
-      timestamp: Date.now(),
-    };
-    append(userMessage);
-  }
-
-  function getOrCreateBufferedAssistant(
-    stopReason: StopReason
-  ): BufferedAssistant {
-    if (!bufferedAssistant) {
-      bufferedAssistant = {
-        thinking: '',
-        content: '',
-        stopReason,
-      };
-    }
-    return bufferedAssistant;
-  }
-
-  function appendAssistantMessage(buffer: BufferedAssistant): void {
-    const content: (TextContent | ThinkingContent)[] = [];
-
-    if (buffer.thinking) {
-      content.push({
-        type: 'thinking',
-        thinking: buffer.thinking,
-      });
-    }
-
-    if (buffer.content) {
-      content.push({
-        type: 'text',
-        text: buffer.content,
-      });
-    }
-
-    const assistantMessage: AssistantMessage = {
-      role: 'assistant',
-      content,
-      api: 'openai-completions',
-      provider: 'openai',
-      model: 'unknown',
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          total: 0,
-        },
-      },
-      stopReason: buffer.stopReason,
-      errorMessage: buffer.errorMessage,
-      timestamp: Date.now(),
-    };
-
-    append(assistantMessage);
-  }
 }
