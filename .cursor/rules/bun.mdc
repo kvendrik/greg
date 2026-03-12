@@ -1,4 +1,5 @@
 ---
+description: Workspace is Bun-enabled; use bun to install packages
 alwaysApply: true
 ---
 

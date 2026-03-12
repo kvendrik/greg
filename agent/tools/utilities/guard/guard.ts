@@ -134,6 +134,7 @@ export async function isSafe(
       'ETIMEDOUT',
       'ECONNRESET',
       'EAI_AGAIN',
+      'FailedToOpenSocket',
     ];
     const code =
       err instanceof Error && 'code' in err
@@ -146,7 +147,7 @@ export async function isSafe(
     const message = err instanceof Error ? err.message : String(err);
     const looksLikeConnectionFailure =
       connectionErrorCodes.includes(code ?? '') ||
-      /unable to connect|fetch failed|connection refused|network|econnrefused|enotfound|etimedout|econnreset/i.test(
+      /unable to connect|fetch failed|connection refused|network|econnrefused|enotfound|etimedout|econnreset|failedtoopensocket|typo in the url or port/i.test(
         message
       );
 

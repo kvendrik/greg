@@ -32,3 +32,4 @@ When writing tests (for example with Bun's `bun:test`):
   - Example:
     - `it('flags direct prompt injection asking for system prompt', async () => { ... });`
 
+Never nest a `describe` deeper than 2 levels. If you need to then create a new test suite with an appropriate file name in the same folder.

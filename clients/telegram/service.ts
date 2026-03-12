@@ -5,6 +5,8 @@ import { createPromper, type BotContext } from './prompt';
 import { pipeline } from '@xenova/transformers';
 import ffmpeg from 'fluent-ffmpeg';
 import fs from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import {
   escapeMarkdownV2,
   getTelegramEnv,
@@ -138,8 +140,8 @@ bot.on('message:voice', async (ctx) => {
   await ctx.api.sendChatAction(chat.id, 'upload_voice');
 
   const paths = {
-    ogg: `/tmp/greg-telegram-${ctx.message.message_id}.ogg`,
-    pcm: `/tmp/greg-telegram-${ctx.message.message_id}.pcm`,
+    ogg: path.join(tmpdir(), `greg-telegram-${ctx.message.message_id}.ogg`),
+    pcm: path.join(tmpdir(), `greg-telegram-${ctx.message.message_id}.pcm`),
   };
 
   const file = await ctx.getFile();

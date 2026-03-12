@@ -5,3 +5,6 @@ alwaysApply: false
 ---
 
 When you create or update a `*.test.ts` file always make sure you follow Bun's best practises for writing tests. When done always run the tests to ensure they pass.
+
+- **Never change the code under test to make a test suite pass.** Fix the tests or the design; do not add test-only parameters, branches, or backdoors to production code.
+- **Always mock the clock when testing time-dependent behaviour.** Use Bun's [setSystemTime](https://bun.com/docs/guides/test/mock-clock) so assertions are deterministic. Reset with `setSystemTime()` in `afterEach` (or when done).
