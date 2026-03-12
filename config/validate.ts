@@ -115,6 +115,33 @@ async function validateBrowserUseKey(key: string): Promise<void> {
   }
 }
 
+const BRAVE_WEB_SEARCH_ENDPOINT =
+  'https://api.search.brave.com/res/v1/web/search';
+
+async function validateBraveKey(apiKey: string): Promise<void> {
+  const url = new URL(BRAVE_WEB_SEARCH_ENDPOINT);
+  url.searchParams.set('q', 'test');
+  url.searchParams.set('count', '1');
+
+  const res = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      'X-Subscription-Token': apiKey,
+      Accept: 'application/json',
+    },
+  });
+
+  if (res.status === 401) {
+    throw new Error('Brave Search API key invalid (401 Unauthorized)');
+  }
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(
+      `Brave Search API error (${res.status}): ${body || res.statusText}`
+    );
+  }
+}
+
 export type ValidateOptions = { exit?: boolean };
 
 export async function validate(
@@ -152,10 +179,17 @@ export async function validate(
     });
   }
 
-  if (config.tools.webSearch?.geminiKey) {
+  if (config.tools.webSearch?.provider === 'gemini') {
     checks.push({
       name: 'Web Search (Gemini)',
-      run: () => validateGoogleKey(config.tools.webSearch!.geminiKey),
+      run: () => validateGoogleKey(config.tools.webSearch!.key),
+    });
+  }
+
+  if (config.tools.webSearch?.provider === 'brave') {
+    checks.push({
+      name: 'Web Search (Brave)',
+      run: () => validateBraveKey(config.tools.webSearch!.key),
     });
   }
 
