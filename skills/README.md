@@ -11,6 +11,7 @@ The following skills from [LeoYeAI/openclaw-master-skills](https://github.com/Le
 | `writing-skills` | When/how to create and edit skills; Greg-adapted (save_skill, skills/ dir). |
 | `using-superpowers` | How to find and use skills; Greg-adapted (read from location, red flags, priority). |
 | `remembering-conversations` | Reuse past conversations; Greg-adapted (workspace memory and notes, no subagent). |
+| `session-logs` | Search past session transcripts when user references older/parent conversations; Greg-adapted (memory_search / memory_summarize / memory_get over workspace/sessions, no jq/rg). |
 | `skill-creator` | Create or improve skills; Greg-adapted (no eval runner, iterate with user feedback). |
 | `docx` | Create, read, edit Word documents (from OpenClaw). |
 | `pdf` | Read, edit, merge PDFs (from OpenClaw). |
