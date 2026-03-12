@@ -1,11 +1,11 @@
 ---
 name: jobs-cli
-description: Manage scheduled LLM jobs via Greg’s jobs CLI. Use when the user wants recurring tasks or automations that run prompts on a schedule (add, list, remove, and run cron-based jobs stored in jobs.json).
+description: Manage scheduled LLM jobs via cron tools and greg cron CLI. Use when the user wants recurring tasks or automations that run prompts on a schedule (add, list, remove, run cron-based jobs stored in workspace/cron/jobs.json).
 ---
 
-# Jobs CLI (scheduled prompts)
+# Cron jobs (scheduled prompts)
 
-Manage recurring, cron-based jobs that send prompts to Greg’s primary LLM. Jobs are stored in `jobs.json` in Greg’s workspace directory and executed via the agent server.
+Manage recurring, cron-based jobs that send prompts to Greg’s primary LLM. Jobs are stored in `workspace/cron/jobs.json` and run automatically when the gateway is running.
 
 ## When to use this skill
 
@@ -24,142 +24,51 @@ Always confirm the **intended schedule and behavior** with the user before creat
 
 ## How to run
 
-From the **repo root** (the path from your system prompt: **"The code you're running on is at: ..."**), always use `bun` and the `scripts/jobs` entry point:
+You have **cron tools** and the **greg cron CLI**.
+
+### Using cron tools (preferred)
+
+Use the agent tools to manage jobs from the conversation:
+
+- **cron_add** — Add a job. Parameters: `cronTime` (6-field cron expression), `jobPrompt` (text sent to the agent), optional `name`. Example: `cronTime: "0 0 18 * * *"` for 6pm daily (second minute hour day-of-month month day-of-week).
+- **cron_list** — List all jobs with id, cronTime, name, and jobPrompt preview.
+- **cron_remove** — Remove a job by `jobId`.
+- **cron_update** — Update a job’s cronTime, jobPrompt, name, or enabled by `jobId`.
+- **cron_run** — To run a job immediately, the user must run `greg cron run <jobId>` in the terminal (gateway must be running).
+
+For natural-language schedules, convert to a 6-field cron expression before calling **cron_add** (e.g. “every day at 6pm” → `0 0 18 * * *`, “every 30 minutes” → `0 */30 * * * *`).
+
+### Using the CLI
+
+From the repo root, use the greg cron subcommands:
 
 ```bash
-# Show help and available subcommands
-bun run scripts/jobs --help
+# Add a job (6-field cron + prompt)
+greg cron add --cron "0 0 18 * * *" --prompt "Send me a summary of tomorrow's calendar" --name "Daily summary"
+
+# List jobs
+greg cron list
+
+# Remove a job
+greg cron remove <jobId>
+
+# Run a job once now (gateway must be running)
+greg cron run <jobId>
 ```
 
-Subcommands are passed after `scripts/jobs`, for example:
-
-```bash
-bun run scripts/jobs add "every day at 6pm, send me a summary of my calendar"
-bun run scripts/jobs list
-bun run scripts/jobs remove <id>
-bun run scripts/jobs schedule
-```
-
-Before running any command:
-
-- Tell the user which subcommand you are going to run and why.
-- For `add`, restate the interpreted schedule and behavior in your own words.
+Cron expression is **6-field**: second, minute, hour, day-of-month, month, day-of-week. Examples: `0 0 18 * * *` = 6pm daily; `0 */30 * * * *` = every 30 minutes. Times are interpreted in the **gateway server’s local timezone** (no per-job timezone option).
 
 ## Requirements
 
-- **Primary model configured** in `.greg` with a `role: "primary"` entry that includes:
-  - a valid `model` string
-  - an API key field (`key`) for that model
-- **Agent server running** when using `jobs schedule`, so that prompts can be processed.
-- The Greg **workspace directory** must be writable (used to store `jobs.json`).
+- **Primary model configured** in `.greg` with a valid API key.
+- **Gateway running** (`greg gateway`) for jobs to run on schedule and for `greg cron run`.
+- **Writable workspace** so jobs can be stored in `workspace/cron/jobs.json`.
 
-If no valid primary model with an API key exists, job creation will fail.
+If any requirement is missing, explain which one and how to fix it.
 
-If any requirement is missing:
+## Behavior
 
-- Explain clearly which prerequisite is missing (primary model, API key, agent server, or writable workspace).
-- Tell the user which file or command they need to configure.
-- Do not keep retrying failing commands.
-
-## Commands
-
-### add \<description\>
-
-Create a new job from a natural-language description that includes both the schedule and the task. The CLI uses the primary LLM to parse the description into:
-
-- **cronTime**: a 6‑field cron expression (`second minute hour day-of-month month day-of-week`)
-- **jobPrompt**: the exact instruction that will be sent to the agent when the job runs
-
-```bash
-# Examples
-bun run scripts/jobs add "every day at 6pm, send me a brief summary of tomorrow’s calendar"
-bun run scripts/jobs add "every 30 minutes, remind me to stand up"
-bun run scripts/jobs add "every weekday at 9:00, summarize my unread important emails"
-```
-
-On success it prints:
-
-- `cronTime: ...`
-- `jobPrompt: ...`
-- `id: <generated-id>`
-
-The job is appended to `jobs.json`.
-
-**Agent behavior:**
-
-1. After running `add`, repeat back to the user:
-   - The parsed `cronTime`.
-   - The `jobPrompt` that will run.
-   - The generated `id`.
-2. Ask the user to confirm that this behavior matches what they intended. If it does not, suggest adjusting the natural-language description and running `add` again.
-
-### list
-
-List all scheduled jobs currently stored in `jobs.json`.
-
-```bash
-bun run scripts/jobs list
-```
-
-Output shows, for each job:
-
-- the job **id** (cyan)
-- `cronTime`
-- `jobPrompt`
-
-If there are no jobs, it prints `No jobs in <path-to-jobs.json>`.
-
-When listing jobs for the user:
-
-- Present them as a **numbered list** with `id`, a human-readable schedule (if you can infer it), and a short preview of `jobPrompt`.
-- If there are many jobs, focus on the ones that are relevant to the user’s current question.
-
-### remove \<id\>
-
-Remove a job by its `id` (as shown in `add` output or `list`).
-
-```bash
-bun run scripts/jobs remove <id>
-```
-
-Behavior:
-
-- If the id exists, the job is removed from `jobs.json` and `Removed job <id>` is printed.
-- If the id does **not** exist, an error is printed and the process exits with a non‑zero status.
-
-Always confirm with the user before removing a job:
-
-- Show them which job (`id`, schedule, and `jobPrompt`) you are about to remove.
-- Ask explicitly if they want to proceed, then run `remove <id>` only after confirmation.
-
-### schedule
-
-Start the cron scheduler that reads `jobs.json` and runs jobs at their configured times. This is a **long‑running process**; keep it running in the background (e.g. in a terminal tab or supervisor).
-
-```bash
-bun run scripts/jobs schedule
-```
-
-Behavior:
-
-- Loads all jobs from `jobs.json` and creates cron jobs for each.
-- Logs how many jobs were loaded.
-- If there are no jobs, logs `No jobs in <path-to-jobs.json>` but continues watching.
-- Watches the workspace directory for changes to `jobs.json`:
-  - when the file changes, existing cron jobs are stopped
-  - jobs are reloaded and new cron jobs are created
-
-At each scheduled time:
-
-- Logs a timestamped line indicating which job is running (with a shortened preview of the `jobPrompt`).
-- Opens a new agent thread and sends the `jobPrompt`.
-- Streams the model output to stdout.
-- Logs any errors encountered while running the job.
-
-Use this when the user wants Greg to **continuously run recurring tasks** based on natural‑language schedules, such as reminders, summaries, or periodic reports.
-
-When explaining `schedule` to the user:
-
-- Make it clear that this process must stay running for jobs to execute.
-- Suggest running it in a long‑lived terminal tab or process manager.
-- If the user wants notifications elsewhere (e.g. Telegram, email), explain that `jobPrompt` should include instructions for where and how to send results, and that additional skills may be involved.
+- After **cron_add** (tool or CLI), repeat back the cronTime, jobPrompt, and id; ask the user to confirm.
+- Before **cron_remove**, confirm which job (id, schedule, jobPrompt) will be removed.
+- **cron_run** from the LLM cannot run jobs immediately; tell the user to run `greg cron run <jobId>` in the terminal.
+- The gateway runs the cron scheduler; jobs execute automatically at their scheduled times. Restart the gateway after changing jobs (add/remove/update) so the scheduler reloads.

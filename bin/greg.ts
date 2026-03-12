@@ -6,6 +6,13 @@ import { Command } from 'commander';
 import { name, description, version } from '../package.json';
 import * as sdk from '../gateway/sdk/sdk';
 import { validate, type Config } from '../config';
+import {
+  readJobs,
+  writeJobs,
+  getJobsPath,
+  generateJobId,
+} from '../agent/tools/cron';
+import type { CronJob } from '../agent/tools/cron';
 import { discoverSkills } from '../agent/tools/skills';
 import { sendCommand } from '../clients/telegram/send-message';
 import pc from 'picocolors';
@@ -337,6 +344,113 @@ program
       cwd: projectRoot,
     }).on('exit', (code) => process.exit(code ?? 0));
   });
+
+const cronCommand = new Command('cron').description(
+  'Manage scheduled cron jobs (stored in workspace/cron/jobs.json)'
+);
+
+cronCommand
+  .addCommand(
+    new Command('add')
+      .description('Add a scheduled job')
+      .requiredOption(
+        '--cron <expr>',
+        '6-field cron: second minute hour day month weekday (e.g. "0 0 18 * * *" for 6pm daily)'
+      )
+      .requiredOption(
+        '--prompt <text>',
+        'Prompt sent to the agent when the job runs'
+      )
+      .option('--name <name>', 'Optional short name for the job')
+      .action(async (opts: { cron: string; prompt: string; name?: string }) => {
+        const config = await loadConfig();
+        const job: CronJob = {
+          id: generateJobId(),
+          cronTime: opts.cron.trim(),
+          jobPrompt: opts.prompt.trim(),
+          enabled: true,
+        };
+        if (opts.name?.trim()) job.name = opts.name.trim();
+        const jobs = await readJobs(config);
+        jobs.push(job);
+        await writeJobs(config, jobs);
+        console.log(pc.green(`Added job ${job.id}`));
+        console.log(`  cronTime: ${job.cronTime}`);
+        console.log(
+          `  jobPrompt: ${job.jobPrompt.slice(0, 60)}${job.jobPrompt.length > 60 ? '...' : ''}`
+        );
+      })
+  )
+  .addCommand(
+    new Command('list')
+      .description('List all scheduled jobs')
+      .action(async () => {
+        const config = await loadConfig();
+        const jobs = await readJobs(config);
+        if (jobs.length === 0) {
+          console.log(pc.gray(`No jobs in ${getJobsPath(config)}`));
+          return;
+        }
+        for (const j of jobs) {
+          console.log(
+            pc.cyan(j.id),
+            j.cronTime,
+            j.name ?? '-',
+            `| ${j.jobPrompt.slice(0, 50)}${j.jobPrompt.length > 50 ? '...' : ''}`
+          );
+        }
+      })
+  )
+  .addCommand(
+    new Command('remove')
+      .description('Remove a job by id')
+      .argument('<jobId>', 'Job id from cron list')
+      .action(async (jobId: string) => {
+        const config = await loadConfig();
+        const jobs = await readJobs(config);
+        const index = jobs.findIndex((j) => j.id === jobId);
+        if (index === -1) {
+          console.error(pc.red(`Job ${jobId} not found.`));
+          process.exitCode = 1;
+          return;
+        }
+        jobs.splice(index, 1);
+        await writeJobs(config, jobs);
+        console.log(pc.green(`Removed job ${jobId}.`));
+      })
+  )
+  .addCommand(
+    new Command('run')
+      .description('Run a job immediately (gateway must be running)')
+      .argument('<jobId>', 'Job id from cron list')
+      .action(async (jobId: string) => {
+        const config = await loadConfig();
+        const jobs = await readJobs(config);
+        const job = jobs.find((j) => j.id === jobId);
+        if (!job) {
+          console.error(pc.red(`Job ${jobId} not found.`));
+          process.exitCode = 1;
+          return;
+        }
+        try {
+          const session = await sdk.Session.existing('main');
+          await session.connect();
+          await session.prompt({ content: job.jobPrompt, images: [] });
+          console.log(pc.green('Job run completed.'));
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          console.error(
+            pc.red(
+              `Failed to run job: ${message}. Ensure \`greg gateway\` is running.`
+            )
+          );
+          process.exitCode = 1;
+        }
+      })
+  );
+
+program.addCommand(cronCommand);
 
 program
   .command('sessions')
