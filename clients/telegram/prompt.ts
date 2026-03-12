@@ -112,7 +112,7 @@ export async function createPromper(bot: Bot<BotContext>) {
     if (!sessions.has('main')) {
       const mainSession = await Session.existing('main');
       await mainSession.connect();
-      mainSession.listen(callbacks);
+      mainSession.subscribe(callbacks);
       sessions.set('main', mainSession);
     }
 
@@ -129,7 +129,7 @@ export async function createPromper(bot: Bot<BotContext>) {
       } else {
         session = await Session.create('tg');
         await session.connect();
-        session.listen(callbacks);
+        session.subscribe(callbacks);
         sessions.set(messageThreadId, session);
       }
     }

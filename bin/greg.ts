@@ -410,7 +410,7 @@ program
           process.exit(1);
         }
 
-        session.listen({
+        session.subscribe({
           onThinking(chunk) {
             process.stdout.write(pc.gray(chunk));
           },

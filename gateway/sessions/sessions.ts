@@ -5,7 +5,7 @@ import config from '../../.greg';
 export type SessionTools = {
   id: string;
   working: boolean;
-  listen: typeof Agent.prototype.listen;
+  subscribe: typeof Agent.prototype.subscribe;
   abort: typeof Agent.prototype.abort;
   prompt: typeof Agent.prototype.prompt;
 };
@@ -46,8 +46,8 @@ export async function load(sessionId: string): Promise<SessionTools> {
   const tools: SessionTools = {
     id: sessionId,
     working: agent.working,
-    listen: (callbacks: Callbacks) =>
-      agent.listen(sessionStorage.proxy(callbacks, agent)),
+    subscribe: (callbacks: Callbacks) =>
+      agent.subscribe(sessionStorage.proxy(callbacks, agent)),
     abort: agent.abort.bind(agent),
     prompt: agent.prompt.bind(agent),
   };
