@@ -176,7 +176,21 @@ function createServiceCommand(serviceConfig: ServiceConfig): Command {
   cmd.addCommand(
     new Command('start')
       .description(serviceConfig.descriptions.start)
-      .action(() => runServiceStart(serviceConfig))
+      .option('-d, --detached', 'Do not follow logs after start')
+      .action(
+        async (options: {
+          detached?: boolean;
+        }) => {
+          await runServiceStart(serviceConfig);
+          if (options.detached) return;
+
+          spawnSync(
+            'bun',
+            ['run', serviceConfig.scripts.logs],
+            { stdio: 'inherit', cwd: projectRoot }
+          );
+        }
+      )
   );
 
   cmd.addCommand(

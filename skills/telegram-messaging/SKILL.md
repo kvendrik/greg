@@ -89,7 +89,7 @@ For long-running processes:
 
 - Command: `greg telegram send <message>` with optional `--voice` and `--await-reply`.
 - Arguments: `message` — the text to send.
-- `--voice`: send as a voice message (ElevenLabs). Falls back to text if `config.voice.elevenlabs.key` / `config.voice.elevenlabs.voiceId` are missing or the API fails.
+- `--voice`: send as a voice message (ElevenLabs). Falls back to text if `config.voice.elevenlabs.key` / `config.voice.elevenlabs.voiceId` are missing or the API fails. When you use `--voice`, do **not** add meta-comments like "(Replied via voice!)" or "I sent you a voice message".
 - The Telegram client is already configured and ready to use.
 
 ## Notes

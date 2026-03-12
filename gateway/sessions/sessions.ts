@@ -37,9 +37,9 @@ export async function load(sessionId: string): Promise<SessionTools> {
     return loadedSessions.get(sessionId)!;
   }
 
-  const sessionStorage = storage.exists(sessionId)
+  const sessionStorage = await (storage.exists(sessionId)
     ? storage.load(sessionId)
-    : storage.create(sessionId);
+    : storage.create(sessionId));
 
   const agent = await Agent.create({
     config,

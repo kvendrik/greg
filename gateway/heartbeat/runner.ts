@@ -6,6 +6,9 @@ import type { ExecutePromptFn, HeartbeatOptions } from './types';
 import { appendHeartbeatRun, getLastHeartbeatRun } from './run-log';
 import { isWithinActiveHours } from './active-hours';
 import { isHeartbeatPaused } from './paused';
+import { createLogger } from '../../utilities/logger';
+
+const logger = createLogger('heartbeat');
 
 const HEARTBEAT_FILENAME = 'HEARTBEAT.md';
 const DEFAULT_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
@@ -87,6 +90,14 @@ export function startHeartbeat(
       body = '';
     }
     const content = body.trim();
+
+    if (content === '') {
+      logger.info(
+        '[heartbeat] No heartbeat checklist found. Skipping heartbeat.'
+      );
+      return;
+    }
+
     const prompt =
       content.length > 0
         ? `${instruction}\n\n---\n\n${content}`
@@ -151,14 +162,9 @@ export function startHeartbeat(
       options?.jitterMs !== undefined
         ? options.jitterMs
         : Math.floor(intervalMs * 0.1);
-    const maxJitterMs = Math.max(
-      0,
-      Math.min(configuredJitterMs, intervalMs)
-    );
+    const maxJitterMs = Math.max(0, Math.min(configuredJitterMs, intervalMs));
     const jitterDelayMs =
-      maxJitterMs > 0
-        ? Math.floor(Math.random() * maxJitterMs)
-        : 0;
+      maxJitterMs > 0 ? Math.floor(Math.random() * maxJitterMs) : 0;
 
     let baseDelayMs: number;
 
