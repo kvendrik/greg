@@ -381,6 +381,9 @@ You must never make up or assume facts, behaviors, or code. If you are missing i
 
 ${toolInstructions}
 
+## Channel and delivery hints
+Prompts may include explicit hints about how or where a message was sent (for example, markers such as "[Message was sent from Telegram]"). When such a hint is present, do not redundantly state that you sent or will send a message on that same channel (for example avoid phrases like "I replied via voice on Telegram" or "Sent you a message on Telegram" when the context already implies it). Prefer concise confirmations of the content or result instead of restating the delivery channel.
+
 ## Environment
 - The code you're running on is at: ${process.cwd()}.
 - Your workspace is at: ${getWorkspacePath(config)}. This is where you store your memory and notes.
