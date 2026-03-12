@@ -98,9 +98,12 @@ When returning data:
 
 Print page contents as **Markdown** (blocks and nested children). Line numbers in options are **1-based**.
 
+**Notion pages can be very large.** To avoid loading massive amounts of text at once, **prefer reading in chunks** using `--from` and `--lines`. For example: start with the first 50–100 lines; if the user needs more or a specific section, run another `contents` call with the appropriate `--from` and `--lines`.
+
 ```bash
 bun run hub/notion -- contents <page-id>
-bun run hub/notion -- contents <page-id> --from 10 --lines 20
+bun run hub/notion -- contents <page-id> --from 1 --lines 50
+bun run hub/notion -- contents <page-id> --from 51 --lines 50
 ```
 
 | Option             | Description                                           |
@@ -111,8 +114,9 @@ bun run hub/notion -- contents <page-id> --from 10 --lines 20
 **Typical flows:**
 
 - **"Show me the contents of this Notion page"**
-  1. Run `contents <page-id>`.
-  2. Return the Markdown inside a fenced code block so formatting is preserved.
+  1. Run `contents <page-id> --from 1 --lines <N>` (e.g. 50–100 lines) to get the first chunk.
+  2. Return the Markdown inside a fenced code block. Say how many lines were shown and that more is available if needed.
+  3. If the user asks for more or a specific part, run `contents` again with the right `--from` and `--lines`.
 
 - **"Show just the middle of a long page"**
   1. Decide a sensible `--from` and `--lines` range based on what the user asked for.
@@ -121,6 +125,7 @@ bun run hub/notion -- contents <page-id> --from 10 --lines 20
 
 ## Notes
 
+- **Large pages:** Use `--from` and `--lines` with `contents` to read in chunks; do not load entire large pages in one go.
 - Pagination for `search` is not implemented; "more results" is mentioned in stderr if applicable.
 - Use `contents` when the user needs readable page text or Markdown; use `get` when they need full API JSON.
 - If a page or database is not shared with the integration, the API will behave as if it does not exist; explain this to the user and suggest sharing the page with the integration.
