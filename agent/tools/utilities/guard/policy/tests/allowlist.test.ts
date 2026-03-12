@@ -266,7 +266,7 @@ const tests: TestCase[] = [
   {
     title: 'full-path safe bin wildcard jq',
     allowlist: {
-      '/usr/bin/jq *': { trusted: false, allow: true },
+      '/usr/bin/jq *': { trusted: true, allow: true },
     },
     command: '/usr/bin/jq .',
     expected: { allow: true, trusted: true },

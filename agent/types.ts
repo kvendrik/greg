@@ -1,4 +1,4 @@
-export type { Config as BaseConfig } from '../../config';
+export type { Config as BaseConfig } from '../config';
 
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { GuardMethods } from './tools/utilities/guard/guard';
@@ -14,6 +14,30 @@ export interface ToolContext {
 export type AllowListEntry = { trusted: boolean; allow: boolean };
 export type AllowList = Record<string, AllowListEntry>;
 
+export interface CronRetryConfig {
+  maxAttempts?: number;
+  backoffMs?: number[];
+  retryOn?: string[];
+}
+
+export interface CronRunLogConfig {
+  maxBytes?: number;
+  keepLines?: number;
+}
+
+export interface CronConfig {
+  /** If false, cron scheduler does not start. Default true. */
+  enabled?: boolean;
+  /** Override job store path (default: workspace/cron/jobs.json). */
+  store?: string;
+  /** Max concurrent job runs. Default 1. */
+  maxConcurrentRuns?: number;
+  /** Retry policy (shape only; behavior in later tier). */
+  retry?: CronRetryConfig;
+  /** Run log pruning. */
+  runLog?: CronRunLogConfig;
+}
+
 export interface AgentConfig {
   /**
    * ID to use as the QMD collection name
@@ -28,6 +52,20 @@ export interface AgentConfig {
    * Port for the agent server. `greg start` to start the server.
    */
   port: string;
+  /** Cron scheduler and job store config. */
+  cron?: CronConfig;
+  /** Heartbeat: periodic main-session runs using workspace HEARTBEAT.md. */
+  heartbeat?: {
+    enabled?: boolean;
+    intervalMs?: number;
+    activeHours?: { start: string; end: string; timezone?: string };
+    prompt?: string;
+    ackMaxChars?: number;
+    jitterMs?: number;
+    includeReasoning?: boolean;
+    target?: 'last' | 'none';
+    runLog?: { maxBytes?: number; keepLines?: number };
+  };
   /**
    * Models the agent has access to
    */

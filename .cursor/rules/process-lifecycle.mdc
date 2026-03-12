@@ -1,0 +1,10 @@
+---
+description: Handle async startup and graceful shutdown for long-running services
+alwaysApply: true
+---
+
+When starting long-running services (HTTP server, bots, child processes, etc.):
+
+- **Promise rejections**: Attach `.catch()` (or equivalent) to the main async entry point (e.g. `start()`) so startup failures are logged or handled instead of becoming unhandled rejections.
+- **Fire-and-forget promises**: Any background promise (e.g. `bot.start()` for long polling) that is not awaited must have a `.catch()` so its rejections do not go unhandled.
+- **Teardown**: Keep references needed for shutdown (e.g. server instance, a `stop()` returned from a child process). Register SIGINT/SIGTERM handlers (or your platform’s equivalent) and shut down those services in a sensible order (e.g. stop accepting new work, then close connections, then exit).

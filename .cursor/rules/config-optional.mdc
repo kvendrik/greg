@@ -1,0 +1,9 @@
+---
+description: Optional features gated by config must not be required at startup
+alwaysApply: false
+---
+
+When adding a feature that is gated by config (e.g. API key, `enabled` flag, optional integration):
+
+- Use the feature only when that config is present. Do not require it for process startup.
+- Do not fail the whole process if the optional key or flag is missing. Treat absence as “feature disabled” and continue.

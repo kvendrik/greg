@@ -7,7 +7,7 @@ description: 'How to send messages to the user via Telegram using greg telegram 
 
 ## Overview
 
-This workspace has a built-in Telegram messaging capability. Use the `greg telegram send` command to send messages to the user.
+This workspace has a built-in Telegram messaging capability. Use the `greg telegram send` command to send messages to the user. Messages can be sent as **text** or as **voice messages** (ElevenLabs TTS). If voice is requested but not configured or the voice API fails, the message is sent as normal text instead.
 
 ## When to use this skill
 
@@ -18,6 +18,11 @@ Use Telegram messaging when:
 - The user explicitly asks to **receive updates via Telegram**.
 - You need to **ask the user a question** and use their reply in the next step (the agent does this via the Telegram service’s await-reply channel when e.g. confirming a guarded command).
 
+Use **voice messages** when:
+
+- The user prefers or requested voice updates.
+- The message is short and benefits from being spoken (e.g. a quick confirmation or alert).
+
 Avoid using this skill for:
 
 - Extremely long logs or outputs that will be unreadable in a messaging app.
@@ -27,8 +32,17 @@ Avoid using this skill for:
 
 Run from the **repo root** (the directory where `greg` and `package.json` live). Your system prompt gives this as **"The code you're running on is at: ..."** — use that path as the working directory for these commands.
 
+**Text message:**
+
 ```bash
 cd "<path from system prompt: The code you're running on is at: ...>" && greg telegram send "Your message here"
+```
+
+**Voice message (ElevenLabs TTS):**  
+Add `--voice`. If `config.voice.elevenlabs` is not set in `.greg` or the voice API errors, send the message as normal text instead using `greg telegram send` without the `--voice` flag.
+
+```bash
+cd [WORKSPACE_ROOT] && greg telegram send --voice "Your message here"
 ```
 
 When sending a message:
@@ -73,8 +87,9 @@ For long-running processes:
 
 ## Technical Details
 
-- Command: `greg telegram send <message>`
+- Command: `greg telegram send <message>` with optional `--voice` and `--await-reply`.
 - Arguments: `message` — the text to send.
+- `--voice`: send as a voice message (ElevenLabs). Falls back to text if `config.voice.elevenlabs.key` / `config.voice.elevenlabs.voiceId` are missing or the API fails.
 - The Telegram client is already configured and ready to use.
 
 ## Notes
@@ -83,6 +98,7 @@ For long-running processes:
 - Run the command from the workspace root (where package.json lives).
 - Messages should be wrapped in quotes to handle spaces and special characters.
 - The connection is already set up, no additional configuration needed.
+- For voice: configure `voice.elevenlabs.key` and `voice.elevenlabs.voiceId` in `.greg` to enable voice. If not set, `--voice` still sends the message as text.
 
 If the command fails (e.g. `bun` error, script not found, Telegram not configured):
 

@@ -3,7 +3,7 @@ import { getAllowlistForCommand } from './allowlist';
 import { saveAlwaysAllowPreferenceForCommand } from './allowlist';
 import type { ToolContext } from '../../../../types';
 import { parseCommand } from './command-parser/command-parser';
-import { sendMessage } from '../../../../../../clients/telegram/utilities';
+import { sendMessage } from '../../../../../clients/telegram/utilities';
 
 type PolicyEvaluation =
   | {

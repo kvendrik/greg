@@ -1,0 +1,17 @@
+---
+description: When doing research or looking up information, search and cite; when giving recommendations, tier by impact and offer to save a plan
+alwaysApply: true
+---
+
+When the user asks for research, up-to-date information, or to look something up:
+
+- **Search**: Use web search or fetch tools to find current sources (docs, articles, official sites). Prefer authoritative sources (official docs, known references).
+- **Verify**: Base answers on what you actually read from those sources. Do not invent URLs, quotes, or version numbers.
+- **Cite**: When giving facts or recommendations, cite the source (e.g. URL and a short quote or summary). If something is inferred or uncertain, say so.
+- If search fails or no good source is found, say so clearly instead of guessing.
+- Prefer a few well-sourced points over long unsourced answers.
+
+When you've finished researching and are giving recommendations:
+
+- **Tiers**: Divide recommendations into tiers and order them from highest to lowest impact. Make the tiers explicit (e.g. "High impact", "Medium impact", "Lower impact" or numbered tiers).
+- **Plan offer**: Ask the user if they want to save a plan to `planning/*` as a Markdown file so they can iterate on it and execute later, or if they'd like to work on it now.

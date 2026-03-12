@@ -2,7 +2,29 @@ import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import type { ToolContext } from '../../types';
 import * as store from './store';
-import type { CronJob } from './types';
+import { formatSchedule } from './format';
+import type { CronJob, Schedule } from './types';
+import { validateSchedule } from './validate';
+
+const ScheduleSchema = Type.Union([
+  Type.Object({
+    kind: Type.Literal('cron'),
+    expr: Type.String({ description: '6-field cron expression.' }),
+    tz: Type.Optional(
+      Type.String({ description: 'IANA timezone (e.g. Europe/Amsterdam).' })
+    ),
+  }),
+  Type.Object({
+    kind: Type.Literal('every'),
+    everyMs: Type.Number({ description: 'Interval in milliseconds.' }),
+  }),
+  Type.Object({
+    kind: Type.Literal('at'),
+    at: Type.String({
+      description: 'ISO 8601 or date string for one-shot run.',
+    }),
+  }),
+]);
 
 export function getCronTools(context: ToolContext): AgentTool[] {
   const { config } = context;
@@ -11,45 +33,69 @@ export function getCronTools(context: ToolContext): AgentTool[] {
     {
       name: 'cron_add',
       label: 'cron add',
-      description: `Add a scheduled job. The job runs at the given cron time and sends the prompt to the agent. cronTime is 6-field: second minute hour day-of-month month day-of-week (e.g. "0 0 18 * * *" for 6pm daily). Returns the new job id.`,
+      description: `Add a scheduled job. Schedule: kind "cron" (expr + optional tz), "every" (everyMs), or "at" (one-shot ISO date). Returns the new job id.`,
       parameters: Type.Object({
-        cronTime: Type.String({
-          description:
-            '6-field cron expression: second minute hour day-of-month month day-of-week.',
-        }),
+        schedule: ScheduleSchema,
         jobPrompt: Type.String({
           description: 'Prompt text sent to the agent when the job runs.',
         }),
         name: Type.Optional(
           Type.String({ description: 'Optional short name for the job.' })
         ),
+        staggerMs: Type.Optional(
+          Type.Number({
+            description: 'Delay execution by this many ms to spread load.',
+          })
+        ),
+        deleteAfterRun: Type.Optional(
+          Type.Boolean({
+            description:
+              'If true and schedule is "at", remove the job after it runs once.',
+          })
+        ),
       }),
       execute: async (_id, params) => {
-        const { cronTime, jobPrompt, name } = params as {
-          cronTime: string;
-          jobPrompt: string;
-          name?: string;
-        };
-        const trimmedCron = cronTime.trim();
+        const { schedule, jobPrompt, name, staggerMs, deleteAfterRun } =
+          params as {
+            schedule: Schedule;
+            jobPrompt: string;
+            name?: string;
+            staggerMs?: number;
+            deleteAfterRun?: boolean;
+          };
         const trimmedPrompt = jobPrompt.trim();
-        if (!trimmedCron || !trimmedPrompt) {
+        if (!trimmedPrompt) {
           return {
             content: [
               {
                 type: 'text' as const,
-                text: 'cronTime and jobPrompt are required and cannot be empty.',
+                text: 'jobPrompt is required and cannot be empty.',
               },
             ],
             details: {},
           };
         }
+        const validation = validateSchedule(schedule);
+        if (!validation.valid) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: validation.error ?? 'Invalid schedule.',
+              },
+            ],
+            details: { valid: false, error: validation.error },
+          };
+        }
         const job: CronJob = {
           id: store.generateJobId(),
-          cronTime: trimmedCron,
+          schedule,
           jobPrompt: trimmedPrompt,
           enabled: true,
         };
         if (name?.trim()) job.name = name.trim();
+        if (staggerMs != null && staggerMs >= 0) job.staggerMs = staggerMs;
+        if (deleteAfterRun === true) job.deleteAfterRun = true;
         const jobs = await store.readJobs(config);
         jobs.push(job);
         await store.writeJobs(config, jobs);
@@ -57,10 +103,14 @@ export function getCronTools(context: ToolContext): AgentTool[] {
           content: [
             {
               type: 'text' as const,
-              text: `Added job ${job.id}. cronTime: ${job.cronTime}, jobPrompt: ${job.jobPrompt.slice(0, 80)}${job.jobPrompt.length > 80 ? '...' : ''}`,
+              text: `Added job ${job.id}. ${formatSchedule(schedule)}, jobPrompt: ${job.jobPrompt.slice(0, 80)}${job.jobPrompt.length > 80 ? '...' : ''}`,
             },
           ],
-          details: { jobId: job.id, cronTime: job.cronTime, jobPrompt: job.jobPrompt },
+          details: {
+            jobId: job.id,
+            schedule: job.schedule,
+            jobPrompt: job.jobPrompt,
+          },
         };
       },
     },
@@ -68,7 +118,7 @@ export function getCronTools(context: ToolContext): AgentTool[] {
       name: 'cron_list',
       label: 'cron list',
       description:
-        'List all scheduled cron jobs. Returns id, cronTime, jobPrompt, name, and enabled for each job.',
+        'List all scheduled cron jobs. Returns id, schedule, jobPrompt, name, and enabled for each job.',
       parameters: Type.Object({}),
       execute: async () => {
         const jobs = await store.readJobs(config);
@@ -85,15 +135,10 @@ export function getCronTools(context: ToolContext): AgentTool[] {
         }
         const lines = jobs.map(
           (j) =>
-            `${j.id} | ${j.cronTime} | ${j.name ?? '-'} | enabled: ${j.enabled !== false} | ${j.jobPrompt.slice(0, 60)}${j.jobPrompt.length > 60 ? '...' : ''}`
+            `${j.id} | ${formatSchedule(j.schedule)} | ${j.name ?? '-'} | enabled: ${j.enabled !== false} | ${j.jobPrompt.slice(0, 60)}${j.jobPrompt.length > 60 ? '...' : ''}`
         );
         return {
-          content: [
-            {
-              type: 'text' as const,
-              text: lines.join('\n'),
-            },
-          ],
+          content: [{ type: 'text' as const, text: lines.join('\n') }],
           details: { jobs },
         };
       },
@@ -112,10 +157,7 @@ export function getCronTools(context: ToolContext): AgentTool[] {
         if (index === -1) {
           return {
             content: [
-              {
-                type: 'text' as const,
-                text: `Job ${jobId} not found.`,
-              },
+              { type: 'text' as const, text: `Job ${jobId} not found.` },
             ],
             details: { removed: false },
           };
@@ -132,21 +174,33 @@ export function getCronTools(context: ToolContext): AgentTool[] {
       name: 'cron_update',
       label: 'cron update',
       description:
-        'Update an existing job (cronTime, jobPrompt, name, or enabled). Omit fields to leave unchanged.',
+        'Update an existing job (schedule, jobPrompt, name, or enabled). Omit fields to leave unchanged.',
       parameters: Type.Object({
         jobId: Type.String({ description: 'Id of the job to update.' }),
-        cronTime: Type.Optional(Type.String()),
+        schedule: Type.Optional(ScheduleSchema),
         jobPrompt: Type.Optional(Type.String()),
         name: Type.Optional(Type.String()),
         enabled: Type.Optional(Type.Boolean()),
+        staggerMs: Type.Optional(Type.Number()),
+        deleteAfterRun: Type.Optional(Type.Boolean()),
       }),
       execute: async (_id, params) => {
-        const { jobId, cronTime, jobPrompt, name, enabled } = params as {
+        const {
+          jobId,
+          schedule,
+          jobPrompt,
+          name,
+          enabled,
+          staggerMs,
+          deleteAfterRun,
+        } = params as {
           jobId: string;
-          cronTime?: string;
+          schedule?: Schedule;
           jobPrompt?: string;
           name?: string;
           enabled?: boolean;
+          staggerMs?: number;
+          deleteAfterRun?: boolean;
         };
         const jobs = await store.readJobs(config);
         const job = jobs.find((j) => j.id === jobId);
@@ -158,17 +212,20 @@ export function getCronTools(context: ToolContext): AgentTool[] {
             details: { updated: false },
           };
         }
-        if (cronTime !== undefined) {
-          const trimmed = cronTime.trim();
-          if (!trimmed) {
+        if (schedule !== undefined) {
+          const validation = validateSchedule(schedule);
+          if (!validation.valid) {
             return {
               content: [
-                { type: 'text' as const, text: 'cronTime cannot be empty.' },
+                {
+                  type: 'text' as const,
+                  text: validation.error ?? 'Invalid schedule.',
+                },
               ],
               details: { updated: false },
             };
           }
-          job.cronTime = trimmed;
+          job.schedule = schedule;
         }
         if (jobPrompt !== undefined) {
           const trimmed = jobPrompt.trim();
@@ -184,25 +241,25 @@ export function getCronTools(context: ToolContext): AgentTool[] {
         }
         if (name !== undefined) job.name = name.trim() || undefined;
         if (enabled !== undefined) job.enabled = enabled;
+        if (staggerMs !== undefined)
+          job.staggerMs = staggerMs >= 0 ? staggerMs : undefined;
+        if (deleteAfterRun !== undefined) job.deleteAfterRun = deleteAfterRun;
         await store.writeJobs(config, jobs);
         return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `Updated job ${jobId}.`,
-            },
-          ],
+          content: [{ type: 'text' as const, text: `Updated job ${jobId}.` }],
           details: { updated: true, jobId },
         };
       },
     },
     {
-      name: 'cron_run',
-      label: 'cron run',
+      name: 'cron_run_hint',
+      label: 'cron run hint',
       description:
-        'Run a job immediately once (by id). Does not change the schedule. Use cron_list to see ids.',
+        'Returns instructions for running a job immediately. Does not execute the job—the agent cannot trigger an immediate run; the user must run `greg cron run <jobId>` in the terminal (gateway must be running). Use when the user asks to run a job now. Use cron_list to see job ids.',
       parameters: Type.Object({
-        jobId: Type.String({ description: 'Id of the job to run now.' }),
+        jobId: Type.String({
+          description: 'Id of the job to run (user runs via CLI).',
+        }),
       }),
       execute: async (_id, params) => {
         const { jobId } = params as { jobId: string };

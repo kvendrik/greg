@@ -1,13 +1,16 @@
-import { Agent, type Callbacks } from '../../agent';
-import * as storage from './storage';
+import { Agent, type Callbacks, type PromptInput } from '../../agent';
+import * as storage from './storage/storage';
 import config from '../../.greg';
+import type { PromptOptionsRef } from './storage/storage';
+
+export type SessionPromptOptions = { heartbeatAckMaxChars?: number };
 
 export type SessionTools = {
   id: string;
   working: boolean;
   subscribe: typeof Agent.prototype.subscribe;
   abort: typeof Agent.prototype.abort;
-  prompt: typeof Agent.prototype.prompt;
+  prompt: (input: PromptInput, options?: SessionPromptOptions) => Promise<void>;
 };
 
 const loadedSessions = new Map<string, SessionTools>();

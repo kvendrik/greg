@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { convert } from 'telegram-markdown-v2';
 import config from '../../.greg';
+import { synthesizeToBuffer } from '../../scripts/voice/speech';
+import { Bot, type Context, InputFile } from 'grammy';
 import { TaskChannel } from '../TaskChannel';
 
 type TelegramConfig = NonNullable<
@@ -24,26 +26,36 @@ export const telegramAwaitSocketPath = path.join(
  * Sends a message: via send CLI when awaitReply is false; via service socket when true.
  * When awaitReply is true, waits for the user's reply (no timeout) and returns it.
  */
-export function sendMessage(
-  text: string,
-  options: { awaitReply: true }
-): Promise<string>;
-export function sendMessage(
-  text: string,
-  options: { awaitReply: false }
-): Promise<void>;
 export async function sendMessage(
   text: string,
-  options: { awaitReply: boolean }
+  options: { awaitReply: boolean; voice: boolean }
 ): Promise<string | void> {
+  const { botToken, senderId } = getTelegramEnv();
+  const bot = new Bot<Context>(botToken);
+
+  if (options.voice) {
+    const audioBuffer = await synthesizeToBuffer(text);
+    const voiceFile = new InputFile(audioBuffer, 'voice.mp3');
+    await bot.api.sendVoice(senderId, voiceFile);
+    return;
+  }
+
   if (options.awaitReply) {
     return TaskChannel.send('await-reply', text, telegramAwaitSocketPath);
   }
-  const scriptPath = path.join(import.meta.dirname, 'send-message.ts');
-  const proc = spawn('bun', [scriptPath, text], {
-    stdio: 'inherit',
-  });
-  await waitForProcessExit(proc);
+
+  const escaped = escapeMarkdownV2(text);
+
+  try {
+    /**
+     * Only the Telegram gateway knows what thread the user is on
+     * so when possible we use the TaskChannel to send the message
+     * so it can be sent in the correct thread.
+     */
+    await TaskChannel.send('send-message', escaped, telegramAwaitSocketPath);
+  } catch {
+    await bot.api.sendMessage(senderId, escaped);
+  }
 }
 
 export async function editTopicName(

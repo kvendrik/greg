@@ -230,67 +230,67 @@ function createSaveSkillTool(config: AgentConfig): AgentTool {
     name: 'save_skill',
     label: 'save skill',
     description:
-    'Create or update a skill. Call whenever you learn or establish something reusable: a workflow, rule, convention, or capability. Prefer saving when in doubt. Use at the end of your response after teaching or applying something new (e.g. new CLI workflow, project convention, how the user wants something done).',
-  parameters: Type.Object({
-    name: Type.String({
-      description:
-        'Skill name: 1-64 chars, lowercase letters numbers hyphens only; no leading/trailing/consecutive hyphens (underscores are converted to hyphens). Skills should have names that are specific to their use-case. E.g. a skill to read Gmail emails shouldn’t be called read-emails but read-gmail.',
-    }),
-    description: Type.String({
-      description:
-        'Short description for the skill frontmatter (required, 1-1024 characters)',
-    }),
-    content: Type.String({
-      description:
-        'Markdown body of the skill (instructions and content after the frontmatter)',
-    }),
-    path: Type.Optional(
-      Type.String({
+      'Create or update a skill. Call whenever you learn or establish something reusable: a workflow, rule, convention, or capability. Prefer saving when in doubt. Use at the end of your response after teaching or applying something new (e.g. new CLI workflow, project convention, how the user wants something done).',
+    parameters: Type.Object({
+      name: Type.String({
         description:
-          'Path to the skill file to save to in case the skill already exists.',
-      })
-    ),
-    scope: Type.Optional(
-      Type.Union([
-        Type.Literal('global', {
+          'Skill name: 1-64 chars, lowercase letters numbers hyphens only; no leading/trailing/consecutive hyphens (underscores are converted to hyphens). Skills should have names that are specific to their use-case. E.g. a skill to read Gmail emails shouldn’t be called read-emails but read-gmail.',
+      }),
+      description: Type.String({
+        description:
+          'Short description for the skill frontmatter (required, 1-1024 characters)',
+      }),
+      content: Type.String({
+        description:
+          'Markdown body of the skill (instructions and content after the frontmatter)',
+      }),
+      path: Type.Optional(
+        Type.String({
           description:
-            'Save the skill globally so it is available to all agents/users and becomes part of Greg’s shared repository.',
-        }),
-        Type.Literal('workspace', {
-          description:
-            'Save the skill only for this agent/user in the current workspace.',
-        }),
-      ])
-    ),
-  }),
-  execute: async (_id, params, signal) => {
-    if (signal?.aborted) {
-      throw new DOMException('Aborted', 'AbortError');
-    }
+            'Path to the skill file to save to in case the skill already exists.',
+        })
+      ),
+      scope: Type.Optional(
+        Type.Union([
+          Type.Literal('global', {
+            description:
+              'Save the skill globally so it is available to all agents/users and becomes part of Greg’s shared repository.',
+          }),
+          Type.Literal('workspace', {
+            description:
+              'Save the skill only for this agent/user in the current workspace.',
+          }),
+        ])
+      ),
+    }),
+    execute: async (_id, params, signal) => {
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
 
-    const { name, description, content, path, scope } = params as {
-      name: string;
-      description: string;
-      content: string;
-      path?: string;
-      scope?: 'global' | 'workspace';
-    };
-    try {
-      const result = saveSkill(
-        name,
-        description,
-        content,
-        path,
-        scope,
-        config
-      );
-      const text = `Skill "${result.name}" saved to ${result.path}.`;
-      return { content: [{ type: 'text' as const, text }], details: {} };
-    } catch (err) {
-      const text = err instanceof Error ? err.message : String(err);
-      return { content: [{ type: 'text' as const, text }], details: {} };
-    }
-  },
+      const { name, description, content, path, scope } = params as {
+        name: string;
+        description: string;
+        content: string;
+        path?: string;
+        scope?: 'global' | 'workspace';
+      };
+      try {
+        const result = saveSkill(
+          name,
+          description,
+          content,
+          path,
+          scope,
+          config
+        );
+        const text = `Skill "${result.name}" saved to ${result.path}.`;
+        return { content: [{ type: 'text' as const, text }], details: {} };
+      } catch (err) {
+        const text = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text' as const, text }], details: {} };
+      }
+    },
   };
 }
 

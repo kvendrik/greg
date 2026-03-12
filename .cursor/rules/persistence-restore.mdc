@@ -1,0 +1,10 @@
+---
+description: When persisting state, implement both write and read/restore paths
+globs: "**/storage/**/*.ts,**/sessions/**/*.ts,**/*persist*.ts"
+alwaysApply: false
+---
+
+When a module is responsible for persisting state to disk (or similar) and the product expects that state to be available later (e.g. session restore, reload after restart):
+
+- Implement both the **write** path (saving state) and the **read/restore** path (loading that state back).
+- The load path must actually restore the state that callers expect (e.g. messages, session data). Do not return empty or unused data from load when the feature is meant to restore previous state.

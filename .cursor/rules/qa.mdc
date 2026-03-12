@@ -1,5 +1,8 @@
 ---
+description: When asked to QA, review changes only; no new files; ensure clarity, rule compliance, and robustness
 alwaysApply: true
 ---
 
 When asked to QA your work don't create any new files. Go through all the changes you made and make sure the code is easy to understand, follows the other rules, and is robust.
+
+Also verify that any methods and variables you created or exported are actually used somewhere in the codebase. If you find an exported symbol or a new method/variable that is never referenced, warn the user (e.g. "Unused export: X in path/to/file").
