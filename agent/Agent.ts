@@ -61,7 +61,7 @@ export class Agent {
     this.abortController = null;
   }
 
-  listen(callbacks: Callbacks): string {
+  subscribe(callbacks: Callbacks): string {
     const id = createUUID();
     this.callbacks.set(id, callbacks);
     return id;
@@ -273,6 +273,7 @@ export class Agent {
         const isPrimaryModel =
           this.core.state.model?.id === this.primaryModel.id &&
           this.core.state.model?.provider === this.primaryModel.provider;
+
         if (
           isPrimaryModel &&
           (this.core.state.error.includes('overloaded') ||
@@ -282,17 +283,21 @@ export class Agent {
           const fallbackModel =
             this.config.models.find((model) => model.role === 'fallback')
               ?.model ?? null;
+
           if (!fallbackModel) {
             callbacks.onError?.(`No fallback model found in config.models.`);
             return;
           }
+
           console.info(
             pc.yellow(
               `${modelLabel} is overloaded. Trying again with ${fallbackModel.name}.`
             )
           );
+
           this.core.setModel(fallbackModel);
           this.core.replaceMessages(this.core.state.messages.slice(0, -1));
+
           await this.core.continue();
         } else {
           callbacks.onError?.(this.core.state.error);

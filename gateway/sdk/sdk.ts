@@ -43,7 +43,7 @@ export class Session {
     await this.ensureSocket();
   }
 
-  listen(callbacks: Callbacks): string {
+  subscribe(callbacks: Callbacks): string {
     const id = createUUID();
     this.callbacks.set(id, callbacks);
     return id;

@@ -122,7 +122,7 @@ describe('agent SDK', () => {
           onError() {},
         };
 
-        session.listen(callbacks);
+        session.subscribe(callbacks);
 
         const prompt: PromptInput = { content: 'Hi', images: [] };
         await session.prompt(prompt);

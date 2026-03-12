@@ -83,7 +83,10 @@ export async function startServer(port = Number(config.port)) {
         },
       },
       '/sessions/:id': {
-        GET: (req: Request & SessionIdParams, bunServer: Server<WebSocketData>) => {
+        GET: (
+          req: Request & SessionIdParams,
+          bunServer: Server<WebSocketData>
+        ) => {
           logRequest(req);
           const { id } = req.params;
           if (!id) {
@@ -135,7 +138,7 @@ export async function startServer(port = Number(config.port)) {
         const existingSession = await sessions.load(sessionId);
         const sender = createSender<AgentEvent>(ws);
 
-        existingSession.listen({
+        existingSession.subscribe({
           onTurnStart(prompt) {
             sender.send({ type: 'turn_start', prompt });
           },

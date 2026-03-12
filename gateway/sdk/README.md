@@ -14,7 +14,7 @@ const session = await Session.existing('main');
 
 await session.connect();
 
-session.listen({
+session.subscribe({
   onThinking(chunk) {},
   onContent(chunk) {},
   onToolcall() {},
