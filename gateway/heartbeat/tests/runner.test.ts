@@ -31,12 +31,12 @@ describe('heartbeat', () => {
       await writeFile(join(dir, 'HEARTBEAT.md'), checklist, 'utf8');
       const calls: { prompt: string; opts?: unknown }[] = [];
       const stop = startHeartbeat(
-        { workspace: dir, options: { intervalMs: 20, jitterMs: 0 } },
+        { workspace: dir, options: { intervalMs: 50, jitterMs: 0 } },
         async (prompt, opts) => {
           calls.push({ prompt, opts });
         }
       );
-      await wait(50);
+      await wait(200);
       stop();
       expect(calls.length).toBeGreaterThanOrEqual(1);
       const first = calls[0]!;
@@ -53,12 +53,12 @@ describe('heartbeat', () => {
       const dir = await createTempDir();
       const calls: { prompt: string }[] = [];
       const stop = startHeartbeat(
-        { workspace: dir, options: { intervalMs: 20, jitterMs: 0 } },
+        { workspace: dir, options: { intervalMs: 50, jitterMs: 0 } },
         async (prompt) => {
           calls.push({ prompt });
         }
       );
-      await wait(50);
+      await wait(200);
       stop();
       expect(calls.length).toBeGreaterThanOrEqual(1);
       expect(calls[0]!.prompt).toContain('No checklist items');
@@ -135,8 +135,8 @@ describe('heartbeat', () => {
 
     it('skips run when previous run still in progress (overlap guard)', async () => {
       const dir = await createTempDir();
-      const callbackDelay = 80;
-      const intervalMs = 20;
+      const callbackDelay = 300;
+      const intervalMs = 200;
       const calls: number[] = [];
       const stop = startHeartbeat(
         { workspace: dir, options: { intervalMs, jitterMs: 0 } },
@@ -145,7 +145,7 @@ describe('heartbeat', () => {
           await wait(callbackDelay);
         }
       );
-      await wait(intervalMs + 10);
+      await wait(400);
       stop();
       expect(calls.length).toBe(1);
     });
@@ -169,17 +169,34 @@ describe('heartbeat', () => {
       const dir = await createTempDir();
       const calls: number[] = [];
       const stop = startHeartbeat(
-        { workspace: dir, options: { intervalMs: 20, jitterMs: 0 } },
+        { workspace: dir, options: { intervalMs: 50, jitterMs: 0 } },
         async () => {
           calls.push(1);
         }
       );
-      await wait(50);
+      await wait(300);
       expect(calls.length).toBeGreaterThanOrEqual(1);
       const countAfterStop = calls.length;
       stop();
-      await wait(80);
+      await wait(300);
       expect(calls.length).toBe(countAfterStop);
+    });
+
+    it('respects interval before first run when jitterMs is 0 (no immediate cold start run)', async () => {
+      const dir = await createTempDir();
+      const calls: number[] = [];
+      const stop = startHeartbeat(
+        { workspace: dir, options: { intervalMs: 200, jitterMs: 0 } },
+        async () => {
+          calls.push(1);
+        }
+      );
+
+      // With intervalMs=200 and jitterMs=0, first run should not occur before ~200ms.
+      await wait(100);
+      expect(calls.length).toBe(0);
+
+      stop();
     });
   });
 });

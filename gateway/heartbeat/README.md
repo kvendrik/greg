@@ -43,7 +43,7 @@ heartbeat: {
   activeHours: { start: '08:00', end: '22:00', timezone: 'Europe/Amsterdam' },
   prompt: '…',                      // full instruction text; if set, replaces the default. HEARTBEAT.md content is still appended after "---"
   ackMaxChars: 300,                // if the reply is HEARTBEAT_OK (or that + up to this many chars), the message is not persisted. Raise to allow short notes with the ack; lower to drop more
-  jitterMs: 60_000,                // first run is delayed by a random 0–jitterMs ms (e.g. 60_000 = up to 1 min). Use to stagger multiple gateways so they don’t all fire at once
+  jitterMs: 60_000,                // optional: max jitter for the first run after a cold start. Default is 10% of intervalMs (clamped to intervalMs). Set 0 to disable. Actual delay = base schedule + random 0–jitterMs ms
   target: 'last',                  // "last" = main session (default). "none" reserved for future routing
   runLog: { maxBytes: 500_000, keepLines: 500 },  // where to cap heartbeat/runs.jsonl; pruned when over maxBytes, keeping last keepLines lines
 }

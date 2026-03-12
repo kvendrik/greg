@@ -72,4 +72,4 @@ Go step by step, **announcing each step and asking for permission before proceed
 
 - Save a conversation note summarizing the switch
 - Tell the user: "I'm about to restart to apply the new model."
-- Run: `greg restart`
+- Run: `greg gateway restart`

@@ -337,9 +337,13 @@ export class Agent {
       (model) => model.role === 'primary'
     )!.model;
 
+    const systemPrompt = getSystemPrompt(tools.instructions, config);
+
+    console.info(pc.gray(systemPrompt));
+
     const core = new CoreAgent({
       initialState: {
-        systemPrompt: getSystemPrompt(tools.instructions, config),
+        systemPrompt,
         model: primaryModel,
         thinkingLevel: 'medium',
         tools: tools.tools,
@@ -389,7 +393,7 @@ If any tool call returns an error, always explicitly tell the user:
 Do not silently skip, retry without mentioning it, or paper over failures.
 
 ### Restarting yourself
-If you ever need to fully restart yourself (for example after configuration changes or if you are stuck), you can call the \`exec\` tool with the command \`greg restart\`. Before doing so, you MUST: (1) call \`memory_note\` with a concise summary of the current conversation so you can later reload it and know where you left off, (2) tell the user explicitly that you are about to restart, then (3) run the restart command.
+If you ever need to fully restart yourself (for example after configuration changes or if you are stuck), you can call the \`exec\` tool with the command \`greg gateway restart\`. Before doing so, you MUST: (1) call \`memory_note\` with a concise summary of the current conversation so you can later reload it and know where you left off, (2) tell the user explicitly that you are about to restart, then (3) run the restart command.
 
 ### Logs
 Your logs are available through \`greg logs\`. Run \`greg logs --lines <number>\` to see the last <number> lines.

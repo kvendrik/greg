@@ -6,20 +6,20 @@ Skills are Markdown files in `SKILL.md` inside each subdirectory. Greg discovers
 
 The following skills from [LeoYeAI/openclaw-master-skills](https://github.com/LeoYeAI/openclaw-master-skills) are included without an `openclaw-` prefix. Some are adapted for Greg (e.g. using workspace memory instead of subagents, or reading skill files via `cat` instead of a Skill tool).
 
-| Skill | Notes |
-|-------|--------|
-| `writing-skills` | When/how to create and edit skills; Greg-adapted (save_skill, skills/ dir). |
-| `using-superpowers` | How to find and use skills; Greg-adapted (read from location, red flags, priority). |
-| `remembering-conversations` | Reuse past conversations; Greg-adapted (workspace memory and notes, no subagent). |
-| `session-logs` | Search past session transcripts when user references older/parent conversations; Greg-adapted (memory_search / memory_summarize / memory_get over workspace/sessions, no jq/rg). |
-| `skill-creator` | Create or improve skills; Greg-adapted (no eval runner, iterate with user feedback). |
-| `docx` | Create, read, edit Word documents (from OpenClaw). |
-| `pdf` | Read, edit, merge PDFs (from OpenClaw). |
-| `xlsx` | Spreadsheets as input/output (from OpenClaw). |
+| Skill                       | Notes                                                                                                                                                                            |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `writing-skills`            | When/how to create and edit skills; Greg-adapted (save_skill, skills/ dir).                                                                                                      |
+| `using-superpowers`         | How to find and use skills; Greg-adapted (read from location, red flags, priority).                                                                                              |
+| `remembering-conversations` | Reuse past conversations; Greg-adapted (workspace memory and notes, no subagent).                                                                                                |
+| `session-logs`              | Search past session transcripts when user references older/parent conversations; Greg-adapted (memory_search / memory_summarize / memory_get over workspace/sessions, no jq/rg). |
+| `skill-creator`             | Create or improve skills; Greg-adapted (no eval runner, iterate with user feedback).                                                                                             |
+| `docx`                      | Create, read, edit Word documents (from OpenClaw).                                                                                                                               |
+| `pdf`                       | Read, edit, merge PDFs (from OpenClaw).                                                                                                                                          |
+| `xlsx`                      | Spreadsheets as input/output (from OpenClaw).                                                                                                                                    |
 
 **git:** The existing `git` skill was updated with conventional commit format, types, workflow, and safety rules from OpenClaw's `git-commit`. We do not add `git-commit` as a separate skill.
 
-To add more skills from OpenClaw: clone the repo, copy `skills/<name>` into this `skills/` directory (no prefix unless you want to avoid name clashes), and run `greg memory index` and `greg restart` if needed.
+To add more skills from OpenClaw: clone the repo, copy `skills/<name>` into this `skills/` directory (no prefix unless you want to avoid name clashes), and run `greg memory index` and `greg gateway restart` if needed.
 
 ---
 
@@ -42,12 +42,14 @@ Some skills assume a CLI or environment variable is available (e.g. `gog` for Go
 
 2. **Optional frontmatter `requires`**  
    In `SKILL.md` you can add:
+
    ```yaml
    requires:
-     - gog           # CLI: must be on PATH
+     - gog # CLI: must be on PATH
      - env:GOG_ACCOUNT
      - env:NOTION_API_KEY
    ```
+
    - Plain entries are treated as CLI names (checked with `which`).
    - `env:VAR` entries are treated as required environment variables.
 

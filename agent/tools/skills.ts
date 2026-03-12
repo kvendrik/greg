@@ -54,34 +54,47 @@ export interface SkillMeta {
 
 /** When the same skill name exists in both project and workspace, workspace wins. */
 export function discoverSkills(config: AgentConfig): SkillMeta[] {
-  const globalSkillsDir = path.resolve(SKILLS_DIR);
   const workspaceSkillsDir = path.resolve(getWorkspaceSkillsDir(config));
 
-  let globalSkills: fs.Dirent[] = [];
-  let workspaceSkills: fs.Dirent[] = [];
+  type SkillEntry = { baseDir: string; ent: fs.Dirent };
 
-  if (
-    fs.existsSync(globalSkillsDir) &&
-    fs.statSync(globalSkillsDir).isDirectory()
-  ) {
-    globalSkills = fs.readdirSync(globalSkillsDir, { withFileTypes: true });
+  const globalSkillDirs = Array.from(
+    new Set([
+      // Skills directory packaged with Greg (relative to this file)
+      path.resolve(SKILLS_DIR),
+      // Skills directory in the current working project (useful in dev)
+      path.resolve(path.join(process.cwd(), 'skills')),
+    ])
+  );
+
+  const entries: SkillEntry[] = [];
+
+  for (const dir of globalSkillDirs) {
+    if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+      const dirents = fs.readdirSync(dir, { withFileTypes: true });
+      for (const ent of dirents) {
+        entries.push({ baseDir: dir, ent });
+      }
+    }
   }
 
   if (
     fs.existsSync(workspaceSkillsDir) &&
     fs.statSync(workspaceSkillsDir).isDirectory()
   ) {
-    workspaceSkills = fs.readdirSync(workspaceSkillsDir, {
+    const workspaceDirents = fs.readdirSync(workspaceSkillsDir, {
       withFileTypes: true,
     });
+    for (const ent of workspaceDirents) {
+      entries.push({ baseDir: workspaceSkillsDir, ent });
+    }
   }
 
-  const entries = [...globalSkills, ...workspaceSkills];
   const byName = new Map<string, SkillMeta>();
 
-  for (const ent of entries) {
+  for (const { baseDir, ent } of entries) {
     if (!ent.isDirectory()) continue;
-    const skillPath = path.join(ent.parentPath, ent.name);
+    const skillPath = path.join(baseDir, ent.name);
     const skillMdPath = path.join(skillPath, SKILL_FILENAME);
     if (!fs.existsSync(skillMdPath) || !fs.statSync(skillMdPath).isFile())
       continue;

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { stat } from 'node:fs/promises';
 import type { ExecutePromptFn, HeartbeatOptions } from './types';
-import { appendHeartbeatRun } from './run-log';
+import { appendHeartbeatRun, getLastHeartbeatRun } from './run-log';
 import { isWithinActiveHours } from './active-hours';
 import { isHeartbeatPaused } from './paused';
 
@@ -143,10 +143,46 @@ export function startHeartbeat(
     }
     if (shuttingDown) return;
 
-    const jitterMs = options?.jitterMs ?? 0;
-    const delay = jitterMs > 0 ? Math.floor(Math.random() * jitterMs) : 0;
+    const lastRun = await getLastHeartbeatRun(workspacePath);
+
+    // OpenClaw-style: jitter only affects the first scheduled run after a cold start.
+    // Default jitter is 10% of the interval, clamped to the interval, unless explicitly set.
+    const configuredJitterMs =
+      options?.jitterMs !== undefined
+        ? options.jitterMs
+        : Math.floor(intervalMs * 0.1);
+    const maxJitterMs = Math.max(
+      0,
+      Math.min(configuredJitterMs, intervalMs)
+    );
+    const jitterDelayMs =
+      maxJitterMs > 0
+        ? Math.floor(Math.random() * maxJitterMs)
+        : 0;
+
+    let baseDelayMs: number;
+
+    if (!lastRun) {
+      // No history: schedule first run at roughly "now + interval" plus optional jitter,
+      // so we do not immediately fire on startup.
+      baseDelayMs = intervalMs;
+    } else {
+      const lastFinishedAtMs = Date.parse(lastRun.finishedAt);
+      if (Number.isNaN(lastFinishedAtMs)) {
+        // Corrupt timestamp; fall back to treating this as no history.
+        baseDelayMs = intervalMs;
+      } else {
+        const nextPlannedAtMs = lastFinishedAtMs + intervalMs;
+        const nowMs = Date.now();
+        baseDelayMs = Math.max(0, nextPlannedAtMs - nowMs);
+      }
+    }
+
+    const delay = baseDelayMs + jitterDelayMs;
     console.info(
-      `[heartbeat] Starting (interval ${intervalMs / 1000}s${delay > 0 ? `, first run jitter ${delay}ms` : ''}).`
+      `[heartbeat] Starting (interval ${intervalMs / 1000}s${
+        jitterDelayMs > 0 ? `, first run jitter ${jitterDelayMs}ms` : ''
+      }).`
     );
     timeoutId = setTimeout(runHeartbeat, delay);
   })();

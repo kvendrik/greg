@@ -55,5 +55,7 @@ export async function load(sessionId: string): Promise<SessionTools> {
     prompt: agent.prompt.bind(agent),
   };
 
+  loadedSessions.set(sessionId, tools);
+
   return tools;
 }

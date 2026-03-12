@@ -7,6 +7,9 @@ import {
 } from '../../gateway/sdk/sdk';
 import { escapeMarkdownV2, getTelegramEnv } from './utilities';
 import pc from 'picocolors';
+import { createLogger } from '../../utilities/logger';
+
+const logger = createLogger('TG');
 
 const { senderId } = getTelegramEnv();
 export type BotContext = FileFlavor<Context>;
@@ -70,7 +73,7 @@ export async function createPromper(bot: Bot<BotContext>) {
     },
     onToolcall: async () => {
       if (state.buffer.trim() !== '') {
-        process.stdout.write(`\n\n${state.log} (partial response)`);
+        logger.write(`\n\n${state.log} (partial response)`);
         const text = state.buffer;
         state.buffer = '';
         await send(text);
@@ -79,19 +82,19 @@ export async function createPromper(bot: Bot<BotContext>) {
     onTurnDone: async () => {
       state.typingAction?.stop();
       if (state.buffer.trim() !== '') {
-        console.log(`\n\n${state.log}`);
-        console.log(`"${state.buffer}"`);
+        logger.info(`\n\n${state.log}`);
+        logger.info(`"${state.buffer}"`);
         await send(state.buffer);
       }
       state.buffer = '';
-      process.stdout.write(`done. ${pc.green('✓')}\n`);
+      logger.write(`done. ${pc.green('✓')}\n`);
       state = emptyState();
     },
     onTurnStop: async () => {
       state.typingAction?.stop();
       await send('Stopped.');
       state.buffer = '';
-      process.stdout.write(`stopped.\n`);
+      logger.write(`stopped.\n`);
       state = emptyState();
     },
     onError: async (error: string) => {
@@ -140,7 +143,7 @@ export async function createPromper(bot: Bot<BotContext>) {
       input.images.length > 0 ? ` [+${input.images.length} image(s)]` : '';
     const preview = `${input.content}${imageSuffix}`;
 
-    console.log(`\n\nPrompting: "${preview}"`);
+    logger.info(`\n\nPrompting: "${preview}"`);
 
     typing?.start();
 
@@ -152,6 +155,8 @@ export async function createPromper(bot: Bot<BotContext>) {
       log: `Sending response to ${ctx ? ctx.from?.username : 'user'}...`,
       initiatedBy: 'user',
     };
+
+    input.content = `${input.content}\n\n[Message was sent from Telegram]`;
 
     await session.prompt(input);
   };
