@@ -77,14 +77,12 @@ export function load(sessionId: string): StorageSession {
       return {
         ...boundCallbacks,
         onTurnDone: (newMessages?: AgentMessage[]) => {
-          if (!newMessages) {
-            return;
+          if (newMessages && newMessages.length > 0) {
+            const jsonl = newMessages.map((m) => JSON.stringify(m)).join('\n');
+            const toAppend = jsonl ? '\n' + jsonl : '';
+
+            fs.appendFileSync(sessionPath, toAppend);
           }
-
-          const jsonl = newMessages.map((m) => JSON.stringify(m)).join('\n');
-          const toAppend = jsonl ? '\n' + jsonl : '';
-
-          fs.appendFileSync(sessionPath, toAppend);
           callbacks.onTurnDone?.(newMessages);
         },
       };

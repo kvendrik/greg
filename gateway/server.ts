@@ -5,6 +5,9 @@ import config from '../.greg';
 import type { PromptInput } from '../agent';
 import { createSender, parsePromptBody } from './utilities';
 import * as sessions from './sessions';
+import { createLogger } from '../utilities/logger';
+
+const logger = createLogger('GW');
 
 type SessionWebSocketMessage =
   | { type: 'prompt'; prompt: PromptInput }
@@ -243,23 +246,23 @@ export async function startServer(port = Number(config.port)) {
     },
   });
 
-  console.log('Running...');
-  console.log('Endpoints: GET /ping, POST /sessions/new, DELETE /sessions/:id');
-  console.log(
+  logger.info('Running...');
+  logger.info('Endpoints: GET /ping, POST /sessions/new, DELETE /sessions/:id');
+  logger.info(
     'WebSocket: ws://<host>:<port>/sessions/:id for bi-directional communication'
   );
-  console.log(
+  logger.info(
     'Use a client to interact. E.g. `bun run clients:cli "How are you today?"`'
   );
-  console.log(`Listening on port ${server.port}`);
-  console.log('Ctrl+C to stop');
+  logger.info(`Listening on port ${server.port}`);
+  logger.info('Ctrl+C to stop');
 
-  console.log('Loading main session...');
+  logger.info('Loading main session...');
   await sessions.load('main');
 
   return server;
 }
 
 function logRequest(req: Request) {
-  console.log(pc.gray(`[${req.method}] ${new URL(req.url).pathname}`));
+  logger.info(pc.gray(`[${req.method}] ${new URL(req.url).pathname}`));
 }

@@ -20,7 +20,10 @@ export interface HeartbeatOptions {
   prompt?: string;
   /** Max chars after HEARTBEAT_OK to treat as ack (drop delivery). Default 300. */
   ackMaxChars?: number;
-  /** Max ms jitter before first run. Default 0. */
+  /**
+   * Max ms jitter applied to the first scheduled run after a cold start.
+   * Default is 10% of intervalMs, clamped to intervalMs. Set to 0 to disable.
+   */
   jitterMs?: number;
   /** If true, deliver reasoning separately (future use). */
   includeReasoning?: boolean;

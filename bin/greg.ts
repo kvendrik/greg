@@ -663,13 +663,13 @@ heartbeatCommand
       .action(async (opts: { lines?: string; json?: boolean }) => {
         const config = await loadConfig();
         const workspacePath = resolveWorkspacePath(config.workspace);
-        const enabled =
-          config.heartbeat != null && config.heartbeat.enabled !== false;
+        const enabled = config.heartbeat?.enabled === false ? false : true;
         const paused = await isHeartbeatPaused(workspacePath);
         const limit = Math.max(
           1,
           Math.min(1000, parseInt(opts.lines ?? '20', 10) || 20)
         );
+
         const runs = await getHeartbeatRuns(workspacePath, limit);
 
         if (opts.json) {
