@@ -12,8 +12,8 @@
     "gateway:restart": "pm2 restart greg:gateway",
     "gateway:logs": "pm2 logs greg:gateway",
     "gateway:tools": "bun run scripts/tools-cli.ts",
-    "guard:test": "bun run agent/Agent/tools/utilities/guard/tests/guard.test.ts",
     "test": "bun test",
+    "test:guard": "bun run agent/Agent/tools/utilities/guard/tests/guard.test.ts",
     "test:sdk": "bun test gateway/sdk/tests/sdk.test.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
