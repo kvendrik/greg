@@ -8,7 +8,8 @@ import {
   getTools as getSkillTools,
 } from './skills';
 import { getFilesTools } from './files';
-import { getWebTools } from './web';
+import { createWebFetchTool } from './web-fetch';
+import { createWebSearchTool } from './web-search';
 
 export async function get(
   conversationStartIso: string,
@@ -22,10 +23,11 @@ export async function get(
   const tools: AgentTool[] = [
     ...getExecTools(context),
     ...getBrowserTools(context),
-    ...getWebTools(context),
     ...memory.tools,
     ...getSkillTools(context),
     ...getFilesTools(context),
+    createWebFetchTool(context),
+    createWebSearchTool(context),
   ];
 
   const instructions = `

@@ -118,11 +118,12 @@ export interface AgentConfig {
       key: string;
     };
     webSearch?: {
+      provider: 'brave' | 'gemini';
       /**
        * Web Search tool uses Google Gemini API to search the web.
        * https://cloud.google.com/gemini-api/docs/get-started
        */
-      geminiKey: string;
+      key: string;
     };
   };
 }
