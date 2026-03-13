@@ -7,7 +7,7 @@ import { createSender, parsePromptBody } from './utilities';
 import * as sessions from './sessions';
 import { createLogger } from '../utilities/logger';
 
-const logger = createLogger('GW');
+const logger = createLogger('SE');
 
 type SessionWebSocketMessage =
   | { type: 'prompt'; prompt: PromptInput }

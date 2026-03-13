@@ -50,6 +50,7 @@ async function evaluateExecPolicy(
 
     const reply = await sendMessage(message, {
       awaitReply: true,
+      voice: false,
     });
 
     if (reply !== '/once' && reply !== '/always' && reply !== `/always_cmd`) {

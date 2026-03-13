@@ -1,11 +1,12 @@
 import { startServer } from './server';
 import { TelegramGateway } from '../clients/telegram';
 import * as classifier from '../classifier';
-import { startCronScheduler } from '../agent/tools/cron';
-import { startHeartbeat } from './heartbeat';
+import * as heartbeat from './heartbeat';
 import * as sessions from './sessions';
+import { createLogger } from '../utilities/logger';
 import config from '../.greg';
-import pc from 'picocolors';
+
+const logger = createLogger('GW');
 
 start().catch((err) => {
   console.error(err);
@@ -18,45 +19,30 @@ async function start() {
   let stopCron: (() => void) | undefined;
 
   if (config.tools?.guard?.enabled) {
-    console.log(pc.cyan('Starting guard classifier...'));
+    logger.info('Starting guard classifier...');
     stopClassifier = classifier.start();
   }
 
-  console.log(pc.cyan('Starting server...'));
+  logger.info('Starting server...');
   await startServer();
 
   if (config.heartbeat?.enabled ?? true) {
-    console.log(pc.cyan(`Starting heartbeat...`));
-    stopHeartbeat = startHeartbeat(
-      { workspace: config.workspace, options: config.heartbeat },
-      async (instruction: string, opts) => {
-        console.log(pc.cyan(`Running heartbeat prompt...`));
-        const session = await sessions.load('main');
-        await session.prompt(
-          { content: instruction, images: [] },
-          { heartbeatAckMaxChars: opts?.ackMaxChars }
-        );
-      }
-    );
-  }
-
-  if (config.cron?.enabled) {
-    console.log(pc.cyan('Starting cron scheduler...'));
-    stopCron = await startCronScheduler(config, async (job) => {
-      console.log(pc.cyan(`Running cron job. Prompt: "${job.jobPrompt}".`));
-      const session = await sessions.load(`job:${job.id}`);
-      await session.prompt({ content: job.jobPrompt, images: [] });
+    logger.info('Starting heartbeat...');
+    stopHeartbeat = await heartbeat.start(async (prompt: string) => {
+      logger.info('Running heartbeat prompt...');
+      const session = await sessions.load('main');
+      await session.prompt({ content: prompt, images: [] });
     });
   }
 
   if (config.clients?.telegram) {
     const gateway = await TelegramGateway.create();
-    console.log(pc.cyan('Starting Telegram service...'));
+    logger.info('Starting Telegram service...');
     await gateway.start();
   }
 
   const shutdown = () => {
-    console.log(pc.cyan('Shutting down...'));
+    logger.info('Shutting down...');
     stopHeartbeat?.();
     stopCron?.();
     stopClassifier?.();

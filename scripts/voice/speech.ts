@@ -64,28 +64,20 @@ function playAudioFile(audioPath: string): Promise<void> {
   });
 }
 
-const TTS_OPTIONS = {
-  model_id: 'eleven_turbo_v2_5',
-  output_format: 'mp3_22050_32',
-} as const;
-
 export async function synthesizeToBuffer(
   text: string,
-  voiceId?: string
+  options: { voiceId: string; useV3: boolean }
 ): Promise<Buffer> {
   if (!text.trim()) return Buffer.alloc(0);
 
-  const id = voiceId ?? config.voice?.elevenlabs?.voiceId;
-  if (!id) {
-    throw new Error(
-      'No voice ID. Pass voiceId or set config.voice.elevenlabs.voiceId in .greg.'
-    );
-  }
-
   const elevenLabsClient = getClient();
   const audioStream = await elevenLabsClient.textToSpeech.convertAsStream(
-    id,
-    { text, ...TTS_OPTIONS }
+    options.voiceId,
+    {
+      text,
+      model_id: options.useV3 ? 'eleven_v3' : 'eleven_turbo_v2_5',
+      output_format: 'mp3_22050_32',
+    }
   );
 
   const chunks: Buffer[] = [];
@@ -106,7 +98,11 @@ export async function synthesizeAndPlay(
   if (!text.trim()) return;
 
   try {
-    const audioBuffer = await synthesizeToBuffer(text, voiceId);
+    const audioBuffer = await synthesizeToBuffer(text, {
+      voiceId,
+      useV3: false,
+    });
+
     const audioPath = join(tmpdir(), `greg-voice-tts-${Date.now()}.mp3`);
     await fs.promises.writeFile(audioPath, audioBuffer);
 

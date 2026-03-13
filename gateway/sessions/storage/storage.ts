@@ -8,15 +8,9 @@ import { createLogger } from '../../../utilities/logger';
 
 const logger = createLogger('Session Storage');
 
-export type PromptOptionsRef = { current?: { heartbeatAckMaxChars?: number } };
-
 export type StorageSession = {
   messages: AgentMessage[];
-  proxy: (
-    callbacks: Callbacks,
-    agent: Agent,
-    promptOptionsRef?: PromptOptionsRef
-  ) => Callbacks;
+  proxy: (callbacks: Callbacks, agent: Agent) => Callbacks;
 };
 
 function getSessionsDir(): string {

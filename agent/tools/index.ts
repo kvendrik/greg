@@ -1,7 +1,6 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type { ToolContext } from '../types';
 import { getBrowserInstructions, getBrowserTools } from './browser';
-import { getCronTools } from './cron';
 import { getExecTools } from './exec';
 import { load as loadMemory } from './memory';
 import {
@@ -27,7 +26,6 @@ export async function get(
     ...memory.tools,
     ...getSkillTools(context),
     ...getFilesTools(context),
-    ...getCronTools(context),
     createWebFetchTool(context),
     createWebSearchTool(context),
   ];

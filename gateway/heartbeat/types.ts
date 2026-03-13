@@ -18,29 +18,11 @@ export interface HeartbeatOptions {
   activeHours?: HeartbeatActiveHours;
   /** Custom prompt body (replaces default HEARTBEAT instruction). HEARTBEAT.md content still appended. */
   prompt?: string;
-  /** Max chars after HEARTBEAT_OK to treat as ack (drop delivery). Default 300. */
-  ackMaxChars?: number;
-  /**
-   * Max ms jitter applied to the first scheduled run after a cold start.
-   * Default is 10% of intervalMs, clamped to intervalMs. Set to 0 to disable.
-   */
-  jitterMs?: number;
-  /** If true, deliver reasoning separately (future use). */
-  includeReasoning?: boolean;
-  /** Where to deliver response: "last" (main session) or "none". Default "last". */
-  target?: 'last' | 'none';
   /** Run log pruning. */
   runLog?: { maxBytes?: number; keepLines?: number };
 }
 
-export type ExecutePromptFn = (
-  prompt: string,
-  opts?: {
-    target?: 'last' | 'none';
-    ackMaxChars?: number;
-    onReply?: (text: string) => void;
-  }
-) => Promise<void>;
+export type ExecutePromptFn = (prompt: string) => Promise<void>;
 
 export interface HeartbeatRunLogEntry {
   startedAt: string;

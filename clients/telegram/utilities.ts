@@ -28,23 +28,44 @@ export const telegramAwaitSocketPath = path.join(
  */
 export async function sendMessage(
   text: string,
-  options: { awaitReply: boolean; voice: boolean }
+  options?: {
+    awaitReply?: boolean;
+    voice?: boolean;
+    context?: Context;
+    threadId?: number;
+  }
 ): Promise<string | void> {
-  const { botToken, senderId } = getTelegramEnv();
-  const bot = new Bot<Context>(botToken);
+  if (options?.voice) {
+    const audioBuffer = await synthesizeToBuffer(text, {
+      voiceId: config.voice?.elevenlabs?.voiceId!,
+      useV3: true,
+    });
 
-  if (options.voice) {
-    const audioBuffer = await synthesizeToBuffer(text);
     const voiceFile = new InputFile(audioBuffer, 'voice.mp3');
-    await bot.api.sendVoice(senderId, voiceFile);
+
+    const { botToken, senderId } = getTelegramEnv();
+    const bot = new Bot<Context>(botToken);
+
+    await bot.api.sendVoice(senderId, voiceFile, {
+      message_thread_id: options.threadId ?? undefined,
+    });
+
     return;
   }
 
-  if (options.awaitReply) {
-    return TaskChannel.send('await-reply', text, telegramAwaitSocketPath);
+  if (options?.context) {
+    if (text.length > 4000) {
+      await options?.context.replyWithDocument(new InputFile(text, 'text.txt'));
+    } else {
+      const escaped = escapeMarkdownV2(text);
+      await options?.context.reply(escaped);
+    }
+    return;
   }
 
-  const escaped = escapeMarkdownV2(text);
+  if (options?.awaitReply) {
+    return TaskChannel.send('await-reply', text, telegramAwaitSocketPath);
+  }
 
   try {
     /**
@@ -52,9 +73,21 @@ export async function sendMessage(
      * so when possible we use the TaskChannel to send the message
      * so it can be sent in the correct thread.
      */
-    await TaskChannel.send('send-message', escaped, telegramAwaitSocketPath);
+    await TaskChannel.send('send-message', text, telegramAwaitSocketPath);
   } catch {
-    await bot.api.sendMessage(senderId, escaped);
+    const { botToken, senderId } = getTelegramEnv();
+    const bot = new Bot<Context>(botToken);
+
+    if (text.length > 4000) {
+      await bot.api.sendDocument(senderId, new InputFile(text, 'text.txt'), {
+        message_thread_id: options?.threadId ?? undefined,
+      });
+    } else {
+      const escaped = escapeMarkdownV2(text);
+      await bot.api.sendMessage(senderId, escaped, {
+        message_thread_id: options?.threadId ?? undefined,
+      });
+    }
   }
 }
 

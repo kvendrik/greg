@@ -13,6 +13,7 @@ import {
   telegramAwaitSocketPath,
 } from './utilities';
 import { TaskChannel } from '../TaskChannel';
+import { sendMessage } from './utilities';
 
 type PromptFn = (
   args: {
@@ -104,16 +105,14 @@ export class TelegramGateway {
 
   private registerTaskHandlers(): void {
     this.taskChannel.onTask('await-reply', async ({ text }) => {
-      const escaped = escapeMarkdownV2(text);
-      await this.bot.api.sendMessage(this.senderId, escaped, {
-        message_thread_id: this.lastMessageThreadId ?? undefined,
+      await sendMessage(text, {
+        threadId: this.lastMessageThreadId ?? undefined,
       });
     });
 
     this.taskChannel.onTask('send-message', async ({ text }) => {
-      const escaped = escapeMarkdownV2(text);
-      await this.bot.api.sendMessage(this.senderId, escaped, {
-        message_thread_id: this.lastMessageThreadId ?? undefined,
+      await sendMessage(text, {
+        threadId: this.lastMessageThreadId ?? undefined,
       });
     });
 

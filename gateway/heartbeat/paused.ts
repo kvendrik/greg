@@ -1,39 +1,22 @@
-import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { exists, mkdir, writeFile, unlink } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { join } from 'node:path';
+import config from '../../.greg';
 
 const HEARTBEAT_DIR = 'heartbeat';
 const PAUSED_FILENAME = '.paused';
 
-export function getPausedFilePath(workspacePath: string): string {
-  return join(workspacePath, HEARTBEAT_DIR, PAUSED_FILENAME);
+const pausedFilePath = join(config.workspace, HEARTBEAT_DIR, PAUSED_FILENAME);
+
+export async function isPaused(): Promise<boolean> {
+  return exists(pausedFilePath);
 }
 
-export async function isHeartbeatPaused(
-  workspacePath: string
-): Promise<boolean> {
-  try {
-    await readFile(getPausedFilePath(workspacePath), 'utf8');
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function setHeartbeatPaused(
-  workspacePath: string,
-  paused: boolean
-): Promise<void> {
-  const path = getPausedFilePath(workspacePath);
+export async function setPaused(paused: boolean): Promise<void> {
   if (paused) {
-    const { mkdir } = await import('node:fs/promises');
-    const { dirname } = await import('node:path');
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, new Date().toISOString() + '\n', 'utf8');
+    await mkdir(dirname(pausedFilePath), { recursive: true });
+    await writeFile(pausedFilePath, new Date().toISOString() + '\n', 'utf8');
   } else {
-    try {
-      await unlink(path);
-    } catch {
-      // already removed or missing
-    }
+    await unlink(pausedFilePath);
   }
 }

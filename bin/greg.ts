@@ -6,25 +6,9 @@ import { Command } from 'commander';
 import { name, description, version } from '../package.json';
 import * as sdk from '../gateway/sdk/sdk';
 import { validate, type Config } from '../config';
-import {
-  readJobs,
-  writeJobs,
-  getJobsPath,
-  generateJobId,
-  formatSchedule,
-  validateSchedule,
-  readRuns,
-} from '../agent/tools/cron';
-import type { CronJob } from '../agent/tools/cron';
 import { discoverSkills } from '../agent/tools/skills';
 import { sendCommand } from '../clients/telegram/send-message';
-import {
-  resolveWorkspacePath,
-  getLastHeartbeatRun,
-  getHeartbeatRuns,
-  isHeartbeatPaused,
-  setHeartbeatPaused,
-} from '../gateway/heartbeat';
+import * as heartbeat from '../gateway/heartbeat';
 import { voiceCommand } from '../scripts/voice/index';
 import pc from 'picocolors';
 
@@ -177,20 +161,15 @@ function createServiceCommand(serviceConfig: ServiceConfig): Command {
     new Command('start')
       .description(serviceConfig.descriptions.start)
       .option('-d, --detached', 'Do not follow logs after start')
-      .action(
-        async (options: {
-          detached?: boolean;
-        }) => {
-          await runServiceStart(serviceConfig);
-          if (options.detached) return;
+      .action(async (options: { detached?: boolean }) => {
+        await runServiceStart(serviceConfig);
+        if (options.detached) return;
 
-          spawnSync(
-            'bun',
-            ['run', serviceConfig.scripts.logs],
-            { stdio: 'inherit', cwd: projectRoot }
-          );
-        }
-      )
+        spawnSync('bun', ['run', serviceConfig.scripts.logs], {
+          stdio: 'inherit',
+          cwd: projectRoot,
+        });
+      })
   );
 
   cmd.addCommand(
@@ -370,300 +349,6 @@ program
     }).on('exit', (code) => process.exit(code ?? 0));
   });
 
-const cronCommand = new Command('cron').description(
-  'Manage scheduled cron jobs (stored in workspace/cron/jobs.json)'
-);
-
-cronCommand
-  .addCommand(
-    new Command('add')
-      .description(
-        'Add a scheduled job (use exactly one of --cron, --every, --at)'
-      )
-      .option(
-        '--cron <expr>',
-        '6-field cron: second minute hour day month weekday (e.g. "0 0 18 * * *" for 6pm daily)'
-      )
-      .option(
-        '--every <ms>',
-        'Run every N milliseconds (e.g. 60000 for every minute)',
-        (v) => parseInt(v, 10)
-      )
-      .option(
-        '--at <iso>',
-        'One-shot at ISO 8601 date/time (e.g. 2025-03-20T09:00:00Z)'
-      )
-      .requiredOption(
-        '--prompt <text>',
-        'Prompt sent to the agent when the job runs'
-      )
-      .option('--name <name>', 'Optional short name for the job')
-      .option('--tz <iana>', 'IANA timezone for --cron (e.g. Europe/Amsterdam)')
-      .option('--stagger <ms>', 'Delay execution by N ms to spread load', (v) =>
-        parseInt(v, 10)
-      )
-      .option('--delete-after-run', 'For --at: remove job after it runs once')
-      .action(
-        async (opts: {
-          cron?: string;
-          every?: number;
-          at?: string;
-          prompt: string;
-          name?: string;
-          tz?: string;
-          stagger?: number;
-          deleteAfterRun?: boolean;
-        }) => {
-          const config = await loadConfig();
-          const hasCron = opts.cron != null && String(opts.cron).trim() !== '';
-          const hasEvery = opts.every != null && Number.isFinite(opts.every);
-          const hasAt = opts.at != null && String(opts.at).trim() !== '';
-          if ([hasCron, hasEvery, hasAt].filter(Boolean).length !== 1) {
-            console.error(
-              pc.red(
-                'Provide exactly one of: --cron <expr>, --every <ms>, --at <iso>'
-              )
-            );
-            process.exitCode = 1;
-            return;
-          }
-          let schedule: CronJob['schedule'];
-          if (hasCron) {
-            schedule = {
-              kind: 'cron',
-              expr: opts.cron!.trim(),
-              ...(opts.tz?.trim() && { tz: opts.tz.trim() }),
-            };
-          } else if (hasEvery) {
-            schedule = { kind: 'every', everyMs: opts.every! };
-          } else {
-            schedule = { kind: 'at', at: opts.at!.trim() };
-          }
-          const validation = validateSchedule(schedule);
-          if (!validation.valid) {
-            console.error(pc.red(validation.error ?? 'Invalid schedule.'));
-            process.exitCode = 1;
-            return;
-          }
-          const job: CronJob = {
-            id: generateJobId(),
-            schedule,
-            jobPrompt: opts.prompt.trim(),
-            enabled: true,
-          };
-          if (opts.name?.trim()) job.name = opts.name.trim();
-          if (opts.stagger != null && opts.stagger >= 0)
-            job.staggerMs = opts.stagger;
-          if (opts.deleteAfterRun === true && schedule.kind === 'at')
-            job.deleteAfterRun = true;
-          const jobs = await readJobs(config);
-          jobs.push(job);
-          await writeJobs(config, jobs);
-          console.log(pc.green(`Added job ${job.id}`));
-          console.log(`  schedule: ${formatSchedule(schedule)}`);
-          console.log(
-            `  jobPrompt: ${job.jobPrompt.slice(0, 60)}${job.jobPrompt.length > 60 ? '...' : ''}`
-          );
-        }
-      )
-  )
-  .addCommand(
-    new Command('runs')
-      .description(
-        'Show recent cron run history (from workspace/cron/runs/runs.jsonl)'
-      )
-      .option('-n, --limit <number>', 'Max number of runs to show', '50')
-      .action(async (opts: { limit?: string }) => {
-        const config = await loadConfig();
-        const limit = Math.min(
-          500,
-          Math.max(1, parseInt(opts.limit ?? '50', 10) || 50)
-        );
-        const runs = await readRuns(config, limit);
-        if (runs.length === 0) {
-          console.log(pc.gray('No runs recorded.'));
-          return;
-        }
-        for (const r of runs) {
-          const status = r.success === true ? pc.green('ok') : pc.red('fail');
-          const end = r.finishedAt ?? '-';
-          const err = r.error ? ` ${pc.red(r.error)}` : '';
-          console.log(
-            `${r.startedAt} | ${pc.cyan(r.jobId)} | ${status} | ${end}${err}`
-          );
-        }
-      })
-  )
-  .addCommand(
-    new Command('update')
-      .description('Update a job by id (omit options to leave unchanged)')
-      .argument('<jobId>', 'Job id from cron list')
-      .option('--cron <expr>', 'Set schedule to cron expression')
-      .option('--tz <iana>', 'IANA timezone (with --cron)')
-      .option('--every <ms>', 'Set schedule to every N ms', (v) =>
-        parseInt(v, 10)
-      )
-      .option('--at <iso>', 'Set schedule to one-shot at ISO date')
-      .option('--prompt <text>', 'New prompt text')
-      .option('--name <name>', 'New name')
-      .option(
-        '--enabled <bool>',
-        'Enable or disable job (true|false)',
-        (v) => v === 'true'
-      )
-      .option('--stagger <ms>', 'Stagger delay in ms', (v) => parseInt(v, 10))
-      .option(
-        '--delete-after-run',
-        'Remove job after it runs (for at schedule)'
-      )
-      .option('--no-delete-after-run', 'Clear delete-after-run')
-      .action(
-        async (
-          jobId: string,
-          opts: {
-            cron?: string;
-            tz?: string;
-            every?: number;
-            at?: string;
-            prompt?: string;
-            name?: string;
-            enabled?: boolean;
-            stagger?: number;
-            deleteAfterRun?: boolean;
-            noDeleteAfterRun?: boolean;
-          }
-        ) => {
-          const config = await loadConfig();
-          const jobs = await readJobs(config);
-          const job = jobs.find((j) => j.id === jobId);
-          if (!job) {
-            console.error(pc.red(`Job ${jobId} not found.`));
-            process.exitCode = 1;
-            return;
-          }
-          const hasCron = opts.cron != null && String(opts.cron).trim() !== '';
-          const hasEvery = opts.every != null && Number.isFinite(opts.every);
-          const hasAt = opts.at != null && String(opts.at).trim() !== '';
-          const scheduleOpts = [hasCron, hasEvery, hasAt].filter(
-            Boolean
-          ).length;
-          if (scheduleOpts > 1) {
-            console.error(
-              pc.red('Provide at most one of: --cron, --every, --at')
-            );
-            process.exitCode = 1;
-            return;
-          }
-          if (scheduleOpts === 1) {
-            if (hasCron) {
-              job.schedule = {
-                kind: 'cron',
-                expr: opts.cron!.trim(),
-                ...(opts.tz?.trim() && { tz: opts.tz.trim() }),
-              };
-            } else if (hasEvery) {
-              job.schedule = { kind: 'every', everyMs: opts.every! };
-            } else {
-              job.schedule = { kind: 'at', at: opts.at!.trim() };
-            }
-            const validation = validateSchedule(job.schedule);
-            if (!validation.valid) {
-              console.error(pc.red(validation.error ?? 'Invalid schedule.'));
-              process.exitCode = 1;
-              return;
-            }
-          }
-          if (opts.prompt !== undefined) {
-            const trimmed = opts.prompt.trim();
-            if (!trimmed) {
-              console.error(pc.red('Prompt cannot be empty.'));
-              process.exitCode = 1;
-              return;
-            }
-            job.jobPrompt = trimmed;
-          }
-          if (opts.name !== undefined) job.name = opts.name.trim() || undefined;
-          if (opts.enabled !== undefined) job.enabled = opts.enabled;
-          if (opts.stagger !== undefined)
-            job.staggerMs = opts.stagger >= 0 ? opts.stagger : undefined;
-          if (opts.deleteAfterRun === true) job.deleteAfterRun = true;
-          if (opts.noDeleteAfterRun === true) job.deleteAfterRun = false;
-          await writeJobs(config, jobs);
-          console.log(pc.green(`Updated job ${jobId}.`));
-        }
-      )
-  )
-  .addCommand(
-    new Command('list')
-      .description('List all scheduled jobs')
-      .action(async () => {
-        const config = await loadConfig();
-        const jobs = await readJobs(config);
-        if (jobs.length === 0) {
-          console.log(pc.gray(`No jobs in ${getJobsPath(config)}`));
-          return;
-        }
-        for (const j of jobs) {
-          console.log(
-            pc.cyan(j.id),
-            formatSchedule(j.schedule),
-            j.name ?? '-',
-            `| ${j.jobPrompt.slice(0, 50)}${j.jobPrompt.length > 50 ? '...' : ''}`
-          );
-        }
-      })
-  )
-  .addCommand(
-    new Command('remove')
-      .description('Remove a job by id')
-      .argument('<jobId>', 'Job id from cron list')
-      .action(async (jobId: string) => {
-        const config = await loadConfig();
-        const jobs = await readJobs(config);
-        const index = jobs.findIndex((j) => j.id === jobId);
-        if (index === -1) {
-          console.error(pc.red(`Job ${jobId} not found.`));
-          process.exitCode = 1;
-          return;
-        }
-        jobs.splice(index, 1);
-        await writeJobs(config, jobs);
-        console.log(pc.green(`Removed job ${jobId}.`));
-      })
-  )
-  .addCommand(
-    new Command('run')
-      .description('Run a job immediately (gateway must be running)')
-      .argument('<jobId>', 'Job id from cron list')
-      .action(async (jobId: string) => {
-        const config = await loadConfig();
-        const jobs = await readJobs(config);
-        const job = jobs.find((j) => j.id === jobId);
-        if (!job) {
-          console.error(pc.red(`Job ${jobId} not found.`));
-          process.exitCode = 1;
-          return;
-        }
-        try {
-          const session = await sdk.Session.existing('cron');
-          await session.connect();
-          await session.prompt({ content: job.jobPrompt, images: [] });
-          console.log(pc.green('Job run completed.'));
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          console.error(
-            pc.red(
-              `Failed to run job: ${message}. Ensure \`greg gateway\` is running.`
-            )
-          );
-          process.exitCode = 1;
-        }
-      })
-  );
-
-program.addCommand(cronCommand);
-
 const heartbeatCommand = new Command('heartbeat').description(
   'Control heartbeat (periodic main-session runs). Uses workspace from config.'
 );
@@ -676,15 +361,14 @@ heartbeatCommand
       .option('--json', 'Machine-readable output')
       .action(async (opts: { lines?: string; json?: boolean }) => {
         const config = await loadConfig();
-        const workspacePath = resolveWorkspacePath(config.workspace);
         const enabled = config.heartbeat?.enabled === false ? false : true;
-        const paused = await isHeartbeatPaused(workspacePath);
+        const paused = await heartbeat.isPaused();
         const limit = Math.max(
           1,
           Math.min(1000, parseInt(opts.lines ?? '20', 10) || 20)
         );
 
-        const runs = await getHeartbeatRuns(workspacePath, limit);
+        const runs = await heartbeat.get(limit);
 
         if (opts.json) {
           console.log(
@@ -722,9 +406,7 @@ heartbeatCommand
       .description('Turn heartbeats on (remove pause)')
       .option('--json', 'Machine-readable output')
       .action(async (opts: { json?: boolean }) => {
-        const config = await loadConfig();
-        const workspacePath = resolveWorkspacePath(config.workspace);
-        await setHeartbeatPaused(workspacePath, false);
+        await heartbeat.setPaused(false);
         if (opts.json) {
           console.log(JSON.stringify({ paused: false }));
         } else {
@@ -737,9 +419,8 @@ heartbeatCommand
       .description('Pause heartbeats')
       .option('--json', 'Machine-readable output')
       .action(async (opts: { json?: boolean }) => {
-        const config = await loadConfig();
-        const workspacePath = resolveWorkspacePath(config.workspace);
-        await setHeartbeatPaused(workspacePath, true);
+        await heartbeat.setPaused(true);
+
         if (opts.json) {
           console.log(JSON.stringify({ paused: true }));
         } else {
@@ -754,17 +435,19 @@ heartbeatCommand
       )
       .option('--json', 'Machine-readable output')
       .action(async (opts: { json?: boolean }) => {
-        const config = await loadConfig();
-        const workspacePath = resolveWorkspacePath(config.workspace);
-        const entry = await getLastHeartbeatRun(workspacePath);
+        const entries = await heartbeat.get();
+        const entry = entries.length > 0 ? entries[entries.length - 1] : null;
+
         if (opts.json) {
           console.log(JSON.stringify(entry ?? null));
           return;
         }
+
         if (entry == null) {
           console.log(pc.gray('No heartbeat runs recorded yet.'));
           return;
         }
+
         console.log(pc.bold('Last heartbeat run'));
         console.log(`  Started:  ${entry.startedAt}`);
         console.log(`  Finished: ${entry.finishedAt}`);

@@ -8,10 +8,9 @@ import {
 import { escapeMarkdownV2, getTelegramEnv } from './utilities';
 import pc from 'picocolors';
 import { createLogger } from '../../utilities/logger';
+import { sendMessage } from './utilities';
 
 const logger = createLogger('TG');
-
-const { senderId } = getTelegramEnv();
 export type BotContext = FileFlavor<Context>;
 
 function createSendTypingAction(ctx: BotContext) {
@@ -76,7 +75,7 @@ export async function createPromper(bot: Bot<BotContext>) {
         logger.write(`\n\n${state.log} (partial response)`);
         const text = state.buffer;
         state.buffer = '';
-        await send(text);
+        await sendMessage(text);
       }
     },
     onTurnDone: async () => {
@@ -84,7 +83,7 @@ export async function createPromper(bot: Bot<BotContext>) {
       if (state.buffer.trim() !== '') {
         logger.info(`\n\n${state.log}`);
         logger.info(`"${state.buffer}"`);
-        await send(state.buffer);
+        await sendMessage(state.buffer);
       }
       state.buffer = '';
       logger.write(`done. ${pc.green('✓')}\n`);
@@ -92,7 +91,7 @@ export async function createPromper(bot: Bot<BotContext>) {
     },
     onTurnStop: async () => {
       state.typingAction?.stop();
-      await send('Stopped.');
+      await sendMessage('Stopped.');
       state.buffer = '';
       logger.write(`stopped.\n`);
       state = emptyState();
@@ -101,7 +100,7 @@ export async function createPromper(bot: Bot<BotContext>) {
       if (error) {
         console.error(pc.red(`Error: ${error}`));
         state.typingAction?.stop();
-        await send(error);
+        await sendMessage(error);
       }
       state = emptyState();
     },
@@ -170,11 +169,5 @@ export async function createPromper(bot: Bot<BotContext>) {
       log: '',
       initiatedBy: null,
     };
-  }
-
-  function send(text: string, ctx?: BotContext) {
-    const escaped = escapeMarkdownV2(text);
-    if (ctx) return ctx.reply(escaped);
-    return bot.api.sendMessage(senderId, escaped);
   }
 }
