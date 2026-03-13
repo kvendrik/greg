@@ -5,7 +5,8 @@ alwaysApply: true
 
 When the user asks for research, up-to-date information, or to look something up:
 
-- **Search**: Use web search or fetch tools to find current sources (docs, articles, official sites). Prefer authoritative sources (official docs, known references).
+- **Search**: Use `web_search` first to find current sources (docs, articles, official sites). Prefer authoritative sources (official docs, known references).
+- **Fetch when needed**: When you need the full content of a result (e.g. to quote, verify, or summarize in depth), call `web_fetch` with that result's URL. Use the citations returned by `web_search`; the agent can pass any citation url to `web_fetch`.
 - **Verify**: Base answers on what you actually read from those sources. Do not invent URLs, quotes, or version numbers.
 - **Cite**: When giving facts or recommendations, cite the source (e.g. URL and a short quote or summary). If something is inferred or uncertain, say so.
 - If search fails or no good source is found, say so clearly instead of guessing.

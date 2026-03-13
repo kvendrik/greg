@@ -23,6 +23,8 @@ Use **voice messages** when:
 - The user prefers or requested voice updates.
 - The message is short and benefits from being spoken (e.g. a quick confirmation or alert).
 
+When composing the actual text for a **voice message**, also activate the `voice-message` AgentSkill so the output is written and tagged for ElevenLabs `eleven_v3` (audio tags, voice-friendly phrasing, and length limits).
+
 Avoid using this skill for:
 
 - Extremely long logs or outputs that will be unreadable in a messaging app.

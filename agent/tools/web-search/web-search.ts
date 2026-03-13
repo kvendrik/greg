@@ -4,8 +4,9 @@ import type { ToolContext } from '../../types';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { searchWithGemini } from './searchProviders/gemini';
 import { searchWithBrave } from './searchProviders/brave';
+import * as guard from '../utilities/guard/guard';
 
-export type { WebFetchResult } from './types';
+export type { WebFetchResult, WebSearchSuccessDetails } from './types';
 
 const WEB_SEARCH_COUNT_MIN = 1;
 const WEB_SEARCH_COUNT_MAX = 10;
@@ -50,10 +51,10 @@ export function createWebSearchTool({ config }: ToolContext): AgentTool {
   return {
     name: 'web_search',
     label: 'web search',
-    description: `Search the web for real-time information (Brave first, then Gemini if needed).
+    description: `Search the web for real-time information (Brave or Gemini).
 Use when the user asks about current events, weather, sports, news, stock prices, or anything that may have changed.
 Parameters: query (required), optional count (1-10), country (2-letter), language, freshness (day/week/month/year), date_after/date_before (YYYY-MM-DD).
-Returns { answer: string, citations: { title: string, url: string }[] }`,
+Returns { answer: string, citations: { title: string, url: string }[] }. When you need the full content of a result, call web_fetch with that citation's url.`,
 
     parameters: Type.Object({
       query: Type.String({
@@ -136,13 +137,13 @@ Returns { answer: string, citations: { title: string, url: string }[] }`,
         date_before: raw.date_before?.trim() || undefined,
       };
 
-      let result: AgentToolResult<object> | null = null;
+      let result: WebSearchSuccessDetails | null = null;
       let lastFailureReason: string | null = null;
 
-      if (config.tools.webSearch?.provider === 'brave') {
+      if (config.tools?.webSearch?.provider === 'brave') {
         try {
           result = await searchWithBrave(
-            config.tools.webSearch.key,
+            config.tools?.webSearch.key,
             query,
             signal,
             braveOptions
@@ -157,10 +158,10 @@ Returns { answer: string, citations: { title: string, url: string }[] }`,
         }
       }
 
-      if (config.tools.webSearch?.provider === 'gemini') {
+      if (config.tools?.webSearch?.provider === 'gemini') {
         try {
           result = await searchWithGemini(
-            config.tools.webSearch.key,
+            config.tools?.webSearch.key,
             query,
             signal
           );
@@ -175,7 +176,32 @@ Returns { answer: string, citations: { title: string, url: string }[] }`,
       }
 
       if (result) {
-        return result;
+        const citationsSummary =
+          result.citations.length === 0
+            ? ''
+            : '\n\nSources:\n' +
+              result.citations.map((c) => `- ${c.title} (${c.url})`).join('\n');
+
+        let parsedResult = `${result.answer}${citationsSummary}`;
+
+        if (await guard.available(config)) {
+          const guardResult = await guard.isSafe(config, parsedResult, {
+            name: `web_search("${query}")`,
+          });
+
+          if (!guardResult.safe) {
+            parsedResult = guardResult.message;
+          }
+        }
+
+        return {
+          content: [{ type: 'text' as const, text: parsedResult }],
+          details: {
+            success: true,
+            answer: result.answer,
+            citations: result.citations,
+          },
+        };
       }
 
       const message =

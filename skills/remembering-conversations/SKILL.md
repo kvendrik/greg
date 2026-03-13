@@ -1,15 +1,17 @@
 ---
 name: remembering-conversations
-description: Use when user asks "how should I..." or "what's the best approach..." after exploring something, or when you've tried to solve something and are stuck, or for unfamiliar workflows, or when user references past work. Search workspace memory and conversation notes before reinventing.
+description: Use when user asks "how should I..." or "what's the best approach..." after exploring something, or when you've tried to solve something and are stuck, or for unfamiliar workflows, or when user references past work. Search workspace memory before reinventing.
 ---
 
 # Remembering conversations
 
 **Core principle:** Search before reinventing. Searching costs little; reinventing or repeating mistakes costs everything.
 
+When the user is **explicitly** asking about a prior conversation or "what was said before," also read the **session-logs** skill — it tells you when to prefer session transcripts over notes and how to search them.
+
 ## When to use
 
-Use your workspace memory and conversation notes in these situations:
+Use your workspace memory (daily notes and session transcripts) in these situations:
 
 **After understanding the task:**
 - User asks "how should I..." or "what's the best approach..."
@@ -26,9 +28,10 @@ Use your workspace memory and conversation notes in these situations:
 - User asks "why did we...", "what was the reason..."
 - User says "do you remember...", "what do we know about..."
 
-## How to search in Greg
+## How to search
 
-- Your system prompt already tells you to call **get_recent_conversation_notes** before your first reply and to use **search_past_conversations** when you need something specific. For the situations listed above (e.g. "how should I...", stuck, user references past work), use those tools: **get_recent_conversation_notes** and **search_past_conversations**.
+- Use the **memory tools**: **memory_recent**, **memory_search**, **memory_summarize**, **memory_get**.
+- **Scope:** Prefer **scope: notes** first (daily notes are condensed). If the answer isn't there or the user is asking about what was actually said in a conversation, use **scope: sessions** or **scope: both** (see **session-logs** for when sessions are better).
 - You also have USER.md and IDENTITY.md in your workspace; read them when relevant. Prefer existing notes and summaries over guessing or starting from scratch.
 
 **Don't search first:**

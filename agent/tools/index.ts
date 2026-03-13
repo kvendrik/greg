@@ -18,25 +18,37 @@ export async function get(
   tools: AgentTool[];
   instructions: string;
 }> {
-  const memory = await loadMemory(context.config, conversationStartIso);
+  const deniedTools = context.config.tools?.deny ?? null;
 
-  const tools: AgentTool[] = [
-    ...getExecTools(context),
-    ...getBrowserTools(context),
-    ...memory.tools,
+  let tools: AgentTool[] = [
     ...getSkillTools(context),
     ...getFilesTools(context),
-    createWebFetchTool(context),
-    createWebSearchTool(context),
   ];
 
-  const instructions = `
-  ${memory.instructions}
-  
-  ${getSkillsInstructions(context.config)}
-  
-  ${getBrowserInstructions()}
-  `;
+  let instructions = getSkillsInstructions(context.config);
+
+  if (!deniedTools?.includes('memory')) {
+    const memory = await loadMemory(context.config, conversationStartIso);
+    tools.push(...memory.tools);
+    instructions += memory.instructions;
+  }
+
+  if (!deniedTools?.includes('exec')) {
+    tools.push(...getExecTools(context));
+  }
+
+  if (!deniedTools?.includes('browser_use')) {
+    tools.push(...getBrowserTools(context));
+    instructions += getBrowserInstructions();
+  }
+
+  if (!deniedTools?.includes('web_search')) {
+    tools.push(createWebSearchTool(context));
+  }
+
+  if (!deniedTools?.includes('web_fetch')) {
+    tools.push(createWebFetchTool(context));
+  }
 
   return {
     tools,

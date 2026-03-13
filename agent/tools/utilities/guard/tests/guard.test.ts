@@ -11,7 +11,6 @@ const mockGuardConfig: AgentConfig = {
   tools: {
     guard: {
       enabled: true,
-      use: 'all',
       port: 7234,
       timeout: 15_000,
     },
@@ -23,7 +22,6 @@ describe('guard', () => {
     for (const testCase of tests) {
       it(testCase.title, async () => {
         const result = await isSafe(mockGuardConfig, testCase.prompt, {
-          use: 'all',
           name: testCase.title,
         });
 
@@ -44,4 +42,3 @@ describe('guard', () => {
     }
   });
 });
-

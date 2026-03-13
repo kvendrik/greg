@@ -15,17 +15,16 @@ sendCommand
       message: string,
       options: { voice?: boolean; awaitReply?: boolean }
     ) => {
-      const isTty = process.stdout.isTTY;
-
       await sendMessage(message, {
         awaitReply: options.awaitReply ?? false,
         voice: options.voice ?? false,
       });
 
-      if (isTty) {
-        const prefix = options.voice ? '📤 Sent as voice' : '📤 Sent';
-        console.log(pc.green(prefix), pc.dim(message));
-      }
+      const log = options.voice
+        ? '📤 Sent & delivered as voice message'
+        : '📤 Sent & delivered as text message';
+
+      console.log(pc.green(log));
 
       process.exit(0);
     }

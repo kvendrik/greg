@@ -6,9 +6,6 @@ import pc from 'picocolors';
 
 import { isSafe as isGuardSafe } from '../agent/tools/utilities/guard/guard';
 import type { Config } from './types';
-import type { GuardMethods } from '../agent/tools/utilities/guard/guard';
-
-const GUARD_METHODS: GuardMethods[] = ['patterns', 'classifier', 'all'];
 
 function assertModelsStructure(config: Config): void {
   const primaryCount = config.models.filter((m) => m.role === 'primary').length;
@@ -28,46 +25,12 @@ function assertModelsStructure(config: Config): void {
   }
 }
 
-function configUsesClassifier(config: Config): boolean {
-  const guard = config.tools.guard;
-  if (!guard?.enabled) {
-    return false;
-  }
-  if (guard.use === 'classifier' || guard.use === 'all') {
-    return true;
-  }
-  const allowlist = guard.allowlist ?? {};
-  const allEntries = Object.values(allowlist).flatMap((group) =>
-    Object.values(group ?? {})
-  );
-  return allEntries.some(
-    (entry) =>
-      typeof entry === 'object' &&
-      entry !== null &&
-      'use' in entry &&
-      (entry as { use: string }).use === 'classifier'
-  );
-}
-
-function assertGuardOptions(config: Config): void {
-  const guard = config.tools.guard;
-  if (!guard) {
-    return;
-  }
-
-  if (!GUARD_METHODS.includes(guard.use)) {
-    throw new Error(
-      `Config tools.guard.use must be one of ${GUARD_METHODS.join(', ')}, got "${guard.use}"`
-    );
-  }
-}
-
 async function validateGuardLoad(config: Config): Promise<void> {
   const result = await isGuardSafe(config, 'x', {
-    use: 'all',
     name: 'test',
     logging: false,
   });
+
   if (!result.safe) {
     throw new Error(result.message);
   }
@@ -149,7 +112,7 @@ export async function validate(
   options?: ValidateOptions
 ): Promise<string[]> {
   assertModelsStructure(config);
-  assertGuardOptions(config);
+
   console.info(pc.green('Config structure is valid ✓'));
 
   const providersToKeys = new Map<string, string>();
@@ -172,24 +135,24 @@ export async function validate(
     }
   }
 
-  if (config.tools.browser?.key) {
+  if (config.tools?.browser?.key) {
     checks.push({
       name: 'Browser Use',
-      run: () => validateBrowserUseKey(config.tools.browser!.key),
+      run: () => validateBrowserUseKey(config.tools?.browser?.key!),
     });
   }
 
-  if (config.tools.webSearch?.provider === 'gemini') {
+  if (config.tools?.webSearch?.provider === 'gemini') {
     checks.push({
       name: 'Web Search (Gemini)',
-      run: () => validateGoogleKey(config.tools.webSearch!.key),
+      run: () => validateGoogleKey(config.tools?.webSearch!.key!),
     });
   }
 
-  if (config.tools.webSearch?.provider === 'brave') {
+  if (config.tools?.webSearch?.provider === 'brave') {
     checks.push({
       name: 'Web Search (Brave)',
-      run: () => validateBraveKey(config.tools.webSearch!.key),
+      run: () => validateBraveKey(config.tools?.webSearch!.key!),
     });
   }
 
@@ -200,7 +163,7 @@ export async function validate(
     });
   }
 
-  if (configUsesClassifier(config)) {
+  if (config.tools?.guard?.enabled) {
     checks.push({
       name: 'Guard',
       run: () => validateGuardLoad(config),
@@ -209,6 +172,7 @@ export async function validate(
 
   const results = await Promise.allSettled(checks.map((c) => c.run()));
   const failures: string[] = [];
+
   results.forEach((result, index) => {
     if (result.status === 'fulfilled') {
       console.info(pc.green(`${checks[index].name}: ${pc.green('✓')}`));
@@ -218,9 +182,12 @@ export async function validate(
       failures.push(checks[index].name);
     }
   });
+
   const exitOnFailure = options?.exit !== false;
+
   if (exitOnFailure) {
     process.exit(failures.length > 0 ? 1 : 0);
   }
+
   return failures;
 }

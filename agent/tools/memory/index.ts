@@ -6,6 +6,9 @@ import { Type } from '@sinclair/typebox';
 import type { AgentConfig } from '../../types';
 import { formatDate, getWorkspacePath } from '../../utilities';
 import { QMD } from './qmd';
+import { createLogger } from '../../../utilities/logger';
+
+const logger = createLogger('Memory');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_IDENTITY_PATH = join(__dirname, 'defaults', 'IDENTITY.md');
@@ -141,42 +144,48 @@ function createMemorySearchTool(config: AgentConfig): AgentTool {
         description: 'What to look for (e.g. a name, decision, or topic)',
       }),
       scope: Type.Optional(
-        Type.Union([
-          Type.Literal('notes', {
+        Type.Union(
+          [
+            Type.Literal('notes', {
+              description:
+                'Search daily notes only (notes/YYYY-MM-DD.md). Default. Use first—notes are condensed from sessions. Fastest when you only need notes.',
+            }),
+            Type.Literal('sessions', {
+              description:
+                'Search session transcripts only (sessions/*.jsonl). Use when the fact was not in notes or you need raw conversation detail.',
+            }),
+            Type.Literal('both', {
+              description:
+                'Search both notes and session transcripts in one call. Use when you want everything at once or after notes did not contain the answer.',
+            }),
+          ],
+          {
             description:
-              'Search daily notes only (notes/YYYY-MM-DD.md). Default. Use first—notes are condensed from sessions. Fastest when you only need notes.',
-          }),
-          Type.Literal('sessions', {
-            description:
-              'Search session transcripts only (sessions/*.jsonl). Use when the fact was not in notes or you need raw conversation detail.',
-          }),
-          Type.Literal('both', {
-            description:
-              'Search both notes and session transcripts in one call. Use when you want everything at once or after notes did not contain the answer.',
-          }),
-        ], {
-          description:
-            'Where to search: notes (default, try first), sessions (if not in notes), or both. Omit for notes.',
-        })
+              'Where to search: notes (default, try first), sessions (if not in notes), or both. Omit for notes.',
+          }
+        )
       ),
       search_mode: Type.Optional(
-        Type.Union([
-          Type.Literal('keyword', {
+        Type.Union(
+          [
+            Type.Literal('keyword', {
+              description:
+                'BM25 full-text only. Fastest—no embedding or LLM. Use when the user or notes use exact phrases, names, project IDs, or known terms. Precise for keyword match.',
+            }),
+            Type.Literal('semantic', {
+              description:
+                'Vector search only. Moderate—runs embedding + vector search. Use when you are looking by meaning or paraphrase (e.g. "how we chose the database") and may not know the exact wording.',
+            }),
+            Type.Literal('hybrid', {
+              description:
+                'BM25 + vector + query expansion + reranking. Slowest—expansion, FTS, vector, and reranker—but best quality. Use when unsure or when the query could match by both keywords and meaning. Default.',
+            }),
+          ],
+          {
             description:
-              'BM25 full-text only. Fastest—no embedding or LLM. Use when the user or notes use exact phrases, names, project IDs, or known terms. Precise for keyword match.',
-          }),
-          Type.Literal('semantic', {
-            description:
-              'Vector search only. Moderate—runs embedding + vector search. Use when you are looking by meaning or paraphrase (e.g. "how we chose the database") and may not know the exact wording.',
-          }),
-          Type.Literal('hybrid', {
-            description:
-              'BM25 + vector + query expansion + reranking. Slowest—expansion, FTS, vector, and reranker—but best quality. Use when unsure or when the query could match by both keywords and meaning. Default.',
-          }),
-        ], {
-          description:
-            'How to match. Performance: keyword (fastest), semantic (moderate), hybrid (slowest, best). Omit for hybrid.',
-        })
+              'How to match. Performance: keyword (fastest), semantic (moderate), hybrid (slowest, best). Omit for hybrid.',
+          }
+        )
       ),
     }),
     execute: async (_id, params, signal) => {
@@ -877,13 +886,15 @@ export async function load(
     fs.mkdirSync(sessionsPath, { recursive: true });
   }
 
+  logger.info('Loading session notes collection...');
   const notesQmd = createNotesQmd(config);
   await notesQmd.ensureCollection(notesPath);
+  await notesQmd.updateAndEmbed({ background: true });
+
+  logger.info('Loading session logs collection...');
   const sessionsQmd = createSessionsQmd(config);
   await sessionsQmd.ensureCollection(sessionsPath, { mask: '**/*.jsonl' });
-
-  await notesQmd.updateAndEmbed();
-  await sessionsQmd.updateAndEmbed();
+  await sessionsQmd.updateAndEmbed({ background: true });
 
   return {
     tools: buildTools(config),

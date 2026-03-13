@@ -1,5 +1,4 @@
 import { spawn } from 'child_process';
-import type { AgentConfig } from '../../types';
 import {
   createStore,
   getRealPath,
@@ -20,6 +19,9 @@ import {
   searchResultsToFiles,
 } from '@tobilu/qmd/dist/formatter.js';
 import { withLLMSession } from '@tobilu/qmd/dist/llm.js';
+import { createLogger } from '../../../utilities/logger';
+
+const logger = createLogger('QMD');
 
 export type SearchOutputFormat = 'json' | 'files';
 
@@ -45,10 +47,13 @@ const RUN_QMD_TIMEOUT_MS = 600_000; // 10 min for update/embed (embed can be slo
  * Run the qmd CLI via bun (no shell). Used only for update and embed; read
  * operations use the QMD library for in-process performance. Times out after
  * 10 minutes so a hung process does not block indefinitely.
+ *
+ * When `background` is true, the child process is started and the promise
+ * resolves immediately without waiting for completion (fire-and-forget).
  */
 function runQmd(
   args: string[],
-  options?: { cwd?: string }
+  options?: { cwd?: string; background?: boolean }
 ): Promise<RunResult> {
   return new Promise((resolve, reject) => {
     const child = spawn('bun', ['run', 'qmd', ...args], {
@@ -56,6 +61,17 @@ function runQmd(
       cwd: options?.cwd ?? process.cwd(),
       shell: false,
     });
+    if (options?.background) {
+      // Fire-and-forget: allow the process to continue independently and
+      // resolve immediately without waiting for output or exit. Still log
+      // spawn errors so failures are visible in logs.
+      child.unref();
+      child.on('error', (err) => {
+        console.error('[qmd] background run failed to start:', err);
+      });
+      resolve({ stdout: '', stderr: '', code: 0 });
+      return;
+    }
     let stdout = '';
     let stderr = '';
     const timeout = setTimeout(() => {
@@ -249,11 +265,7 @@ export class QMD {
   search(searchQuery: string, options?: { limit?: number }): string {
     const qmdStore = getStore();
     const limit = options?.limit ?? 20;
-    const results = qmdStore.searchFTS(
-      searchQuery,
-      limit,
-      this.collectionName
-    );
+    const results = qmdStore.searchFTS(searchQuery, limit, this.collectionName);
     return searchResultsToJson(results, { query: searchQuery });
   }
 
@@ -283,10 +295,32 @@ export class QMD {
    * (update/embed are not exposed as a library API). Run from the workspace
    * directory so the CLI sees the correct files; workspaceRoot is kept for
    * future use (e.g. explicit cwd when CLI supports it safely).
+   *
+   * When called with `{ background: true }`, starts update + embed in the
+   * background without blocking the caller.
    */
-  async updateAndEmbed(): Promise<void> {
+  async updateAndEmbed(options?: { background?: boolean }): Promise<void> {
     const collectionName = this.collectionName;
-    const updateResult = await runQmd(['update', '--collection', collectionName]);
+    const background = options?.background ?? false;
+
+    logger.info(`[${collectionName}] Updating and embedding...`);
+
+    if (background) {
+      // Fire-and-forget maintenance: do not await long-running CLI work.
+      void runQmd(['update', '--collection', collectionName], {
+        background: true,
+      });
+      void runQmd(['embed', '--collection', collectionName], {
+        background: true,
+      });
+      return;
+    }
+
+    const updateResult = await runQmd([
+      'update',
+      '--collection',
+      collectionName,
+    ]);
     if (updateResult.code !== 0) {
       throw new Error(
         `qmd update failed: ${updateResult.stderr || updateResult.stdout}`

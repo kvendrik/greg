@@ -1,11 +1,16 @@
-export type { Config as BaseConfig } from '../config';
-
 import type { Model, Api } from '@mariozechner/pi-ai';
-import type { GuardMethods } from './tools/utilities/guard/guard';
+export type { Config as BaseConfig } from '../config';
 
 export interface ToolContext {
   config: AgentConfig;
 }
+
+type OptionalToolId =
+  | 'memory'
+  | 'exec'
+  | 'browser_use'
+  | 'web_search'
+  | 'web_fetch';
 
 /**
  * Trusted means the output is trusted to be safe and won't be ran through the guard.
@@ -75,7 +80,27 @@ export interface AgentConfig {
         key: string;
       }
   )[];
-  tools: {
+  tools?: {
+    /**
+     * Deny optional tools. Skill and file tools are always allowed.
+     */
+    deny?: OptionalToolId[];
+    browser?: {
+      /**
+       * Enables the browser automation tool using Browser Use
+       * and their blazingly fast finetuned model.
+       * https://cloud.browser-use.com/settings?tab=api-keys&new=1
+       */
+      key: string;
+    };
+    webSearch?: {
+      provider: 'brave' | 'gemini';
+      /**
+       * Web Search tool uses Google Gemini API to search the web.
+       * https://cloud.google.com/gemini-api/docs/get-started
+       */
+      key: string;
+    };
     guard?: {
       /**
        * Enables the guard tool.
@@ -83,13 +108,6 @@ export interface AgentConfig {
        * the browser, web, and exec tools through a guard to attempt to detect malicious content.
        */
       enabled: boolean;
-      /**
-       * The method to use for the guard.
-       * `patterns` means that the guard will use a set of Regex patterns to detect malicious content.
-       * `classifier` means that the guard will use the classifier HTTP service (ModernBERT) to detect malicious content.
-       * `all` means that the guard will use both patterns and classifier to detect malicious content.
-       */
-      use: GuardMethods;
       /**
        * Port the guard classifier HTTP service listens on.
        * Default is 7234.
@@ -116,22 +134,6 @@ export interface AgentConfig {
         exec?: AllowList;
         webFetch?: AllowList;
       };
-    };
-    browser?: {
-      /**
-       * Enables the browser automation tool using Browser Use
-       * and their blazingly fast finetuned model.
-       * https://cloud.browser-use.com/settings?tab=api-keys&new=1
-       */
-      key: string;
-    };
-    webSearch?: {
-      provider: 'brave' | 'gemini';
-      /**
-       * Web Search tool uses Google Gemini API to search the web.
-       * https://cloud.google.com/gemini-api/docs/get-started
-       */
-      key: string;
     };
   };
 }

@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { WebSearchSuccessDetails } from '../types';
 
 const SEARCH_TIMEOUT_MS = 10_000;
 
@@ -7,7 +8,7 @@ export async function searchWithGemini(
   apiKey: string,
   query: string,
   signal?: AbortSignal
-): Promise<AgentToolResult<object>> {
+): Promise<WebSearchSuccessDetails> {
   const ai = new GoogleGenAI({ apiKey });
 
   const controller = new AbortController();
@@ -34,18 +35,11 @@ export async function searchWithGemini(
         title: chunk.web?.title ?? '',
         url: chunk.web?.uri ?? '',
       }))
-      .filter((c) => Boolean(c.title && c.url));
+      .filter((c): c is { title: string; url: string } =>
+        Boolean(c.title && c.url)
+      );
 
-    const citationsSummary =
-      citations.length === 0
-        ? ''
-        : '\n\nSources:\n' +
-          citations.map((c) => `- ${c.title} (${c.url})`).join('\n');
-
-    return {
-      content: [{ type: 'text' as const, text: answer + citationsSummary }],
-      details: {},
-    };
+    return { answer, citations };
   } finally {
     clearTimeout(timeoutId);
     signal?.removeEventListener('abort', onAbort);

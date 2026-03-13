@@ -1,6 +1,7 @@
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import path from 'node:path';
 import fs from 'node:fs';
+import { execSync } from 'node:child_process';
 import config from '../../../.greg';
 import { getWorkspacePath } from '../../../agent/utilities';
 import type { Agent, Callbacks } from '../../../agent';
@@ -43,43 +44,6 @@ export async function create(sessionId: string): Promise<StorageSession> {
   return load(sessionId);
 }
 
-async function parseMessages(
-  sessionPath: string,
-  {
-    maxMessages,
-    skipToolResults,
-  }: {
-    maxMessages?: number;
-    skipToolResults?: boolean;
-  }
-): Promise<AgentMessage[]> {
-  const messages: AgentMessage[] = [];
-
-  for await (const rawLine of tail(sessionPath)) {
-    const trimmed = rawLine.trim();
-
-    if (trimmed.length === 0) {
-      continue;
-    }
-
-    const message = JSON.parse(trimmed) as AgentMessage;
-
-    if (skipToolResults && message.role === 'toolResult') {
-      continue;
-    }
-
-    messages.push(message);
-
-    if (maxMessages !== undefined && messages.length >= maxMessages) {
-      break;
-    }
-  }
-
-  // We collected from newest to oldest, so reverse to chronological order.
-  messages.reverse();
-  return messages;
-}
-
 export async function load(sessionId: string): Promise<StorageSession> {
   const sessionPath = path.join(getSessionsDir(), `${sessionId}.jsonl`);
 
@@ -87,13 +51,17 @@ export async function load(sessionId: string): Promise<StorageSession> {
     throw new Error(`Session ${sessionId} not found`);
   }
 
+  let maxMessages = 40;
+
   logger.info(
-    `Loading session ${sessionId} from ${sessionPath}. Loading last 40 messages and skipping tool results.`
+    `[${sessionId}] Loading session from ${sessionPath}. Loading last ${maxMessages} messages.`
   );
-  const messages = await parseMessages(sessionPath, {
-    maxMessages: 40,
-    skipToolResults: true,
-  });
+
+  const messages = (await tail(sessionPath, maxMessages)).map((l) =>
+    JSON.parse(l)
+  ) as AgentMessage[];
+
+  logger.info(`[${sessionId}] Loaded ${messages.length} messages.`);
 
   return {
     messages,
@@ -122,54 +90,10 @@ export async function load(sessionId: string): Promise<StorageSession> {
   };
 }
 
-async function* tail(path: string): AsyncGenerator<string> {
-  const file = await fs.promises.open(path, 'r');
-  const chunkSize = 64 * 1024;
-
-  try {
-    const stat = await file.stat();
-    let position = stat.size;
-    const buffer = Buffer.alloc(chunkSize);
-    let bufferContent = '';
-
-    while (position > 0) {
-      const bytesToRead = Math.min(chunkSize, position);
-      position -= bytesToRead;
-
-      const { bytesRead } = await file.read(buffer, 0, bytesToRead, position);
-      if (bytesRead <= 0) {
-        break;
-      }
-
-      const chunk = buffer.toString('utf8', 0, bytesRead);
-      bufferContent = chunk + bufferContent;
-
-      // Process complete lines from the end of the buffer so we walk
-      // the file from newest to oldest.
-      // We keep any partial line at the start in bufferContent.
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const newlineIndex = bufferContent.lastIndexOf('\n');
-        if (newlineIndex === -1) {
-          break;
-        }
-
-        const line = bufferContent.slice(newlineIndex + 1);
-        bufferContent = bufferContent.slice(0, newlineIndex);
-
-        if (line.length === 0) {
-          continue;
-        }
-
-        yield line;
-      }
-    }
-
-    const remaining = bufferContent;
-    if (remaining.length > 0) {
-      yield remaining;
-    }
-  } finally {
-    await file.close();
-  }
+async function tail(path: string, lines: number): Promise<string[]> {
+  const result = execSync(`tail -n ${lines} ${path}`);
+  return result
+    .toString()
+    .split('\n')
+    .map((line) => line);
 }

@@ -133,7 +133,7 @@ export const voiceCommand = program
       process.exit(1);
     }
 
-    const session = await Session.create('voice');
+    const session = await Session.create('main', 'voice-cli');
     await session.connect();
 
     let responseText = '';

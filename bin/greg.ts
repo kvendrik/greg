@@ -490,13 +490,15 @@ program
   .addCommand(
     new Command('create')
       .description('Create a new session')
-      .action(async () => {
+      .argument('<sessionId>', 'ID of the session to create')
+      .argument('<channelId>', 'Channel ID')
+      .action(async (sessionId: string, channelId: string) => {
         try {
-          const session = await sdk.Session.create('cli');
-          console.log(pc.green(`Session created: ${session.id}`));
+          const session = await sdk.Session.create(sessionId, channelId);
+          console.log(pc.green('Session created.'));
           console.log(
             pc.gray(
-              `Use \`greg sessions prompt ${session.id} <text>\` to send a prompt.`
+              `Use \`greg sessions prompt ${sessionId} <text>\` to send a prompt.`
             )
           );
         } catch (error) {

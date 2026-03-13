@@ -14,10 +14,7 @@ export function createWebFetchTool({ config }: ToolContext): AgentTool {
     name: 'web_fetch',
     label: 'web fetch',
     description: `Fetch and read the content of a specific web page URL, returning clean readable text.
-Use this when you have a specific URL and need to read its contents — for example to
-read documentation, an article, or a page linked from search results. Does not execute
-JavaScript, so it works best on server-rendered pages (articles, docs, blogs).
-For JS-heavy sites or pages behind login, this may return incomplete content.
+Use when you have a URL (e.g. from web_search citations) and need the full page — documentation, articles, or any result link. Does not execute JavaScript; best for server-rendered pages (articles, docs, blogs). For JS-heavy or login-only pages, content may be incomplete.
 Returns { url: string, title: string, content: string, truncated: boolean }`,
 
     parameters: Type.Object({
@@ -122,12 +119,11 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
 
         const host = new URL(finalUrl).host;
         const hostOptions =
-          config.tools.guard?.allowlist?.webFetch?.[host] ?? null;
+          config.tools?.guard?.allowlist?.webFetch?.[host] ?? null;
 
         if ((await isGuardAvailable(config)) && !hostOptions?.trusted) {
           const result = await isSafe(config, content, {
             name: host,
-            use: config.tools.guard?.use ?? 'all',
           });
 
           if (!result.safe) {
@@ -150,7 +146,10 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
         };
       } catch (err) {
         if (isAbortError(err)) throw err;
-        if (err instanceof SsrfBlockedError || isConnectionOrTimeoutError(err)) {
+        if (
+          err instanceof SsrfBlockedError ||
+          isConnectionOrTimeoutError(err)
+        ) {
           const message = failureMessage(err);
           return {
             content: [{ type: 'text' as const, text: message }],
@@ -194,7 +193,8 @@ function isConnectionOrTimeoutError(err: unknown): boolean {
 
 function failureMessage(err: unknown): string {
   if (err instanceof SsrfBlockedError) return 'Blocked for security reasons.';
-  if (!(err instanceof Error)) return 'Page could not be loaded. Service unreachable.';
+  if (!(err instanceof Error))
+    return 'Page could not be loaded. Service unreachable.';
   if (err.message.toLowerCase().includes('timeout'))
     return 'Page could not be loaded. Request timed out.';
   return 'Page could not be loaded. Service unreachable.';

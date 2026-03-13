@@ -83,12 +83,11 @@ export async function runExec(
       if (code !== 0) {
         resolve(`Command exited with code ${code}\n${combined}`);
       } else {
-        const guardUse = config.tools.guard?.use ?? 'all';
         const { trusted } = getAllowlistForCommand(command, config);
+
         if ((await isGuardAvailable(config)) && !trusted) {
           const result = await isSafe(config, combined, {
             name: command.split(' ')[0],
-            use: guardUse,
           });
 
           if (!result.safe) {

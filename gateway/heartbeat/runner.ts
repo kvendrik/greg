@@ -13,9 +13,14 @@ const logger = createLogger('heartbeat');
 const HEARTBEAT_FILENAME = 'HEARTBEAT.md';
 const DEFAULT_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
-const DEFAULT_HEARTBEAT_INSTRUCTION = `You are running a heartbeat check. Follow the checklist below strictly. Do not infer or repeat old tasks from prior chats.
-If nothing needs attention, respond with exactly: HEARTBEAT_OK
-Otherwise respond with only the alert text for the user (no preamble).`;
+const DEFAULT_HEARTBEAT_INSTRUCTION = `
+## Heartbeat Run
+You are running a heartbeat check. Follow the checklist below strictly.
+Do not infer or repeat old tasks from prior chats.
+If nothing needs attention, do not respond with any text.
+Otherwise respond with only the alert text for the user (no preamble).
+Do not give updates to the user while you work through the checklist.
+`;
 
 const workspacePath = getWorkspacePath(config);
 const heartbeatPath = join(workspacePath, HEARTBEAT_FILENAME);
@@ -77,26 +82,16 @@ export async function start(
     }
 
     const prompt = `${systemPrompt}\n\n---\n\n${heartbeatPrompt}`;
+    const { success, error } = await execute(prompt);
 
-    try {
-      await execute(prompt);
-      await log.append({
-        startedAt,
-        finishedAt: new Date().toISOString(),
-        success: true,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`[heartbeat] Run failed: ${message}`);
-      await log.append({
-        startedAt,
-        finishedAt: new Date().toISOString(),
-        success: false,
-        error: message,
-      });
-    } finally {
-      running = false;
-    }
+    await log.append({
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      success,
+      error,
+    });
+
+    running = false;
 
     if (!shuttingDown) {
       scheduleNext();

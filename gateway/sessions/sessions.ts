@@ -1,13 +1,15 @@
-import { Agent, type Callbacks, type PromptInput } from '../../agent';
+import { Agent, type Callbacks } from '../../agent';
 import * as storage from './storage/storage';
+import { createLogger } from '../../utilities/logger';
 import config from '../../.greg';
+
+const logger = createLogger('Sessions Manager');
 
 export type SessionTools = {
   id: string;
-  working: boolean;
   subscribe: typeof Agent.prototype.subscribe;
   abort: typeof Agent.prototype.abort;
-  prompt: (input: PromptInput) => Promise<void>;
+  prompt: typeof Agent.prototype.prompt;
 };
 
 const loadedSessions = new Map<string, SessionTools>();
@@ -38,16 +40,21 @@ export async function load(sessionId: string): Promise<SessionTools> {
     ? storage.load(sessionId)
     : storage.create(sessionId));
 
+  logger.info(
+    `[${sessionId}] Creating agent with ${sessionStorage.messages.length} messages...`
+  );
+
   const agent = await Agent.create({
     config,
     messages: sessionStorage.messages,
   });
 
+  logger.info(`[${sessionId}] Created agent. Session ready.`);
+
   const tools: SessionTools = {
     id: sessionId,
-    working: agent.working,
-    subscribe: (callbacks: Callbacks) =>
-      agent.subscribe(sessionStorage.proxy(callbacks, agent)),
+    subscribe: (channelId: string, callbacks: Callbacks) =>
+      agent.subscribe(channelId, sessionStorage.proxy(callbacks, agent)),
     abort: agent.abort.bind(agent),
     prompt: agent.prompt.bind(agent),
   };

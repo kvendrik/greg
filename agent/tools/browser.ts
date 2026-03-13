@@ -34,11 +34,16 @@ function normalizeSpacing(text: string): string {
     .replace(/\?([A-Za-z])/g, '? $1');
 }
 
-function getProc(config: AgentConfig): { proc: ChildProcess; rl: readline.Interface } {
-  const browserConfig = config.tools.browser;
+function getProc(config: AgentConfig): {
+  proc: ChildProcess;
+  rl: readline.Interface;
+} {
+  const browserConfig = config.tools?.browser ?? null;
+
   if (!browserConfig) {
     throw new Error('Browser tool is not configured (config.tools.browser).');
   }
+
   if (proc?.exitCode !== null) {
     proc = spawn('uv', ['run', 'scripts/browser-use.py'], {
       stdio: ['pipe', 'pipe', 'inherit'],
@@ -133,7 +138,7 @@ export function runBrowserTask(
 
 export function getBrowserTools(context: ToolContext): AgentTool[] {
   const config = context.config;
-  return config.tools.browser
+  return config.tools?.browser
     ? [
         {
           name: 'run_browser_task',
@@ -153,7 +158,10 @@ export function getBrowserTools(context: ToolContext): AgentTool[] {
                 signal ?? new AbortController().signal,
                 config
               );
-              return { content: [{ type: 'text' as const, text }], details: {} };
+              return {
+                content: [{ type: 'text' as const, text }],
+                details: {},
+              };
             } catch (err) {
               if (err instanceof DOMException && err.name === 'AbortError') {
                 return {

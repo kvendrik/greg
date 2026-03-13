@@ -42,7 +42,7 @@ export class Agent {
   private lastModel: Model<Api> | null = null;
   private readonly primaryModel: Model<Api>;
   private readonly config: AgentConfig;
-  private callbacks: Map<string, Callbacks> = new Map();
+  private callbacks: Map<string, Callbacks[]> = new Map();
 
   private constructor(core: CoreAgent, config: AgentConfig) {
     this.core = core;
@@ -61,41 +61,75 @@ export class Agent {
     this.abortController = null;
   }
 
-  subscribe(callbacks: Callbacks): string {
-    const id = createUUID();
-    this.callbacks.set(id, callbacks);
-    return id;
+  subscribe(channelId: string, callbacks: Callbacks) {
+    this.callbacks.set(channelId, [
+      ...(this.callbacks.get(channelId) ?? []),
+      callbacks,
+    ]);
   }
 
-  private getCallbacks(): Callbacks {
-    const callbacks = Array.from(this.callbacks.values());
+  private getCallbacks(
+    channelId: 'all' | string,
+    callbacks?: Partial<Callbacks>
+  ): Callbacks {
+    const channelCallbacks =
+      channelId === 'all'
+        ? Array.from(this.callbacks.values()).flat()
+        : (this.callbacks.get(channelId) ?? []);
+
     return {
       onTurnStart: (prompt: PromptInput) => {
-        callbacks.forEach((callback) => callback.onTurnStart?.(prompt));
+        channelCallbacks.forEach((callback) => callback.onTurnStart?.(prompt));
+        callbacks?.onTurnStart?.(prompt);
       },
       onContent: (chunk: string) => {
-        callbacks.forEach((callback) => callback.onContent?.(chunk));
+        channelCallbacks.forEach((callback) => callback.onContent?.(chunk));
+        callbacks?.onContent?.(chunk);
       },
       onThinking: (chunk: string) => {
-        callbacks.forEach((callback) => callback.onThinking?.(chunk));
+        channelCallbacks.forEach((callback) => callback.onThinking?.(chunk));
+        callbacks?.onThinking?.(chunk);
       },
       onToolcall: (name: string, args: Record<string, unknown>) => {
-        callbacks.forEach((callback) => callback.onToolcall?.(name, args));
+        channelCallbacks.forEach((callback) =>
+          callback.onToolcall?.(name, args)
+        );
+        callbacks?.onToolcall?.(name, args);
       },
       onTurnDone: (messages?: AgentMessage[]) => {
-        callbacks.forEach((callback) => callback.onTurnDone?.(messages));
+        channelCallbacks.forEach((callback) => callback.onTurnDone?.(messages));
+        callbacks?.onTurnDone?.(messages);
       },
       onTurnStop: () => {
-        callbacks.forEach((callback) => callback.onTurnStop?.());
+        channelCallbacks.forEach((callback) => callback.onTurnStop?.());
+        callbacks?.onTurnStop?.();
       },
       onError: (error: string) => {
-        callbacks.forEach((callback) => callback.onError?.(error));
+        channelCallbacks.forEach((callback) => callback.onError?.(error));
+        callbacks?.onError?.(error);
       },
     };
   }
 
-  async prompt(input: PromptInput): Promise<void> {
-    const callbacks = this.getCallbacks();
+  async prompt(
+    input: PromptInput,
+    options: {
+      /**
+       * undefined = all channels
+       * null = no channels
+       * string = specific channel
+       */
+      channelId?: string | null;
+      callbacks?: Partial<Callbacks>;
+    } = {}
+  ): Promise<void> {
+    const callbacks =
+      options.channelId === null
+        ? {}
+        : this.getCallbacks(
+            options.channelId === undefined ? 'all' : options.channelId,
+            options.callbacks
+          );
 
     const parsed = parseCommands({
       content: input.content,
@@ -338,8 +372,6 @@ export class Agent {
     )!.model;
 
     const systemPrompt = getSystemPrompt(tools.instructions, config);
-
-    console.info(pc.gray(systemPrompt));
 
     const core = new CoreAgent({
       initialState: {

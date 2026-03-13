@@ -38,7 +38,7 @@ async function evaluateExecPolicy(
   const parsedCommand = parseCommand(command);
   const options = getAllowlistForCommand(command, config);
 
-  if (config.tools.guard?.enabled && !options.allow) {
+  if (config.tools?.guard?.enabled && !options.allow) {
     const firstCommand = parsedCommand.segments[0].commandWithSubcommands!;
 
     const message = `💂 Greg is asking to run a command.

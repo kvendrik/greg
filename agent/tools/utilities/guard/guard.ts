@@ -3,18 +3,14 @@ import type { AgentConfig } from '../../../types';
 
 const GUARD_ONLINE_TIMEOUT_MS = 200;
 
-export type GuardMethods = 'patterns' | 'classifier' | 'all';
-
 export async function available(config: AgentConfig): Promise<boolean> {
-  if (!config.tools.guard?.enabled) {
+  if (!config.tools?.guard?.enabled) {
     return false;
   }
-  const use = config.tools.guard.use;
-  if (use === 'patterns') {
-    return true;
-  }
-  const port = config.tools.guard?.port ?? 7234;
+
+  const port = config.tools?.guard?.port ?? 7234;
   const url = `http://127.0.0.1:${port}`;
+
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => {
@@ -37,11 +33,7 @@ export async function available(config: AgentConfig): Promise<boolean> {
 export async function isSafe(
   config: AgentConfig,
   text: string,
-  {
-    use,
-    name,
-    logging = true,
-  }: { use: GuardMethods; name: string; logging?: boolean }
+  { name, logging = true }: { name: string; logging?: boolean }
 ): Promise<
   | {
       success: boolean;
@@ -61,29 +53,17 @@ export async function isSafe(
     console.log(`[Guard] Running guard on content for "${name}".`);
   }
 
-  if (use === 'patterns' || use === 'all') {
-    for (const { pattern, reason } of patterns) {
-      if (new RegExp(pattern, 'i').test(text)) {
-        logResult({ name, performance: 0, safe: false, reason });
-        return {
-          success: true,
-          safe: false,
-          reason,
-          evaluatedBy: 'patterns',
-          message: `Flagged as unsafe by guard. Reason: ${reason}`,
-        };
-      }
+  for (const { pattern, reason } of patterns) {
+    if (new RegExp(pattern, 'i').test(text)) {
+      logResult({ name, performance: 0, safe: false, reason });
+      return {
+        success: true,
+        safe: false,
+        reason,
+        evaluatedBy: 'patterns',
+        message: `Flagged as unsafe by guard. Reason: ${reason}`,
+      };
     }
-  }
-
-  if (use === 'patterns') {
-    logResult({ name, performance: 0, safe: true, reason: null });
-    return {
-      success: true,
-      safe: true,
-      reason: null,
-      evaluatedBy: 'patterns',
-    };
   }
 
   if (text.trim() === '') {
@@ -99,8 +79,8 @@ export async function isSafe(
   const start = performance.now();
   let response: { injection: boolean; score: number; label: string };
   let end = 0;
-  const timeoutMs = config.tools.guard?.timeout ?? 15_000;
-  const port = config.tools.guard?.port ?? 7234;
+  const timeoutMs = config.tools?.guard?.timeout ?? 15_000;
+  const port = config.tools?.guard?.port ?? 7234;
   const classifierUrl = `http://127.0.0.1:${port}`;
 
   try {

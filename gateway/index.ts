@@ -28,10 +28,29 @@ async function start() {
 
   if (config.heartbeat?.enabled ?? true) {
     logger.info('Starting heartbeat...');
+
     stopHeartbeat = await heartbeat.start(async (prompt: string) => {
       logger.info('Running heartbeat prompt...');
+
       const session = await sessions.load('main');
-      await session.prompt({ content: prompt, images: [] });
+
+      const { success, error } = await new Promise<{
+        success: boolean;
+        error?: string;
+      }>((resolve) =>
+        session.prompt(
+          { content: prompt, images: [] },
+          {
+            channelId: null,
+            callbacks: {
+              onError: (error) => resolve({ success: false, error }),
+              onTurnDone: () => resolve({ success: true, error: undefined }),
+            },
+          }
+        )
+      );
+
+      return { success, error };
     });
   }
 
@@ -40,6 +59,9 @@ async function start() {
     logger.info('Starting Telegram service...');
     await gateway.start();
   }
+
+  logger.info('Loading main session...');
+  await sessions.load('main');
 
   const shutdown = () => {
     logger.info('Shutting down...');
@@ -51,4 +73,6 @@ async function start() {
 
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
+
+  logger.info('✅ Gateway ready.');
 }

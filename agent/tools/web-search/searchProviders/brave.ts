@@ -1,4 +1,5 @@
 import { AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { WebSearchSuccessDetails } from '../types';
 
 const BRAVE_WEB_SEARCH_ENDPOINT =
   'https://api.search.brave.com/res/v1/web/search';
@@ -73,7 +74,7 @@ export async function searchWithBrave(
   query: string,
   signal?: AbortSignal,
   options?: BraveSearchOptions
-): Promise<AgentToolResult<object>> {
+): Promise<WebSearchSuccessDetails> {
   const count = Math.min(
     MAX_COUNT,
     Math.max(1, options?.count ?? DEFAULT_COUNT)
@@ -120,18 +121,22 @@ export async function searchWithBrave(
     }
 
     const data = (await response.json()) as BraveWebSearchResponse;
+    const results = data.web?.results ?? [];
 
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: data.web?.results
-            ? JSON.stringify(data.web?.results)
-            : 'No results found.',
-        },
-      ],
-      details: {},
-    };
+    const citations = results
+      .filter((r): r is BraveWebResult & { title: string; url: string } =>
+        Boolean(r.title && r.url)
+      )
+      .map((r) => ({ title: r.title!, url: r.url! }));
+
+    const answer =
+      results.length === 0
+        ? 'No results found.'
+        : results.length === 1
+          ? (results[0].description ?? results[0].title ?? 'One result found.')
+          : `${results.length} results. Use web_fetch with a citation url to read a page in full.`;
+
+    return { answer, citations };
   } finally {
     clearTimeout(timeoutId);
     signal?.removeEventListener('abort', onAbort);

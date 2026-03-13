@@ -7,13 +7,12 @@ import ffmpeg from 'fluent-ffmpeg';
 import fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import {
-  escapeMarkdownV2,
-  getTelegramEnv,
-  telegramAwaitSocketPath,
-} from './utilities';
+import { getTelegramEnv, telegramAwaitSocketPath } from './utilities';
 import { TaskChannel } from '../TaskChannel';
 import { sendMessage } from './utilities';
+import { createLogger } from '../../utilities/logger';
+
+const logger = createLogger('TG');
 
 type PromptFn = (
   args: {
@@ -90,7 +89,7 @@ export class TelegramGateway {
     this.taskChannel.listen();
     this.bot.start();
 
-    console.log('Ready.');
+    logger.log('Ready.');
   }
 
   private isAllowedSender(ctx: BotContext): boolean {
@@ -98,7 +97,7 @@ export class TelegramGateway {
   }
 
   private rejectUnauthorized(ctx: BotContext, label: string): void {
-    console.log(
+    logger.log(
       `401: ${label} from ${ctx.from?.username} (${ctx.from?.id}) but not allowed to send messages to the bot`
     );
   }
@@ -118,7 +117,7 @@ export class TelegramGateway {
 
     this.taskChannel.onTask('edit-topic', async ({ text }) => {
       if (!this.lastMessageThreadId) {
-        console.warn('edit-topic requested but lastMessageThreadId is not set');
+        logger.warn('edit-topic requested but lastMessageThreadId is not set');
         return;
       }
       let title = text;
@@ -188,7 +187,7 @@ export class TelegramGateway {
 
       const voice = ctx.message.voice;
 
-      console.log('Received voice message:', {
+      logger.log('Received voice message:', {
         duration: voice.duration,
         mimeType: voice.mime_type,
         fileSize: voice.file_size,
@@ -246,18 +245,18 @@ export class TelegramGateway {
             this.mediaGroupCollector.delete(mediaGroupId);
             const contexts = existing.contexts;
             this.processPhotoBatch(contexts, contexts[0]).catch((err) => {
-              console.error('Error processing photo batch:', err);
+              logger.error('Error processing photo batch:', err);
               contexts[0]
                 .reply('Failed to process images.')
-                .catch(console.error);
+                .catch(logger.error);
             });
           }, 400);
         } else {
           const timer = setTimeout(() => {
             this.mediaGroupCollector.delete(mediaGroupId);
             this.processPhotoBatch([ctx], ctx).catch((err) => {
-              console.error('Error processing photo batch:', err);
-              ctx.reply('Failed to process images.').catch(console.error);
+              logger.error('Error processing photo batch:', err);
+              ctx.reply('Failed to process images.').catch(logger.error);
             });
           }, 400);
           this.mediaGroupCollector.set(mediaGroupId, {

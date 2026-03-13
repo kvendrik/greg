@@ -58,7 +58,7 @@ export function getAllowlistForCommand(
   command: string,
   config: AgentConfig
 ): AllowListEntry {
-  const configAllowlist = config.tools.guard?.allowlist?.exec ?? {};
+  const configAllowlist = config.tools?.guard?.allowlist?.exec ?? {};
 
   // Start from the curated default allowlist, then let workspace- and
   // config-level entries extend/override it.
@@ -246,13 +246,12 @@ function getAllowlistForSegmentFromList(
 
   // For path-like globs (e.g. "bun run hub/*"), match only the segment before " -- "
   // so "bun run hub_root/dangerous -- x" does not match "bun run hub/*".
-  const candidatesForGlob =
-    trimmedSegment.includes(' -- ')
-      ? [
-          trimmedSegment.split(' -- ')[0]!.trim(),
-          ...candidates.filter((c) => !c.includes(' -- ')),
-        ]
-      : candidates;
+  const candidatesForGlob = trimmedSegment.includes(' -- ')
+    ? [
+        trimmedSegment.split(' -- ')[0]!.trim(),
+        ...candidates.filter((c) => !c.includes(' -- ')),
+      ]
+    : candidates;
 
   for (const [key, entry] of Object.entries(list)) {
     // Glob patterns (e.g. "npm run *", "bun run hub/*").

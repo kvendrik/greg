@@ -26,6 +26,7 @@ type AgentEvent =
 
 type WebSocketData = {
   sessionId: string;
+  channelId: string;
 };
 
 type SessionIdParams = { params: { id: string } };
@@ -59,25 +60,47 @@ export async function startServer(port = Number(config.port)) {
       '/sessions/new': {
         POST: async (req: Request) => {
           logRequest(req);
-          let clientId: string | undefined;
+
+          let sessionId: string | undefined;
+
           try {
             const bodyText = await req.text();
             if (bodyText) {
-              const parsed = JSON.parse(bodyText) as { clientId?: unknown };
+              const parsed = JSON.parse(bodyText) as { sessionId?: unknown };
               if (
-                typeof parsed.clientId === 'string' &&
-                parsed.clientId.trim() !== ''
+                typeof parsed.sessionId === 'string' &&
+                parsed.sessionId.trim() !== ''
               ) {
-                clientId = parsed.clientId;
+                sessionId = parsed.sessionId;
+              } else {
+                throw new Error('Expected session ID');
               }
+            } else {
+              throw new Error('Expected body text');
             }
           } catch {
-            // ignore malformed body, fall back to random ID
+            return new Response(
+              JSON.stringify({ error: 'No session ID provided' }),
+              {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+              }
+            );
           }
 
-          const newSession = await sessions.load(
-            sessions.createUUID() + (clientId ? `-${clientId}` : '')
-          );
+          if (sessions.exists(sessionId)) {
+            return new Response(
+              JSON.stringify({
+                error: `Session "${sessionId}" already exists`,
+              }),
+              {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+              }
+            );
+          }
+
+          const newSession = await sessions.load(sessionId);
 
           return new Response(JSON.stringify({ id: newSession.id }), {
             status: 201,
@@ -91,16 +114,27 @@ export async function startServer(port = Number(config.port)) {
           bunServer: Server<WebSocketData>
         ) => {
           logRequest(req);
-          const { id } = req.params;
-          if (!id) {
+          const { id: sessionId } = req.params;
+
+          if (!sessionId) {
             return new Response('Not found', { status: 404 });
           }
+
+          const url = new URL(req.url);
+          const channelId = url.searchParams.get('channelId');
+
+          if (!channelId) {
+            return new Response('Channel ID is required', { status: 400 });
+          }
+
           const success = bunServer.upgrade(req, {
-            data: { sessionId: id },
+            data: { sessionId, channelId },
           });
+
           if (success) {
             return undefined;
           }
+
           return new Response('WebSocket upgrade failed', { status: 500 });
         },
         DELETE: (req: Request & SessionIdParams) => {
@@ -126,7 +160,7 @@ export async function startServer(port = Number(config.port)) {
     websocket: {
       data: {} as WebSocketData,
       async open(ws) {
-        const { sessionId } = ws.data;
+        const { sessionId, channelId } = ws.data;
         activeSessionIds.add(sessionId);
 
         if (!sessions.exists(sessionId)) {
@@ -141,7 +175,7 @@ export async function startServer(port = Number(config.port)) {
         const existingSession = await sessions.load(sessionId);
         const sender = createSender<AgentEvent>(ws);
 
-        existingSession.subscribe({
+        existingSession.subscribe(channelId, {
           onTurnStart(prompt) {
             sender.send({ type: 'turn_start', prompt });
           },
@@ -249,16 +283,13 @@ export async function startServer(port = Number(config.port)) {
   logger.info('Running...');
   logger.info('Endpoints: GET /ping, POST /sessions/new, DELETE /sessions/:id');
   logger.info(
-    'WebSocket: ws://<host>:<port>/sessions/:id for bi-directional communication'
+    'WebSocket: ws://<host>:<port>/sessions/:id?channelId=<channel> for bi-directional communication'
   );
   logger.info(
     'Use a client to interact. E.g. `bun run clients:cli "How are you today?"`'
   );
   logger.info(`Listening on port ${server.port}`);
   logger.info('Ctrl+C to stop');
-
-  logger.info('Loading main session...');
-  await sessions.load('main');
 
   return server;
 }

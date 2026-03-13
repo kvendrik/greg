@@ -112,30 +112,13 @@ export async function createPromper(bot: Bot<BotContext>) {
     }
 
     if (!sessions.has('main')) {
-      const mainSession = await Session.existing('main');
+      const mainSession = await Session.existing('main', 'telegram');
       await mainSession.connect();
       mainSession.subscribe(callbacks);
       sessions.set('main', mainSession);
     }
 
-    let session = sessions.get('main')!;
-
-    // TODO: I've turned off threaded mode for now
-    const messageThreadId = null; //ctx?.message?.message_thread_id ?? null;
-
-    if (messageThreadId) {
-      const threadSession = sessions.get(messageThreadId) ?? null;
-
-      if (threadSession) {
-        session = threadSession;
-      } else {
-        session = await Session.create('tg');
-        await session.connect();
-        session.subscribe(callbacks);
-        sessions.set(messageThreadId, session);
-      }
-    }
-
+    const session = sessions.get('main')!;
     const typing = ctx ? createSendTypingAction(ctx) : null;
 
     const imageSuffix =

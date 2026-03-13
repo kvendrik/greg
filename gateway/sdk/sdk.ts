@@ -24,8 +24,6 @@ export function setWebSocketFactory(factory: WebSocketFactory): void {
 }
 
 export class Session {
-  public readonly id: string;
-
   private destroyed = false;
   private socket: WebSocket | null = null;
   private socketReadyPromise: Promise<WebSocket> | null = null;
@@ -35,9 +33,10 @@ export class Session {
   } | null = null;
   private callbacks: Map<string, Callbacks> = new Map();
 
-  private constructor(id: string) {
-    this.id = id;
-  }
+  private constructor(
+    private readonly sessionId: string,
+    private readonly channelId: string
+  ) {}
 
   async connect(): Promise<void> {
     await this.ensureSocket();
@@ -175,7 +174,7 @@ export class Session {
       return this.socketReadyPromise;
     }
 
-    const url = `ws://localhost:${config.port}/sessions/${this.id}`;
+    const url = `ws://localhost:${config.port}/sessions/${this.sessionId}?channelId=${this.channelId}`;
 
     this.socketReadyPromise = new Promise<WebSocket>((resolve, reject) => {
       const ws = webSocketFactory(url);
@@ -214,7 +213,7 @@ export class Session {
     }
     this.resetSocket();
 
-    const res = await fetch(`${getBase()}/sessions/${this.id}`, {
+    const res = await fetch(`${getBase()}/sessions/${this.sessionId}`, {
       method: 'DELETE',
     });
 
@@ -246,27 +245,34 @@ export class Session {
     });
   }
 
-  static async create(clientId: string): Promise<Session> {
+  static async create(sessionId: string, channelId: string): Promise<Session> {
     const base = getBase();
-    const res = await fetch(`${base}/sessions/new`, {
+
+    const response = await fetch(`${base}/sessions/new`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId }),
+      body: JSON.stringify({ sessionId }),
     });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Failed to create session: ${res.status} ${text}`);
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Failed to create session: ${response.status} ${text}`);
     }
-    const { id } = (await res.json()) as { id: string };
-    return new Session(id);
+
+    return new Session(sessionId, channelId);
   }
 
-  static async existing(sessionId: string): Promise<Session> {
+  static async existing(
+    sessionId: string,
+    channelId: string
+  ): Promise<Session> {
     const sessions = await listSessions();
+
     if (!sessions.includes(sessionId)) {
       throw new Error(`Session ${sessionId} not found`);
     }
-    return new Session(sessionId);
+
+    return new Session(sessionId, channelId);
   }
 }
 

@@ -8,11 +8,10 @@ The following skills from [LeoYeAI/openclaw-master-skills](https://github.com/Le
 
 | Skill                       | Notes                                                                                                                                                                            |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `writing-skills`            | When/how to create and edit skills; Greg-adapted (save_skill, skills/ dir).                                                                                                      |
 | `using-superpowers`         | How to find and use skills; Greg-adapted (read from location, red flags, priority).                                                                                              |
-| `remembering-conversations` | Reuse past conversations; Greg-adapted (workspace memory and notes, no subagent).                                                                                                |
+| `remembering-conversations` | Reuse past conversations; Greg-adapted (workspace memory and notes, memory_recent / memory_search / memory_summarize / memory_get).                                                |
 | `session-logs`              | Search past session transcripts when user references older/parent conversations; Greg-adapted (memory_search / memory_summarize / memory_get over workspace/sessions, no jq/rg). |
-| `skill-creator`             | Create or improve skills; Greg-adapted (no eval runner, iterate with user feedback).                                                                                             |
+| `skill-creator`             | Create, edit, or verify skills; format (save_skill, SKILL.md), description guidelines, process (capture intent, draft, iterate with feedback).                                     |
 | `docx`                      | Create, read, edit Word documents (from OpenClaw).                                                                                                                               |
 | `pdf`                       | Read, edit, merge PDFs (from OpenClaw).                                                                                                                                          |
 | `xlsx`                      | Spreadsheets as input/output (from OpenClaw).                                                                                                                                    |

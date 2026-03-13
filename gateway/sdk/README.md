@@ -10,7 +10,7 @@ if (!(await pingAgent())) {
 
 // connects to main session. To create a new
 // session use Session.create()
-const session = await Session.existing('main');
+const session = await Session.existing('main', 'your_channel_id');
 
 await session.connect();
 
