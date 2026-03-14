@@ -1,11 +1,12 @@
 import { readFile, exists } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { ExecutePromptFn, HeartbeatOptions } from './types';
+import type { HeartbeatOptions } from './types';
 import * as log from './log';
 import { isWithinActiveHours } from './active-hours';
 import { isPaused } from './paused';
 import { createLogger } from '../../utilities/logger';
 import { getWorkspacePath } from '../../agent/utilities';
+import * as sessions from '../sessions/sessions';
 import config from '../../.greg';
 
 const logger = createLogger('heartbeat');
@@ -22,52 +23,65 @@ Otherwise respond with only the alert text for the user (no preamble).
 Do not give updates to the user while you work through the checklist.
 `;
 
-const workspacePath = getWorkspacePath(config);
-const heartbeatPath = join(workspacePath, HEARTBEAT_FILENAME);
+const heartbeatPath = join(getWorkspacePath(config), HEARTBEAT_FILENAME);
 
-export async function start(
-  execute: ExecutePromptFn,
-  options?: Omit<HeartbeatOptions, 'enabled'>
-): Promise<() => void> {
-  const intervalMs = options?.intervalMs ?? DEFAULT_INTERVAL_MS;
+export class Heartbeat {
+  private readonly intervalMs: number;
+  private readonly systemPrompt: string;
+  private readonly activeHours: HeartbeatOptions['activeHours'] | null = null;
+  private timeoutId: ReturnType<typeof setTimeout> | null = null;
+  private started = false;
+  private running = false;
+  private shuttingDown = false;
 
-  const systemPrompt =
-    options?.prompt && options?.prompt.trim().length > 0
-      ? options?.prompt.trim()
-      : DEFAULT_HEARTBEAT_INSTRUCTION;
+  constructor(options?: Omit<HeartbeatOptions, 'enabled'>) {
+    this.intervalMs = options?.intervalMs ?? DEFAULT_INTERVAL_MS;
+    this.activeHours = options?.activeHours ?? null;
 
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let running = false;
-  let shuttingDown = false;
+    this.systemPrompt =
+      options?.prompt && options?.prompt.trim().length > 0
+        ? options?.prompt.trim()
+        : DEFAULT_HEARTBEAT_INSTRUCTION;
+  }
 
-  logger.info(`Starting (interval ${intervalMs / 1000}s.`);
-  timeoutId = setTimeout(runHeartbeat, intervalMs);
+  start() {
+    this.started = true;
+    this.schedule();
+  }
 
-  return () => {
-    shuttingDown = true;
-    clearTimeout(timeoutId!);
-  };
+  stop() {
+    this.shuttingDown = true;
+    clearTimeout(this.timeoutId!);
+  }
 
-  async function runHeartbeat(): Promise<void> {
-    if (shuttingDown) return;
+  async run(): Promise<void> {
+    if (this.shuttingDown) return;
 
-    if (running) {
+    if (!this.runPrompt) {
+      logger.error('No prompt runner function provided. Skipping run.');
+      this.schedule();
+      return;
+    }
+
+    if (this.running) {
       logger.info('Skipping run: previous run still in progress.');
-      scheduleNext();
+      this.schedule();
       return;
     }
 
     if (await isPaused()) {
-      scheduleNext();
+      logger.info(`Heartbeat is paused. Skipping run.`);
+      this.schedule();
       return;
     }
 
-    if (options?.activeHours && !isWithinActiveHours(options.activeHours)) {
-      scheduleNext();
+    if (this.activeHours && !isWithinActiveHours(this.activeHours)) {
+      logger.info(`Not within active hours. Skipping run.`);
+      this.schedule();
       return;
     }
 
-    running = true;
+    this.running = true;
 
     const startedAt = new Date().toISOString();
     const heartbeatPrompt = (await exists(heartbeatPath))
@@ -75,15 +89,16 @@ export async function start(
       : '';
 
     if (heartbeatPrompt === '') {
-      logger.info(
-        '[heartbeat] No heartbeat checklist found. Skipping heartbeat.'
-      );
+      logger.info('No heartbeat checklist found. Skipping heartbeat.');
       return;
     }
 
-    const prompt = `${systemPrompt}\n\n---\n\n${heartbeatPrompt}`;
-    const { success, error } = await execute(prompt);
+    const prompt = `${this.systemPrompt}\n\n---\n\n${heartbeatPrompt}`;
 
+    logger.info(`Running heartbeat...\n\n${prompt}\n\n`);
+    const { success, error } = await this.runPrompt(prompt);
+
+    logger.info(`Heartbeat result... \nsuccess=${success}\nerror="${error}"`);
     await log.append({
       startedAt,
       finishedAt: new Date().toISOString(),
@@ -91,15 +106,42 @@ export async function start(
       error,
     });
 
-    running = false;
+    this.running = false;
 
-    if (!shuttingDown) {
-      scheduleNext();
+    if (!this.shuttingDown) {
+      this.schedule();
     }
   }
 
-  function scheduleNext(): void {
-    if (shuttingDown) return;
-    timeoutId = setTimeout(runHeartbeat, intervalMs);
+  private async runPrompt(
+    prompt: string
+  ): Promise<{ success: boolean; error?: string }> {
+    logger.info('Running heartbeat prompt...');
+
+    const session = await sessions.load('main');
+
+    const { success, error } = await new Promise<{
+      success: boolean;
+      error?: string;
+    }>((resolve) =>
+      session.prompt(
+        { content: prompt, images: [] },
+        {
+          channelId: null,
+          callbacks: {
+            onError: (error) => resolve({ success: false, error }),
+            onTurnDone: () => resolve({ success: true, error: undefined }),
+          },
+        }
+      )
+    );
+
+    return { success, error };
+  }
+
+  private schedule(): void {
+    if (this.shuttingDown || !this.started) return;
+    logger.info(`Next heartbeat in ${this.intervalMs / 1000 / 60} minutes.`);
+    this.timeoutId = setTimeout(this.run, this.intervalMs);
   }
 }

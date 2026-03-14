@@ -26,12 +26,13 @@ These tags are all explicitly documented in ElevenLabs' Eleven v3 audio tag arti
 
 | Tag               | Use for                                                           |
 | ----------------- | ----------------------------------------------------------------- |
-| `[pause]`         | Brief beat or breath between clauses                              |
+| `[sarcastically]` | Sarcastic tone                                                    |
 | `[pauses]`        | Noticeable pause — thinking, transitioning, landing a point       |
 | `[sigh]`          | Single sigh, a quick release of tension                           |
 | `[sighs]`         | Contemplation, mild frustration, or ongoing weariness             |
 | `[laughs]`        | Genuine amusement — not sarcasm                                   |
 | `[laughs softly]` | Warm, gentle amusement                                            |
+| `[giggles]`       | Softly giggles.                                                   |
 | `[light chuckle]` | Very small laugh or wry humor                                     |
 | `[whispers]`      | Intimacy, aside, or secret                                        |
 | `[excited]`       | High energy, good news, enthusiasm                                |

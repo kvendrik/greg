@@ -22,11 +22,6 @@ export interface HeartbeatOptions {
   runLog?: { maxBytes?: number; keepLines?: number };
 }
 
-export type ExecutePromptFn = (prompt: string) => Promise<{
-  success: boolean;
-  error?: string;
-}>;
-
 export interface HeartbeatRunLogEntry {
   startedAt: string;
   finishedAt: string;

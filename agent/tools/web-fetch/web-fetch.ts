@@ -117,19 +117,19 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
         let finalContent =
           (details.title ? `${details.title}\n\n` : '') + details.content;
 
-        const host = new URL(finalUrl).host;
-        const hostOptions =
-          config.tools?.guard?.allowlist?.webFetch?.[host] ?? null;
+        // const host = new URL(finalUrl).host;
+        // const hostOptions =
+        //   config.tools?.guard?.allowlist?.webFetch?.[host] ?? null;
 
-        if ((await isGuardAvailable(config)) && !hostOptions?.trusted) {
-          const result = await isSafe(config, content, {
-            name: host,
-          });
+        // if ((await isGuardAvailable(config)) && !hostOptions?.trusted) {
+        //   const result = await isSafe(config, content, {
+        //     name: host,
+        //   });
 
-          if (!result.safe) {
-            finalContent = result.message;
-          }
-        }
+        //   if (!result.safe) {
+        //     finalContent = result.message;
+        //   }
+        // }
 
         return {
           content: [

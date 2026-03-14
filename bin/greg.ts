@@ -4,12 +4,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { Command } from 'commander';
 import { name, description, version } from '../package.json';
-import * as sdk from '../gateway/sdk/sdk';
-import { validate, type Config } from '../config';
-import { discoverSkills } from '../agent/tools/skills';
-import { sendCommand } from '../clients/telegram/send-message';
-import * as heartbeat from '../gateway/heartbeat';
-import { voiceCommand } from '../scripts/voice/index';
+import type { Config } from '../config';
 import pc from 'picocolors';
 
 const projectRoot = path.join(import.meta.dirname, '..');
@@ -260,7 +255,32 @@ program
   .command('telegram')
   .alias('tg')
   .description('Telegram messaging tools')
-  .addCommand(sendCommand);
+  .addCommand(
+    new Command('send')
+      .description('Send a message to the configured Telegram user')
+      .option('--voice', 'send the message as a voice message')
+      .option('--await-reply', "wait for the user's reply")
+      .argument('<message>', 'message to send')
+      .action(
+        async (
+          message: string,
+          options: { voice?: boolean; awaitReply?: boolean }
+        ) => {
+          const { sendMessage } = await import(
+            '../clients/telegram/utilities'
+          );
+          await sendMessage(message, {
+            awaitReply: options.awaitReply ?? false,
+            voice: options.voice ?? false,
+          });
+          const log = options.voice
+            ? '📤 Sent & delivered as voice message'
+            : '📤 Sent & delivered as text message';
+          console.log(pc.green(log));
+          process.exit(0);
+        }
+      )
+  );
 
 program
   .command('config')
@@ -270,6 +290,7 @@ program
       .description('Validate the config file')
       .action(async () => {
         const config = await loadConfig();
+        const { validate } = await import('../config');
         await validate(config);
       })
   )
@@ -292,6 +313,8 @@ program
   )
   .action(async () => {
     const config = await loadConfig();
+    const { validate } = await import('../config');
+    const { discoverSkills } = await import('../agent/tools/skills');
     const configFailures = await validate(config, { exit: false });
     const skills = discoverSkills(config);
     for (const skill of skills) {
@@ -354,6 +377,16 @@ const heartbeatCommand = new Command('heartbeat').description(
 );
 
 heartbeatCommand
+  .alias('hb')
+  .addCommand(
+    new Command('run')
+      .description('Run a heartbeat immediately')
+      .action(async () => {
+        const heartbeat = await import('../gateway/heartbeat');
+        const hb = new heartbeat.Heartbeat();
+        await hb.run();
+      })
+  )
   .addCommand(
     new Command('status')
       .description('Show heartbeat status: enabled, paused, and recent runs')
@@ -361,6 +394,7 @@ heartbeatCommand
       .option('--json', 'Machine-readable output')
       .action(async (opts: { lines?: string; json?: boolean }) => {
         const config = await loadConfig();
+        const heartbeat = await import('../gateway/heartbeat');
         const enabled = config.heartbeat?.enabled === false ? false : true;
         const paused = await heartbeat.isPaused();
         const limit = Math.max(
@@ -406,6 +440,7 @@ heartbeatCommand
       .description('Turn heartbeats on (remove pause)')
       .option('--json', 'Machine-readable output')
       .action(async (opts: { json?: boolean }) => {
+        const heartbeat = await import('../gateway/heartbeat');
         await heartbeat.setPaused(false);
         if (opts.json) {
           console.log(JSON.stringify({ paused: false }));
@@ -419,6 +454,7 @@ heartbeatCommand
       .description('Pause heartbeats')
       .option('--json', 'Machine-readable output')
       .action(async (opts: { json?: boolean }) => {
+        const heartbeat = await import('../gateway/heartbeat');
         await heartbeat.setPaused(true);
 
         if (opts.json) {
@@ -435,6 +471,7 @@ heartbeatCommand
       )
       .option('--json', 'Machine-readable output')
       .action(async (opts: { json?: boolean }) => {
+        const heartbeat = await import('../gateway/heartbeat');
         const entries = await heartbeat.get();
         const entry = entries.length > 0 ? entries[entries.length - 1] : null;
 
@@ -470,6 +507,7 @@ program
       .description('List known session IDs')
       .action(async () => {
         try {
+          const sdk = await import('../gateway/sdk/sdk');
           const sessionIds = await sdk.listSessions();
           if (!sessionIds.length) {
             console.log('No sessions found.');
@@ -494,11 +532,12 @@ program
       .argument('<channelId>', 'Channel ID')
       .action(async (sessionId: string, channelId: string) => {
         try {
+          const sdk = await import('../gateway/sdk/sdk');
           const session = await sdk.Session.create(sessionId, channelId);
           console.log(pc.green('Session created.'));
           console.log(
             pc.gray(
-              `Use \`greg sessions prompt ${sessionId} <text>\` to send a prompt.`
+              `Use \`greg sessions prompt ${sessionId} ${channelId} <text>\` to send a prompt.`
             )
           );
         } catch (error) {
@@ -513,8 +552,9 @@ program
     new Command('prompt')
       .description('Send a prompt to an existing session')
       .argument('<sessionId>', 'ID of the session to prompt')
+      .argument('<channelId>', 'Channel ID')
       .argument('<text>', 'Prompt text')
-      .action(async (sessionId: string, promptText: string) => {
+      .action(async (sessionId: string, channelId: string, promptText: string) => {
         if (!promptText) {
           console.error(pc.red('No prompt text provided.'));
           process.exitCode = 1;
@@ -523,7 +563,8 @@ program
 
         let session;
         try {
-          session = await sdk.Session.existing(sessionId);
+          const sdk = await import('../gateway/sdk/sdk');
+          session = await sdk.Session.existing(sessionId, channelId);
           await session.connect();
         } catch (error) {
           const message =
@@ -567,6 +608,18 @@ program
       })
   );
 
-program.addCommand(voiceCommand);
+program
+  .command('voice')
+  .description('Talk to Greg by voice.')
+  .option(
+    '-d, --device <index>',
+    'AVFoundation microphone device index (default: prompt to choose)'
+  )
+  .action(async () => {
+    const { voiceCommand } = await import('../scripts/voice/index');
+    await voiceCommand.parseAsync(
+      process.argv.slice(process.argv.indexOf('voice'))
+    );
+  });
 
 program.parse();

@@ -363,7 +363,13 @@ export class Agent {
     }
   }
 
-  static async create({ config, messages }: AgentOptions): Promise<Agent> {
+  static async create({
+    config,
+    messages,
+    onCompact,
+  }: AgentOptions & {
+    onCompact(newMessages: AgentMessage[]): Promise<void>;
+  }): Promise<Agent> {
     const conversationStartIso = new Date().toISOString();
     const tools = await getTools(conversationStartIso, { config });
 
@@ -392,8 +398,19 @@ export class Agent {
         }
         return key;
       },
-      transformContext: (messages, signal) =>
-        compactContext(messages, signal, config),
+      transformContext: async (messages, signal) => {
+        const { messages: newMessages, didCompact } = await compactContext(
+          messages,
+          signal,
+          config
+        );
+
+        if (didCompact) {
+          await onCompact(newMessages);
+        }
+
+        return newMessages;
+      },
     });
 
     return new Agent(core, config);

@@ -225,13 +225,7 @@ export class Session {
       throw new Error('Session has been destroyed');
     }
 
-    if (this.pendingTurn) {
-      throw new Error('Session is already handling a prompt');
-    }
-
     return new Promise<void>((resolve, reject) => {
-      this.pendingTurn = { resolve, reject };
-
       if (!this.socket) {
         throw new Error('Session is not connected');
       }

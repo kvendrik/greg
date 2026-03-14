@@ -38,6 +38,17 @@ export function destroy(sessionId: string): void {
   fs.unlinkSync(sessionPath);
 }
 
+export async function replace(
+  sessionId: string,
+  messages: AgentMessage[]
+): Promise<void> {
+  const sessionPath = path.join(getSessionsDir(), `${sessionId}.jsonl`);
+  fs.writeFileSync(
+    sessionPath,
+    messages.map((m) => JSON.stringify(m)).join('\n')
+  );
+}
+
 export async function create(sessionId: string): Promise<StorageSession> {
   const sessionPath = path.join(getSessionsDir(), `${sessionId}.jsonl`);
   fs.writeFileSync(sessionPath, '');
@@ -51,15 +62,13 @@ export async function load(sessionId: string): Promise<StorageSession> {
     throw new Error(`Session ${sessionId} not found`);
   }
 
-  let maxMessages = 40;
+  logger.info(`[${sessionId}] Loading session from ${sessionPath}`);
 
-  logger.info(
-    `[${sessionId}] Loading session from ${sessionPath}. Loading last ${maxMessages} messages.`
-  );
-
-  const messages = (await tail(sessionPath, maxMessages)).map((l) =>
-    JSON.parse(l)
-  ) as AgentMessage[];
+  const messages = fs
+    .readFileSync(sessionPath, 'utf8')
+    .split('\n')
+    .filter((l) => l.trim() !== '')
+    .map((l) => JSON.parse(l)) as AgentMessage[];
 
   logger.info(`[${sessionId}] Loaded ${messages.length} messages.`);
 
@@ -90,10 +99,10 @@ export async function load(sessionId: string): Promise<StorageSession> {
   };
 }
 
-async function tail(path: string, lines: number): Promise<string[]> {
-  const result = execSync(`tail -n ${lines} ${path}`);
-  return result
-    .toString()
-    .split('\n')
-    .map((line) => line);
-}
+// async function tail(path: string, lines: number): Promise<string[]> {
+//   const result = execSync(`tail -n ${lines} ${path}`);
+//   return result
+//     .toString()
+//     .split('\n')
+//     .map((line) => line);
+// }

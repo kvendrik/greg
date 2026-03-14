@@ -107,10 +107,6 @@ export async function createPromper(bot: Bot<BotContext>) {
   };
 
   return async function prompt(input: PromptInput, ctx?: BotContext) {
-    if (state.working) {
-      throw new Error('Already working');
-    }
-
     if (!sessions.has('main')) {
       const mainSession = await Session.existing('main', 'telegram');
       await mainSession.connect();
@@ -132,7 +128,11 @@ export async function createPromper(bot: Bot<BotContext>) {
     state = {
       working: true,
       ctx: ctx ?? null,
-      typingAction: typing ? typing : null,
+      typingAction: state.typingAction
+        ? state.typingAction
+        : typing
+          ? typing
+          : null,
       buffer: '',
       log: `Sending response to ${ctx ? ctx.from?.username : 'user'}...`,
       initiatedBy: 'user',

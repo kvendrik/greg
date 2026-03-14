@@ -65,15 +65,12 @@ export class TelegramGateway {
     const senderId = env.senderId;
 
     const bot = new Bot<BotContext>(botToken);
+    bot.api.config.use(hydrateFiles(bot.token));
+
     const transcriber = (await pipeline(
       'automatic-speech-recognition',
       'Xenova/whisper-small'
     )) as TelegramGateway['transcriber'];
-
-    bot.api.config.use(hydrateFiles(bot.token));
-    bot.api.config.use((prev, method, payload, signal) =>
-      prev(method, { parse_mode: 'MarkdownV2', ...payload }, signal)
-    );
 
     const prompt: PromptFn = await createPromper(bot);
 

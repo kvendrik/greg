@@ -1,4 +1,4 @@
-import { Agent, type Callbacks } from '../../agent';
+import { Agent, type Callbacks, type AgentMessage } from '../../agent';
 import * as storage from './storage/storage';
 import { createLogger } from '../../utilities/logger';
 import config from '../../.greg';
@@ -47,6 +47,9 @@ export async function load(sessionId: string): Promise<SessionTools> {
   const agent = await Agent.create({
     config,
     messages: sessionStorage.messages,
+    async onCompact(newMessages: AgentMessage[]) {
+      await storage.replace(sessionId, newMessages);
+    },
   });
 
   logger.info(`[${sessionId}] Created agent. Session ready.`);

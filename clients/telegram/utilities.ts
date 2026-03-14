@@ -33,7 +33,8 @@ export async function sendMessage(
     voice?: boolean;
     context?: Context;
     threadId?: number;
-  }
+    type?: 'text' | 'markdown';
+  } = { type: 'text' }
 ): Promise<string | void> {
   if (options?.voice) {
     const audioBuffer = await synthesizeToBuffer(text, {
@@ -55,10 +56,15 @@ export async function sendMessage(
 
   if (options?.context) {
     if (text.length > 4000) {
-      await options?.context.replyWithDocument(new InputFile(text, 'text.txt'));
+      await options?.context.replyWithDocument(
+        new InputFile(text, 'content.md')
+      );
     } else {
-      const escaped = escapeMarkdownV2(text);
-      await options?.context.reply(escaped);
+      const content =
+        options.type === 'markdown' ? escapeMarkdownV2(text) : text;
+      await options?.context.reply(content, {
+        parse_mode: content === 'markdown' ? 'MarkdownV2' : undefined,
+      });
     }
     return;
   }
@@ -79,12 +85,14 @@ export async function sendMessage(
     const bot = new Bot<Context>(botToken);
 
     if (text.length > 4000) {
-      await bot.api.sendDocument(senderId, new InputFile(text, 'text.txt'), {
+      await bot.api.sendDocument(senderId, new InputFile(text, 'content.md'), {
         message_thread_id: options?.threadId ?? undefined,
       });
     } else {
-      const escaped = escapeMarkdownV2(text);
-      await bot.api.sendMessage(senderId, escaped, {
+      const content =
+        options.type === 'markdown' ? escapeMarkdownV2(text) : text;
+      await bot.api.sendMessage(senderId, content, {
+        parse_mode: content === 'markdown' ? 'MarkdownV2' : undefined,
         message_thread_id: options?.threadId ?? undefined,
       });
     }

@@ -2,6 +2,9 @@ import { completeSimple } from '@mariozechner/pi-ai';
 import type { Usage } from '@mariozechner/pi-ai';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import type { AgentConfig } from './types';
+import { createLogger } from '../utilities/logger';
+
+const logger = createLogger('Compact');
 
 const SUMMARIZE_SYSTEM = `You are a summarizer. Given a conversation history, produce a concise summary that preserves key facts, decisions, topics, and context needed to continue the conversation. Output only the summary, no preamble.`;
 
@@ -84,7 +87,7 @@ export async function compactContext(
   messages: AgentMessage[],
   signal: AbortSignal | undefined,
   config: AgentConfig
-): Promise<AgentMessage[]> {
+): Promise<{ messages: AgentMessage[]; didCompact: boolean }> {
   const effectiveSignal = signal ?? new AbortController().signal;
   const model = config.models.find((model) => model.role === 'primary')!.model;
 
@@ -111,7 +114,10 @@ export async function compactContext(
   const currentTokens = deriveContextTokens(messages);
 
   if (currentTokens <= softLimit) {
-    return messages;
+    logger.info(
+      `Current context size: ${currentTokens} tokens (compact at ${softLimit} tokens)`
+    );
+    return { messages, didCompact: false };
   }
 
   let splitIndex = messages.length;
@@ -127,8 +133,14 @@ export async function compactContext(
   const recent = messages.slice(splitIndex);
 
   if (toSummarize.length === 0) {
-    return recent;
+    return { messages: recent, didCompact: false };
   }
+
+  logger.info(
+    `Current context size ${currentTokens} tokens above ${softLimit} tokens`
+  );
+
+  logger.info(`Compacting context using ${model.provider}...`);
 
   const transcript = messagesToTranscript(toSummarize);
   const apiKey = getApiKey(model.provider);
@@ -157,5 +169,5 @@ export async function compactContext(
     timestamp: Date.now(),
   };
 
-  return [summaryMessage, ...recent];
+  return { messages: [summaryMessage, ...recent], didCompact: true };
 }

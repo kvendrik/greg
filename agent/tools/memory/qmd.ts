@@ -66,6 +66,9 @@ function runQmd(
       // resolve immediately without waiting for output or exit. Still log
       // spawn errors so failures are visible in logs.
       child.unref();
+      // child.stdout?.on('data', (chunk) => {
+      //   console.error('[qmd]', chunk.toString());
+      // });
       child.on('error', (err) => {
         console.error('[qmd] background run failed to start:', err);
       });

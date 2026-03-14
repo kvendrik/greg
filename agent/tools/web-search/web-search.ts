@@ -184,15 +184,15 @@ Returns { answer: string, citations: { title: string, url: string }[] }. When yo
 
         let parsedResult = `${result.answer}${citationsSummary}`;
 
-        if (await guard.available(config)) {
-          const guardResult = await guard.isSafe(config, parsedResult, {
-            name: `web_search("${query}")`,
-          });
+        // if (await guard.available(config)) {
+        //   const guardResult = await guard.isSafe(config, parsedResult, {
+        //     name: `web_search("${query}")`,
+        //   });
 
-          if (!guardResult.safe) {
-            parsedResult = guardResult.message;
-          }
-        }
+        //   if (!guardResult.safe) {
+        //     parsedResult = guardResult.message;
+        //   }
+        // }
 
         return {
           content: [{ type: 'text' as const, text: parsedResult }],

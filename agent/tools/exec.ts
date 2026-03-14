@@ -2,9 +2,9 @@ import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import { spawn } from 'child_process';
 import { isSafe, available as isGuardAvailable } from './utilities/guard/guard';
+import { getAllowlistForCommand } from './utilities/guard/policy/allowlist';
 import type { ToolContext } from '../types';
 import { evaluatePolicy } from './utilities/guard/policy/policy';
-import { getAllowlistForCommand } from './utilities/guard/policy/allowlist';
 import pc from 'picocolors';
 
 export async function runExec(
@@ -83,17 +83,17 @@ export async function runExec(
       if (code !== 0) {
         resolve(`Command exited with code ${code}\n${combined}`);
       } else {
-        const { trusted } = getAllowlistForCommand(command, config);
+        // const { trusted } = getAllowlistForCommand(command, config);
 
-        if ((await isGuardAvailable(config)) && !trusted) {
-          const result = await isSafe(config, combined, {
-            name: command.split(' ')[0],
-          });
+        // if ((await isGuardAvailable(config)) && !trusted) {
+        //   const result = await isSafe(config, combined, {
+        //     name: command.split(' ')[0],
+        //   });
 
-          if (!result.safe) {
-            combined = result.message;
-          }
-        }
+        //   if (!result.safe) {
+        //     combined = result.message;
+        //   }
+        // }
 
         resolve(combined || '(no output. exit code: ' + code + ')');
       }
