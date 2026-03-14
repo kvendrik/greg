@@ -106,14 +106,12 @@ export async function createPromper(bot: Bot<BotContext>) {
     },
   };
 
-  return async function prompt(input: PromptInput, ctx?: BotContext) {
-    if (!sessions.has('main')) {
-      const mainSession = await Session.existing('main', 'telegram');
-      await mainSession.connect();
-      mainSession.subscribe(callbacks);
-      sessions.set('main', mainSession);
-    }
+  const mainSession = await Session.existing('main', 'telegram');
+  await mainSession.connect();
+  mainSession.subscribe(callbacks);
+  sessions.set('main', mainSession);
 
+  return async function prompt(input: PromptInput, ctx?: BotContext) {
     const session = sessions.get('main')!;
     const typing = ctx ? createSendTypingAction(ctx) : null;
 

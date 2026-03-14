@@ -1,4 +1,4 @@
-import type { AgentConfig, AllowList, AllowListEntry } from '../../../../types';
+import type { AgentConfig } from '../../../../types';
 import { getWorkspacePath } from '../../../../utilities';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -6,6 +6,13 @@ import { minimatch } from 'minimatch';
 import { parseCommand } from './command-parser/command-parser';
 import type { ParsedCommandSegment } from './command-parser/command-parser';
 import { defaultExecAllowlist } from './default_exec_allowlist';
+
+/**
+ * Trusted means the output is trusted to be safe and won't be ran through the guard.
+ * Allow means the input is allowed to run.
+ */
+export type AllowListEntry = { allow: boolean };
+export type AllowList = Record<string, AllowListEntry>;
 
 /** True if the allowlist key contains glob metacharacters (* ? [ ]). */
 function isGlobPattern(key: string): boolean {
@@ -58,8 +65,6 @@ export function getAllowlistForCommand(
   command: string,
   config: AgentConfig
 ): AllowListEntry {
-  const configAllowlist = config.tools?.guard?.allowlist?.exec ?? {};
-
   // Start from the curated default allowlist, then let workspace- and
   // config-level entries extend/override it.
   //
@@ -84,10 +89,8 @@ export function getAllowlistForCommand(
     mergedAllowlist = { ...mergedAllowlist, ...workspaceAllowlistData };
   }
 
-  mergedAllowlist = { ...mergedAllowlist, ...configAllowlist };
-
   if (Object.keys(mergedAllowlist).length === 0) {
-    return { trusted: false, allow: false };
+    return { allow: false };
   }
 
   const normalizedAllowlist =
@@ -188,12 +191,10 @@ function getAllowlistForCommandFromList(
   const parsedCommand = parseCommand(command);
 
   if (!parsedCommand.segments.length) {
-    return { trusted: false, allow: false };
+    return { allow: false };
   }
 
   const directEntry = list?.[command];
-
-  let aggregateTrusted = true;
   let aggregateAllow = true;
 
   for (const segment of parsedCommand.segments) {
@@ -201,21 +202,15 @@ function getAllowlistForCommandFromList(
 
     if (!segmentEntry.allow) {
       aggregateAllow = false;
-      aggregateTrusted = false;
       break;
-    }
-
-    if (!segmentEntry.trusted) {
-      aggregateTrusted = false;
     }
   }
 
   if (!directEntry) {
-    return { trusted: aggregateTrusted, allow: aggregateAllow };
+    return { allow: aggregateAllow };
   }
 
   return {
-    trusted: aggregateTrusted && directEntry.trusted,
     allow: aggregateAllow && directEntry.allow,
   };
 }
@@ -298,14 +293,12 @@ function getAllowlistForSegmentFromList(
   }
 
   if (matches.length === 0) {
-    return { trusted: false, allow: false };
+    return { allow: false };
   }
 
   const allAllowed = matches.every(([, entry]) => entry.allow);
-  const allTrusted = matches.every(([, entry]) => entry.trusted);
 
   return {
-    trusted: allTrusted,
     allow: allAllowed,
   };
 }
@@ -324,7 +317,7 @@ export function saveAlwaysAllowPreferenceForCommand(
 
   workspaceAllowlistData[command] = workspaceAllowlistData[command]
     ? { ...workspaceAllowlistData[command], allow: true }
-    : { trusted: false, allow: true };
+    : { allow: true };
 
   fs.writeFileSync(
     workspaceAllowlist,

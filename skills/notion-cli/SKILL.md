@@ -39,7 +39,7 @@ If `NOTION_API_KEY` is missing or invalid:
 From repo root:
 
 ```bash
-bun run hub/notion -- <command> [options] [args]
+greg hub notion -- <command> [options] [args]
 ```
 
 Before running the CLI:
@@ -54,10 +54,10 @@ Before running the CLI:
 Search pages (and optionally databases) shared with the integration. Output: `page-id\tTitle` per line.
 
 ```bash
-bun run hub/notion -- search
-bun run hub/notion -- search -q "my query"
-bun run hub/notion -- search --page-only
-bun run hub/notion -- search -n 50
+greg hub notion -- search
+greg hub notion -- search -q "my query"
+greg hub notion -- search --page-only
+greg hub notion -- search -n 50
 ```
 
 | Option                     | Description                           |
@@ -84,7 +84,7 @@ bun run hub/notion -- search -n 50
 Retrieve a single page as raw JSON. Page ID can include or omit hyphens.
 
 ```bash
-bun run hub/notion -- get <page-id>
+greg hub notion -- get <page-id>
 ```
 
 Use this when the user explicitly wants **raw Notion page JSON** (for debugging or automation).
@@ -101,9 +101,9 @@ Print page contents as **Markdown** (blocks and nested children). Line numbers i
 **Notion pages can be very large.** To avoid loading massive amounts of text at once, **prefer reading in chunks** using `--from` and `--lines`. For example: start with the first 50–100 lines; if the user needs more or a specific section, run another `contents` call with the appropriate `--from` and `--lines`.
 
 ```bash
-bun run hub/notion -- contents <page-id>
-bun run hub/notion -- contents <page-id> --from 1 --lines 50
-bun run hub/notion -- contents <page-id> --from 51 --lines 50
+greg hub notion -- contents <page-id>
+greg hub notion -- contents <page-id> --from 1 --lines 50
+greg hub notion -- contents <page-id> --from 51 --lines 50
 ```
 
 | Option             | Description                                           |

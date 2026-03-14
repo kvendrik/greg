@@ -1,4 +1,5 @@
 import type { Model, Api } from '@mariozechner/pi-ai';
+import type { HeartbeatOptions } from '../gateway/heartbeat/types';
 export type { Config as BaseConfig } from '../config';
 
 export interface ToolContext {
@@ -11,13 +12,6 @@ type OptionalToolId =
   | 'browser_use'
   | 'web_search'
   | 'web_fetch';
-
-/**
- * Trusted means the output is trusted to be safe and won't be ran through the guard.
- * Allow means the input is allowed to run.
- */
-export type AllowListEntry = { trusted: boolean; allow: boolean };
-export type AllowList = Record<string, AllowListEntry>;
 
 export interface AgentConfig {
   /**
@@ -34,13 +28,7 @@ export interface AgentConfig {
    */
   port: string;
   /** Heartbeat: periodic main-session runs using workspace HEARTBEAT.md. */
-  heartbeat?: {
-    enabled?: boolean;
-    intervalMs?: number;
-    activeHours?: { start: string; end: string; timezone?: string };
-    prompt?: string;
-    runLog?: { maxBytes?: number; keepLines?: number };
-  };
+  heartbeat?: HeartbeatOptions;
   /**
    * Models the agent has access to
    */
@@ -108,32 +96,6 @@ export interface AgentConfig {
        * the browser, web, and exec tools through a guard to attempt to detect malicious content.
        */
       enabled: boolean;
-      /**
-       * Port the guard classifier HTTP service listens on.
-       * Default is 7234.
-       */
-      port?: number;
-      /**
-       * The timeout for the classifier in milliseconds.
-       * Default is 15 seconds (15_000).
-       */
-      timeout?: number;
-      allowlist?: {
-        /**
-         * Allowlist of commands that are allowed and/or trusted.
-         *
-         * The command string is a full command string, including arguments.
-         * For example: "git pull" or "npm install" or "rm -rf ./tmp/new-file.log".
-         *
-         * The AllowListEntry object has two properties:
-         * - trusted: boolean - whether the command output is trusted.
-         *   If trusted is true, the output will NOT be ran through the guard.
-         * - allow: boolean - whether the domain or command is allowed.
-         *   If a command is not allowed, the user will be asked to confirm before running.
-         */
-        exec?: AllowList;
-        webFetch?: AllowList;
-      };
     };
   };
 }

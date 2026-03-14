@@ -125,7 +125,7 @@ export class Agent {
   ): Promise<void> {
     const callbacks =
       options.channelId === null
-        ? {}
+        ? (options.callbacks ?? {})
         : this.getCallbacks(
             options.channelId === undefined ? 'all' : options.channelId,
             options.callbacks

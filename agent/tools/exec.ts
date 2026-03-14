@@ -13,7 +13,6 @@ export async function runExec(
   context: ToolContext
 ): Promise<string> {
   const { command } = params;
-  const { config } = context;
 
   const policy = await evaluatePolicy('exec', { command }, context);
 
@@ -95,7 +94,11 @@ export async function runExec(
         //   }
         // }
 
-        resolve(combined || '(no output. exit code: ' + code + ')');
+        resolve(
+          combined.trim() === ''
+            ? '(no output. exit code: ' + code + ')'
+            : combined
+        );
       }
     });
 

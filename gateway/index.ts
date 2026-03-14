@@ -28,7 +28,7 @@ async function start() {
 
   if (config.heartbeat?.enabled ?? true) {
     logger.info('Starting heartbeat...');
-    heartbeat = new Heartbeat();
+    heartbeat = new Heartbeat(config.heartbeat);
     heartbeat.start();
   }
 

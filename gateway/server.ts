@@ -27,12 +27,16 @@ type AgentEvent =
 type WebSocketData = {
   sessionId: string;
   channelId: string;
+  ip: string;
 };
 
 type SessionIdParams = { params: { id: string } };
 
+type PresenceClient = { ip: string; channelId: string };
+
 let server: Server<WebSocketData> | null = null;
 const activeSessionIds = new Set<string>();
+const sessionPresence = new Map<string, PresenceClient[]>();
 
 export async function startServer(port = Number(config.port)) {
   if (server) {
@@ -108,6 +112,17 @@ export async function startServer(port = Number(config.port)) {
           });
         },
       },
+      '/sessions/:id/presence': {
+        GET: (req: Request & SessionIdParams) => {
+          logRequest(req);
+          const { id: sessionId } = req.params;
+          if (!sessionId) {
+            return new Response('Not found', { status: 404 });
+          }
+          const clients = sessionPresence.get(sessionId) ?? [];
+          return Response.json({ clients });
+        },
+      },
       '/sessions/:id': {
         GET: (
           req: Request & SessionIdParams,
@@ -127,8 +142,10 @@ export async function startServer(port = Number(config.port)) {
             return new Response('Channel ID is required', { status: 400 });
           }
 
+          const ip = bunServer.requestIP?.(req)?.address ?? 'unknown';
+
           const success = bunServer.upgrade(req, {
-            data: { sessionId, channelId },
+            data: { sessionId, channelId, ip },
           });
 
           if (success) {
@@ -160,8 +177,7 @@ export async function startServer(port = Number(config.port)) {
     websocket: {
       data: {} as WebSocketData,
       async open(ws) {
-        const { sessionId, channelId } = ws.data;
-        activeSessionIds.add(sessionId);
+        const { sessionId, channelId, ip } = ws.data;
 
         if (!sessions.exists(sessionId)) {
           createSender<AgentEvent>(ws).send({
@@ -174,6 +190,15 @@ export async function startServer(port = Number(config.port)) {
 
         const existingSession = await sessions.load(sessionId);
         const sender = createSender<AgentEvent>(ws);
+
+        logger.info(
+          `[${sessionId}] Client connected from ${ip} on channel ${channelId}`
+        );
+        activeSessionIds.add(sessionId);
+
+        const clients = sessionPresence.get(sessionId) ?? [];
+        clients.push({ ip, channelId });
+        sessionPresence.set(sessionId, clients);
 
         existingSession.subscribe(channelId, {
           onTurnStart(prompt) {
@@ -274,14 +299,28 @@ export async function startServer(port = Number(config.port)) {
         }
       },
       close(ws) {
-        const { sessionId } = ws.data;
+        const { sessionId, channelId, ip } = ws.data;
         activeSessionIds.delete(sessionId);
+        const clients = sessionPresence.get(sessionId);
+        if (clients) {
+          const idx = clients.findIndex(
+            (c) => c.channelId === channelId && c.ip === ip
+          );
+          if (idx !== -1) {
+            clients.splice(idx, 1);
+            if (clients.length === 0) {
+              sessionPresence.delete(sessionId);
+            }
+          }
+        }
       },
     },
   });
 
   logger.info('Running...');
-  logger.info('Endpoints: GET /ping, POST /sessions/new, DELETE /sessions/:id');
+  logger.info(
+    'Endpoints: GET /ping, GET /sessions/:id/presence, POST /sessions/new, DELETE /sessions/:id'
+  );
   logger.info(
     'WebSocket: ws://<host>:<port>/sessions/:id?channelId=<channel> for bi-directional communication'
   );

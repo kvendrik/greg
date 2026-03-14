@@ -12,8 +12,8 @@ export interface HeartbeatActiveHours {
 export interface HeartbeatOptions {
   /** If false, heartbeat does not start. Default true. */
   enabled: boolean;
-  /** Interval between heartbeat runs in milliseconds. Default 30 minutes. */
-  intervalMs?: number;
+  /** Interval between heartbeat runs in minutes. Default 30 minutes. */
+  interval?: number;
   /** Only run inside this time window. */
   activeHours?: HeartbeatActiveHours;
   /** Custom prompt body (replaces default HEARTBEAT instruction). HEARTBEAT.md content still appended. */

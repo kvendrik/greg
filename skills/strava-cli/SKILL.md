@@ -42,7 +42,7 @@ If any of these are missing:
 From repo root:
 
 ```bash
-bun run hub/strava -- <command> [options] [args]
+greg hub strava -- <command> [options] [args]
 ```
 
 When you run any Strava CLI command, briefly tell the user:
@@ -57,9 +57,9 @@ When you run any Strava CLI command, briefly tell the user:
 OAuth flow: opens browser for Strava authorization, then saves tokens to `STRAVA_STORAGE_PATH`. Requires `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, and `STRAVA_STORAGE_PATH`.
 
 ```bash
-bun run hub/strava -- auth
-bun run hub/strava -- auth --code <authorization-code>
-bun run hub/strava -- auth --redirect-port 8080
+greg hub strava -- auth
+greg hub strava -- auth --code <authorization-code>
+greg hub strava -- auth --redirect-port 8080
 ```
 
 | Option                     | Description                                              |
@@ -72,7 +72,7 @@ bun run hub/strava -- auth --redirect-port 8080
 Refresh access token using the refresh token stored at `STRAVA_STORAGE_PATH`. Requires client ID/secret and existing tokens file.
 
 ```bash
-bun run hub/strava -- refresh
+greg hub strava -- refresh
 ```
 
 ### activities
@@ -80,10 +80,10 @@ bun run hub/strava -- refresh
 Fetch latest activities. Default output is a table; use `--json` for raw JSON.
 
 ```bash
-bun run hub/strava -- activities
-bun run hub/strava -- activities -n 50 -p 2
-bun run hub/strava -- activities --after <unix> --before <unix>
-bun run hub/strava -- activities --json
+greg hub strava -- activities
+greg hub strava -- activities -n 50 -p 2
+greg hub strava -- activities --after <unix> --before <unix>
+greg hub strava -- activities --json
 ```
 
 | Option                    | Description                                      |
@@ -118,7 +118,7 @@ bun run hub/strava -- activities --json
 Fetch a single activity by ID with full details. Outputs JSON.
 
 ```bash
-bun run hub/strava -- activity <id>
+greg hub strava -- activity <id>
 ```
 
 When a user references “that run” or “my marathon” instead of an ID:

@@ -485,4 +485,4 @@ program
     }
   );
 
-program.parse();
+export const stravaCommand = program;

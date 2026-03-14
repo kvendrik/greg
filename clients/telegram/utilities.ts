@@ -28,7 +28,7 @@ export const telegramAwaitSocketPath = path.join(
  */
 export async function sendMessage(
   text: string,
-  options?: {
+  options: {
     awaitReply?: boolean;
     voice?: boolean;
     context?: Context;
@@ -36,6 +36,8 @@ export async function sendMessage(
     type?: 'text' | 'markdown';
   } = { type: 'text' }
 ): Promise<string | void> {
+  console.log(`Send: "${text}".`);
+
   if (options?.voice) {
     const audioBuffer = await synthesizeToBuffer(text, {
       voiceId: config.voice?.elevenlabs?.voiceId!,
@@ -70,7 +72,7 @@ export async function sendMessage(
   }
 
   if (options?.awaitReply) {
-    return TaskChannel.send('await-reply', text, telegramAwaitSocketPath);
+    return TaskChannel.send('await-reply', { text }, telegramAwaitSocketPath);
   }
 
   try {
@@ -79,7 +81,7 @@ export async function sendMessage(
      * so when possible we use the TaskChannel to send the message
      * so it can be sent in the correct thread.
      */
-    await TaskChannel.send('send-message', text, telegramAwaitSocketPath);
+    await TaskChannel.send('send-message', { text }, telegramAwaitSocketPath);
   } catch {
     const { botToken, senderId } = getTelegramEnv();
     const bot = new Bot<Context>(botToken);

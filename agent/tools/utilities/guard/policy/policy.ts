@@ -1,4 +1,4 @@
-import type { AgentConfig } from '../../../../types';
+import { join, dirname, basename } from 'node:path';
 import { getAllowlistForCommand } from './allowlist';
 import { saveAlwaysAllowPreferenceForCommand } from './allowlist';
 import type { ToolContext } from '../../../../types';
@@ -35,6 +35,22 @@ async function evaluateExecPolicy(
   { command }: { command: string },
   { config }: ToolContext
 ): Promise<PolicyEvaluation> {
+  // const codeFolderName = basename(
+  //   dirname(join(__dirname, '..', '..', '..', '..'))
+  // );
+  // const workspaceFolderName = basename(dirname(config.workspace));
+
+  // if ()
+
+  const pathSafeResult = evaluatePathSafety(command);
+
+  if (!pathSafeResult.safe) {
+    return {
+      allowed: false,
+      reason: pathSafeResult.reason,
+    };
+  }
+
   const parsedCommand = parseCommand(command);
   const options = getAllowlistForCommand(command, config);
 
@@ -51,6 +67,7 @@ async function evaluateExecPolicy(
     const reply = await sendMessage(message, {
       awaitReply: true,
       voice: false,
+      type: 'markdown',
     });
 
     if (reply !== '/once' && reply !== '/always' && reply !== `/always_cmd`) {
@@ -72,6 +89,30 @@ async function evaluateExecPolicy(
 
   return {
     allowed: true,
+    reason: null,
+  };
+}
+
+function evaluatePathSafety(command: string):
+  | {
+      safe: true;
+      reason: null;
+    }
+  | {
+      safe: false;
+      reason: string;
+    } {
+  const forbiddenPaths = ['policy/'];
+
+  if (forbiddenPaths.some((p) => command.includes(p))) {
+    return {
+      safe: false,
+      reason: `Command contains forbidden path.`,
+    };
+  }
+
+  return {
+    safe: true,
     reason: null,
   };
 }

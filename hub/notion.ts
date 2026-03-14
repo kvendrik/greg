@@ -576,4 +576,4 @@ program
     );
   });
 
-program.parse();
+export const notionCommand = program;

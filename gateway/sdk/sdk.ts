@@ -302,3 +302,20 @@ export async function listSessions() {
 
   return data.sessions;
 }
+
+export async function getSessionPresence(
+  sessionId: string
+): Promise<{ clients: { ip: string; channelId: string }[] }> {
+  const response = await fetch(`${getBase()}/sessions/${sessionId}/presence`);
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch presence: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const data = (await response.json()) as {
+    clients?: { ip: string; channelId: string }[];
+  };
+  return { clients: data.clients ?? [] };
+}

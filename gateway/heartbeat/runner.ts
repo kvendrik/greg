@@ -7,23 +7,29 @@ import { isPaused } from './paused';
 import { createLogger } from '../../utilities/logger';
 import { getWorkspacePath } from '../../agent/utilities';
 import * as sessions from '../sessions/sessions';
+import pc from 'picocolors';
 import config from '../../.greg';
 
 const logger = createLogger('heartbeat');
 
 const HEARTBEAT_FILENAME = 'HEARTBEAT.md';
-const DEFAULT_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
-
-const DEFAULT_HEARTBEAT_INSTRUCTION = `
-## Heartbeat Run
-You are running a heartbeat check. Follow the checklist below strictly.
-Do not infer or repeat old tasks from prior chats.
-If nothing needs attention, do not respond with any text.
-Otherwise respond with only the alert text for the user (no preamble).
-Do not give updates to the user while you work through the checklist.
-`;
+const DEFAULT_INTERVAL = 30; // 30 minutes
 
 const heartbeatPath = join(getWorkspacePath(config), HEARTBEAT_FILENAME);
+
+function getInstructions(intervalMinutes: number) {
+  return `
+## Heartbeat Run
+- You are running a heartbeat check. This is a system check that runs every ${intervalMinutes} minutes.
+- Follow the user’s checklist below strictly.
+- Do not infer or repeat old tasks from prior chats.
+- If nothing needs attention, do not respond with any text.
+- Otherwise respond with only the alert text for the user (no preamble).
+- Do not give updates to the user while you work through the checklist.
+- If the user says something like "last time we spoke" then do not include heartbeat runs in your assessment of when the last time you spoke was.
+- Heartbeat instructions live in ${heartbeatPath}. The user might ask you to update them in their instructions.
+`;
+}
 
 export class Heartbeat {
   private readonly intervalMs: number;
@@ -35,13 +41,13 @@ export class Heartbeat {
   private shuttingDown = false;
 
   constructor(options?: Omit<HeartbeatOptions, 'enabled'>) {
-    this.intervalMs = options?.intervalMs ?? DEFAULT_INTERVAL_MS;
+    this.intervalMs = (options?.interval ?? DEFAULT_INTERVAL) * 60 * 1000;
     this.activeHours = options?.activeHours ?? null;
 
     this.systemPrompt =
       options?.prompt && options?.prompt.trim().length > 0
         ? options?.prompt.trim()
-        : DEFAULT_HEARTBEAT_INSTRUCTION;
+        : getInstructions(options?.interval ?? DEFAULT_INTERVAL);
   }
 
   start() {
@@ -56,12 +62,6 @@ export class Heartbeat {
 
   async run(): Promise<void> {
     if (this.shuttingDown) return;
-
-    if (!this.runPrompt) {
-      logger.error('No prompt runner function provided. Skipping run.');
-      this.schedule();
-      return;
-    }
 
     if (this.running) {
       logger.info('Skipping run: previous run still in progress.');
@@ -120,28 +120,29 @@ export class Heartbeat {
 
     const session = await sessions.load('main');
 
-    const { success, error } = await new Promise<{
+    return new Promise<{
       success: boolean;
       error?: string;
-    }>((resolve) =>
-      session.prompt(
+    }>(async (resolve) => {
+      await session.prompt(
         { content: prompt, images: [] },
         {
           channelId: null,
           callbacks: {
-            onError: (error) => resolve({ success: false, error }),
-            onTurnDone: () => resolve({ success: true, error: undefined }),
+            onError: (error) => {
+              console.error(pc.red(error));
+              resolve({ success: false, error });
+            },
           },
         }
-      )
-    );
-
-    return { success, error };
+      );
+      resolve({ success: true, error: undefined });
+    });
   }
 
   private schedule(): void {
     if (this.shuttingDown || !this.started) return;
     logger.info(`Next heartbeat in ${this.intervalMs / 1000 / 60} minutes.`);
-    this.timeoutId = setTimeout(this.run, this.intervalMs);
+    this.timeoutId = setTimeout(this.run.bind(this), this.intervalMs);
   }
 }

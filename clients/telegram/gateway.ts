@@ -2,7 +2,6 @@ import { Bot } from 'grammy';
 import { hydrateFiles } from '@grammyjs/files';
 import { ping } from '../../gateway/sdk/sdk';
 import { createPromper, type BotContext } from './prompt';
-import { pipeline } from '@xenova/transformers';
 import ffmpeg from 'fluent-ffmpeg';
 import fs from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,6 +10,7 @@ import { getTelegramEnv, telegramAwaitSocketPath } from './utilities';
 import { TaskChannel } from '../TaskChannel';
 import { sendMessage } from './utilities';
 import { createLogger } from '../../utilities/logger';
+import { escapeMarkdownV2 } from './utilities';
 
 const logger = createLogger('TG');
 
@@ -67,6 +67,14 @@ export class TelegramGateway {
     const bot = new Bot<BotContext>(botToken);
     bot.api.config.use(hydrateFiles(bot.token));
 
+    // Suppress ONNX Runtime graph-cleanup warnings (e.g. "Removing initializer ...").
+    // Must be set before the first load of onnxruntime-node.
+    if (process.env.ORT_LOGGING_LEVEL === undefined) {
+      process.env.ORT_LOGGING_LEVEL = '2'; // ERROR only; WARNING=3 would still show
+    }
+
+    const { pipeline } = await import('@xenova/transformers');
+
     const transcriber = (await pipeline(
       'automatic-speech-recognition',
       'Xenova/whisper-small'
@@ -101,8 +109,9 @@ export class TelegramGateway {
 
   private registerTaskHandlers(): void {
     this.taskChannel.onTask('await-reply', async ({ text }) => {
-      await sendMessage(text, {
-        threadId: this.lastMessageThreadId ?? undefined,
+      this.bot.api.sendMessage(this.senderId, escapeMarkdownV2(text), {
+        message_thread_id: this.lastMessageThreadId ?? undefined,
+        parse_mode: 'MarkdownV2',
       });
     });
 
@@ -163,8 +172,9 @@ export class TelegramGateway {
           text,
           messageThreadId: ctx.message.message_thread_id,
         }).handledByChannel
-      )
+      ) {
         return;
+      }
 
       if (!(await ping())) {
         await ctx.reply('Agent is not running');

@@ -1,12 +1,18 @@
 import { spawn } from 'child_process';
 import {
   createStore,
+  enableProductionMode,
   getRealPath,
   vectorSearchQuery,
   hybridQuery,
   searchFTS,
   DEFAULT_MULTI_GET_MAX_BYTES,
 } from '@tobilu/qmd/dist/store.js';
+
+// Allow default DB path (~/.cache/qmd/index.sqlite) when INDEX_PATH is not set.
+// Tests that need an isolated DB set INDEX_PATH in beforeAll (e.g. memory.tests.ts).
+enableProductionMode();
+
 import type { SearchResult } from '@tobilu/qmd/dist/store.js';
 import {
   getCollection,
@@ -129,6 +135,11 @@ export class QMD {
     private readonly collectionDescription: string,
     private readonly workspaceRoot?: string
   ) {}
+
+  static async healthy(): Promise<boolean> {
+    const result = await runQmd(['status']);
+    return result.code === 0;
+  }
 
   /**
    * Ensure the QMD collection exists; if not, add it and register context.

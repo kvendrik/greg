@@ -89,61 +89,46 @@ export async function compactContext(
   config: AgentConfig
 ): Promise<{ messages: AgentMessage[]; didCompact: boolean }> {
   const effectiveSignal = signal ?? new AbortController().signal;
-  const model = config.models.find((model) => model.role === 'primary')!.model;
-
-  const getApiKey = (provider: string) => {
-    const key =
-      config.models.find((model) => model.model.provider === provider)?.key ??
-      null;
-    if (!key) {
-      throw new Error(
-        `No API key found for provider "${provider}" in config.models.`
-      );
-    }
-    return key;
-  };
 
   if (effectiveSignal.aborted) {
     throw new DOMException('Aborted', 'AbortError');
   }
 
+  const model = config.models.find((model) => model.role === 'primary')!.model;
   const contextWindow = model?.contextWindow ?? 128_000;
   const softLimit = Math.floor(contextWindow * 0.8);
-  const targetAfterCompact = Math.floor(contextWindow * 0.6);
-
   const currentTokens = deriveContextTokens(messages);
 
   if (currentTokens <= softLimit) {
     logger.info(
-      `Current context size: ${currentTokens} tokens (compact at ${softLimit} tokens)`
+      `Current context size: ${currentTokens}/${softLimit} tokens (${Math.round((currentTokens / softLimit) * 100)}%)`
     );
     return { messages, didCompact: false };
-  }
-
-  let splitIndex = messages.length;
-  for (let i = 0; i < messages.length; i++) {
-    const recent = messages.slice(i);
-    if (deriveContextTokens(recent) <= targetAfterCompact) {
-      splitIndex = i;
-      break;
-    }
-  }
-
-  const toSummarize = messages.slice(0, splitIndex);
-  const recent = messages.slice(splitIndex);
-
-  if (toSummarize.length === 0) {
-    return { messages: recent, didCompact: false };
   }
 
   logger.info(
     `Current context size ${currentTokens} tokens above ${softLimit} tokens`
   );
 
-  logger.info(`Compacting context using ${model.provider}...`);
+  const compactedMessages = await compact(messages, {
+    config,
+    signal: effectiveSignal,
+  });
 
-  const transcript = messagesToTranscript(toSummarize);
-  const apiKey = getApiKey(model.provider);
+  return { messages: compactedMessages, didCompact: true };
+}
+
+export async function compact(
+  messages: AgentMessage[],
+  { config, signal }: { config: AgentConfig; signal: AbortSignal }
+): Promise<AgentMessage[]> {
+  const model = config.models.find((model) => model.role === 'primary')!.model;
+
+  logger.info(`Compacting ${messages.length} messages using ${model.name}...`);
+
+  const transcript = messagesToTranscript(messages);
+  const apiKey = getApiKey(model.provider, config);
+
   const response = await completeSimple(
     model,
     {
@@ -156,18 +141,36 @@ export async function compactContext(
         },
       ],
     },
-    { signal: effectiveSignal, apiKey }
+    { signal, apiKey }
   );
 
   const summaryText = extractTextFromAssistantMessage(response).trim();
+
   if (!summaryText) {
     throw new Error('Compaction failed: model returned no summary.');
   }
+
   const summaryMessage: AgentMessage = {
     role: 'user',
     content: `[Previous conversation summary]\n\n${summaryText}`,
     timestamp: Date.now(),
   };
 
-  return { messages: [summaryMessage, ...recent], didCompact: true };
+  logger.info(`Compaction done...`);
+
+  return [summaryMessage];
+}
+
+function getApiKey(provider: string, config: AgentConfig): string {
+  const key =
+    config.models.find((model) => model.model.provider === provider)?.key ??
+    null;
+
+  if (!key) {
+    throw new Error(
+      `No API key found for provider "${provider}" in config.models.`
+    );
+  }
+
+  return key;
 }
