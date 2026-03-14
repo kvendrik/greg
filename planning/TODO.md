@@ -3,6 +3,9 @@
 - [ ] Messaging from Telegram is completely broken
 - [ ] `greg telegram send "hello" --await-reply` is broken
 - [ ] QMD `search_memory` is broken. QMD.healthy() is also broken. `greg tools memory_search --search-query "friends"`
+- [ ] Add tests to ensure Telegram and QMD keep working
+- [ ] Fix other `bun test` failures
+- [ ] Remove classifier and tighten up `exec()` security by improving allowlist and path policy checks
 
 ## Tier 1 — Core to the OpenClaw-style experience
 
