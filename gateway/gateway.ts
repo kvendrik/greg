@@ -6,6 +6,10 @@ import { get as getConfig, validate as validateConfig } from '../config';
 const logger = createLogger('GW');
 
 interface GatewayState {
+  /**
+   * Method to get a reply from the user.
+   * Used by the Guard to get a reply from the user.
+   */
   getReply: ((message: string) => Promise<string>) | null;
 }
 
