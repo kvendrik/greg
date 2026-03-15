@@ -4,7 +4,7 @@ import type { ServerWebSocket } from 'bun';
 import type { PromptInput } from '../agent';
 
 export type ParsedPromptResult =
-  | { ok: true; value: PromptInput }
+  | { ok: true; prompt: PromptInput; channelId: string }
   | { ok: false; status: number; error: string };
 
 const PromptSchema = Type.Object({
@@ -17,6 +17,7 @@ const PromptSchema = Type.Object({
       })
     ),
   }),
+  channelId: Type.String(),
 });
 
 export function parsePromptBody(body: string): ParsedPromptResult {
@@ -39,8 +40,12 @@ export function parsePromptBody(body: string): ParsedPromptResult {
     };
   }
 
-  const { prompt } = parsed as { prompt: PromptInput };
-  return { ok: true, value: prompt };
+  const { prompt, channelId } = parsed as {
+    prompt: PromptInput;
+    channelId: string;
+  };
+
+  return { ok: true, prompt, channelId };
 }
 
 export function parsePath(url: string): string[] {

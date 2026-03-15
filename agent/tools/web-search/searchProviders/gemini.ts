@@ -1,5 +1,4 @@
 import { GoogleGenAI } from '@google/genai';
-import { AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { WebSearchSuccessDetails } from '../types';
 
 const SEARCH_TIMEOUT_MS = 10_000;

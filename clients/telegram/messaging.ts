@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
-import { convert } from 'telegram-markdown-v2';
 import { type Context, InputFile } from 'grammy';
 import { bot, senderId } from './bot';
 import { synthesizeToBuffer } from '../../scripts/voice/speech';
 import { get as getConfig } from '../../config';
+import { convert } from 'telegram-markdown-v2';
 
 const config = await getConfig();
 
@@ -40,7 +40,7 @@ export async function sendMessage(
       const content =
         options.type === 'markdown' ? convert(text, 'escape') : text;
       await options?.context.reply(content, {
-        parse_mode: content === 'markdown' ? 'MarkdownV2' : undefined,
+        parse_mode: options.type === 'markdown' ? 'MarkdownV2' : undefined,
       });
     }
     return;
@@ -52,7 +52,7 @@ export async function sendMessage(
     const content =
       options.type === 'markdown' ? convert(text, 'escape') : text;
     await bot.api.sendMessage(senderId, content, {
-      parse_mode: content === 'markdown' ? 'MarkdownV2' : undefined,
+      parse_mode: options.type === 'markdown' ? 'MarkdownV2' : undefined,
     });
   }
 }

@@ -9,7 +9,9 @@ import { get as getTools } from './tools';
 import { formatDate, getWorkspacePath } from './utilities';
 import type { AgentConfig, ToolContext } from './types';
 import pc from 'picocolors';
-import { createUUID } from '../gateway/sessions/utilities';
+import { createLogger } from '../utilities/logger';
+
+const logger = createLogger('Agent');
 
 export type Callbacks = Partial<{
   onTurnStart: (prompt: PromptInput) => void;
@@ -70,8 +72,12 @@ export class Agent {
 
   private getCallbacks(
     channelId: 'all' | string,
-    callbacks?: Partial<Callbacks>
+    extraCallbacks?: Partial<Callbacks>
   ): Callbacks {
+    if (channelId !== 'all' && !this.callbacks.has(channelId)) {
+      throw new Error(`Channel "${channelId}" has not been subscribed to.`);
+    }
+
     const channelCallbacks =
       channelId === 'all'
         ? Array.from(this.callbacks.values()).flat()
@@ -80,33 +86,33 @@ export class Agent {
     return {
       onTurnStart: (prompt: PromptInput) => {
         channelCallbacks.forEach((callback) => callback.onTurnStart?.(prompt));
-        callbacks?.onTurnStart?.(prompt);
+        extraCallbacks?.onTurnStart?.(prompt);
       },
       onContent: (chunk: string) => {
         channelCallbacks.forEach((callback) => callback.onContent?.(chunk));
-        callbacks?.onContent?.(chunk);
+        extraCallbacks?.onContent?.(chunk);
       },
       onThinking: (chunk: string) => {
         channelCallbacks.forEach((callback) => callback.onThinking?.(chunk));
-        callbacks?.onThinking?.(chunk);
+        extraCallbacks?.onThinking?.(chunk);
       },
       onToolcall: (name: string, args: Record<string, unknown>) => {
         channelCallbacks.forEach((callback) =>
           callback.onToolcall?.(name, args)
         );
-        callbacks?.onToolcall?.(name, args);
+        extraCallbacks?.onToolcall?.(name, args);
       },
       onTurnDone: (messages?: AgentMessage[]) => {
         channelCallbacks.forEach((callback) => callback.onTurnDone?.(messages));
-        callbacks?.onTurnDone?.(messages);
+        extraCallbacks?.onTurnDone?.(messages);
       },
       onTurnStop: () => {
         channelCallbacks.forEach((callback) => callback.onTurnStop?.());
-        callbacks?.onTurnStop?.();
+        extraCallbacks?.onTurnStop?.();
       },
       onError: (error: string) => {
         channelCallbacks.forEach((callback) => callback.onError?.(error));
-        callbacks?.onError?.(error);
+        extraCallbacks?.onError?.(error);
       },
     };
   }
@@ -114,22 +120,26 @@ export class Agent {
   async prompt(
     input: PromptInput,
     options: {
-      /**
-       * undefined = all channels
-       * null = no channels
-       * string = specific channel
-       */
-      channelId?: string | null;
+      channelId: 'all' | string | null;
       callbacks?: Partial<Callbacks>;
-    } = {}
+    }
   ): Promise<void> {
     const callbacks =
       options.channelId === null
-        ? (options.callbacks ?? {})
-        : this.getCallbacks(
-            options.channelId === undefined ? 'all' : options.channelId,
-            options.callbacks
-          );
+        ? {}
+        : this.getCallbacks(options.channelId, options.callbacks);
+
+    switch (options.channelId) {
+      case 'all':
+        logger.info('Prompting all channels...');
+        break;
+      case null:
+        logger.info('Prompting no channels...');
+        break;
+      default:
+        logger.info(`Prompting channel "${options.channelId}"...`);
+        break;
+    }
 
     const parsed = parseCommands({
       content: input.content,
@@ -448,6 +458,6 @@ Do not silently skip, retry without mentioning it, or paper over failures.
 If you ever need to fully restart yourself (for example after configuration changes or if you are stuck), you can call the \`exec\` tool with the command \`greg gateway restart\`. Before doing so, you MUST: (1) call \`memory_note\` with a concise summary of the current conversation so you can later reload it and know where you left off, (2) tell the user explicitly that you are about to restart, then (3) run the restart command.
 
 ### Logs
-Your logs are available through \`greg logs\`. Run \`greg logs --lines <number>\` to see the last <number> lines.
+Your logs are available through \`greg gateway logs\`. Run \`greg gateway logs --lines <number>\` to see the last <number> lines.
 `;
 }

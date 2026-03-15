@@ -103,12 +103,14 @@ export async function createPromper() {
     },
   };
 
-  const mainSession = await Session.existing('main', 'telegram');
-  await mainSession.connect();
-  mainSession.subscribe(callbacks);
-  sessions.set('main', mainSession);
-
   return async function prompt(input: PromptInput, ctx?: BotContext) {
+    if (!sessions.has('main')) {
+      const mainSession = await Session.existing('main', 'telegram');
+      await mainSession.connect();
+      mainSession.subscribe(callbacks);
+      sessions.set('main', mainSession);
+    }
+
     const session = sessions.get('main')!;
     const typing = ctx ? createSendTypingAction(ctx) : null;
 

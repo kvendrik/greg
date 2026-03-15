@@ -7,7 +7,7 @@ import { parseCommand } from './command-parser/command-parser';
 import type { ParsedCommandSegment } from './command-parser/command-parser';
 import { defaultExecAllowlist } from './default_exec_allowlist';
 
-export type AllowListEntry = { allow: boolean; trusted?: boolean };
+export type AllowListEntry = { allow: boolean };
 export type AllowList = Record<string, AllowListEntry>;
 
 /** True if the allowlist key contains glob metacharacters (* ? [ ]). */
@@ -207,18 +207,14 @@ function getAllowlistForCommandFromList(
       aggregateAllow = false;
       break;
     }
-    if (segmentEntry.trusted !== true) {
-      aggregateTrusted = false;
-    }
   }
 
   if (!directEntry) {
-    return { allow: aggregateAllow, trusted: aggregateTrusted };
+    return { allow: aggregateAllow };
   }
 
   return {
     allow: aggregateAllow && directEntry.allow,
-    trusted: aggregateTrusted && directEntry.trusted === true,
   };
 }
 
@@ -231,7 +227,6 @@ function getAllowlistForSegmentFromList(
   if (directEntry)
     return {
       allow: directEntry.allow,
-      trusted: directEntry.trusted === true,
     };
 
   // Use argv-based form (env vars and similar stripped by parser) for matching.
@@ -311,11 +306,9 @@ function getAllowlistForSegmentFromList(
   }
 
   const allAllowed = matches.every(([, entry]) => entry.allow);
-  const allTrusted = matches.every(([, entry]) => entry.trusted === true);
 
   return {
     allow: allAllowed,
-    trusted: allTrusted,
   };
 }
 
@@ -327,6 +320,7 @@ export function saveAlwaysAllowPreferenceForCommand(
     getWorkspacePath(config),
     'exec_allowlist.json'
   );
+
   const workspaceAllowlistData: AllowList = fs.existsSync(workspaceAllowlist)
     ? (JSON.parse(fs.readFileSync(workspaceAllowlist, 'utf8')) as AllowList)
     : {};

@@ -92,12 +92,7 @@ async function validateBraveKey(apiKey: string): Promise<void> {
   }
 }
 
-export type ValidateOptions = { exit?: boolean };
-
-export async function validate(
-  config: Config,
-  options?: ValidateOptions
-): Promise<string[]> {
+export async function validate(config: Config): Promise<string[]> {
   assertModelsStructure(config);
 
   console.info(pc.green('Config structure is valid ✓'));
@@ -162,12 +157,6 @@ export async function validate(
       failures.push(checks[index].name);
     }
   });
-
-  const exitOnFailure = options?.exit !== false;
-
-  if (exitOnFailure) {
-    process.exit(failures.length > 0 ? 1 : 0);
-  }
 
   return failures;
 }

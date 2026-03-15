@@ -13,7 +13,7 @@ function getApiKey(): string {
   const key = config.voice?.elevenlabs?.key;
   if (!key) {
     throw new Error(
-      'Config voice.elevenlabs.key is not set. Add voice.elevenlabs.key (and voiceId) to your .greg config.'
+      'Config voice.elevenlabs.key is not set. Add voice.elevenlabs.key (and voiceId) to your config.'
     );
   }
   return key;

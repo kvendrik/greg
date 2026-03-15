@@ -45,9 +45,8 @@ export class Session {
   }
 
   subscribe(callbacks: Callbacks): string {
-    const id = createUUID();
-    this.callbacks.set(id, callbacks);
-    return id;
+    this.callbacks.set('primary', callbacks);
+    return 'primary';
   }
 
   private resetSocket(): void {
@@ -236,6 +235,10 @@ export class Session {
         JSON.stringify({
           type: 'prompt',
           prompt: input,
+          /**
+           * TODO: you shouldn't have to send the channelId again
+           */
+          channelId: this.channelId,
         })
       );
     });

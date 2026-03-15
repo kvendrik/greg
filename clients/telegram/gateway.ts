@@ -59,9 +59,7 @@ export class TelegramGateway {
     this.registerTextHandler();
     this.registerVoiceHandler();
     this.registerPhotoHandler();
-
     bot.start();
-    logger.log('Ready.');
   }
 
   async getReply(text: string): Promise<string> {
@@ -223,11 +221,6 @@ export class TelegramGateway {
     }));
     await this.prompt({ content: caption, images }, replyCtx);
   }
-}
-
-export async function start(): Promise<void> {
-  const gateway = await TelegramGateway.create();
-  await gateway.start();
 }
 
 async function downloadFileToBuffer(file: {

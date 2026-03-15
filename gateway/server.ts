@@ -9,7 +9,7 @@ import { createLogger } from '../utilities/logger';
 const logger = createLogger('SE');
 
 type SessionWebSocketMessage =
-  | { type: 'prompt'; prompt: PromptInput }
+  | { type: 'prompt'; prompt: PromptInput; channelId: string }
   | { type: 'abort' }
   | { type: 'delete' };
 
@@ -249,6 +249,7 @@ export async function startServer(port: number) {
               );
 
         let message: SessionWebSocketMessage;
+
         try {
           message = JSON.parse(text) as SessionWebSocketMessage;
         } catch {
@@ -272,15 +273,21 @@ export async function startServer(port: number) {
 
         if (message.type === 'prompt') {
           const result = parsePromptBody(
-            JSON.stringify({ prompt: message.prompt })
+            JSON.stringify({
+              prompt: message.prompt,
+              channelId: message.channelId,
+            })
           );
+
           if (!result.ok) {
             sender.send({ type: 'error', error: result.error });
             return;
           }
 
           try {
-            await existingSession.prompt(result.value);
+            await existingSession.prompt(result.prompt, {
+              channelId: result.channelId,
+            });
           } catch (err) {
             if (
               err instanceof APIUserAbortError ||

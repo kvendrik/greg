@@ -7,7 +7,7 @@ const mockConfig = (allowlist: AllowList): AgentConfig =>
   ({
     id: 'test',
     workspace: '',
-    port: '3000',
+    port: 3000,
     models: [],
     tools: {
       guard: {
@@ -23,7 +23,6 @@ type TestCase = {
   command: string;
   expected: {
     allow: boolean;
-    trusted?: boolean;
   };
 };
 
@@ -31,7 +30,7 @@ const tests: TestCase[] = [
   {
     title: 'single allowed base command with args',
     allowlist: {
-      ls: {  allow: true },
+      ls: { allow: true },
     },
     command: 'ls -la /tmp',
     expected: { allow: true },
@@ -39,7 +38,7 @@ const tests: TestCase[] = [
   {
     title: 'allowing base command doesn’t allow subcommands',
     allowlist: {
-      something: {  allow: true },
+      something: { allow: true },
     },
     command: 'something else',
     expected: { allow: false },
@@ -47,7 +46,7 @@ const tests: TestCase[] = [
   {
     title: 'allowing subcommands',
     allowlist: {
-      'git status': {  allow: true },
+      'git status': { allow: true },
     },
     command: 'git status',
     expected: { allow: true },
@@ -56,7 +55,7 @@ const tests: TestCase[] = [
     title:
       'allowing subcommand plus default wildcard allows more than specified',
     allowlist: {
-      'git status': {  allow: true },
+      'git status': { allow: true },
     },
     command: 'git status diff',
     expected: { allow: true },
@@ -64,7 +63,7 @@ const tests: TestCase[] = [
   {
     title: 'ignores env variables',
     allowlist: {
-      'gog calendar events *': {  allow: true },
+      'gog calendar events *': { allow: true },
     },
     command:
       'GOG_ACCOUNT=example@gmail.com gog calendar events primary --today',
@@ -73,7 +72,7 @@ const tests: TestCase[] = [
   {
     title: 'ignores pipes',
     allowlist: {
-      'gog calendar events *': {  allow: true },
+      'gog calendar events *': { allow: true },
     },
     command:
       'GOG_ACCOUNT=example@gmail.com gog calendar events primary --today --json 2>/dev/null',
@@ -83,7 +82,7 @@ const tests: TestCase[] = [
     title:
       'allowing subcommand does allow more than specified when wildcard is used',
     allowlist: {
-      'git status *': {  allow: true },
+      'git status *': { allow: true },
     },
     command: 'git status diff',
     expected: { allow: true },
@@ -91,7 +90,7 @@ const tests: TestCase[] = [
   {
     title: 'single allowed base command without args',
     allowlist: {
-      cat: {  allow: true },
+      cat: { allow: true },
     },
     command: 'cat "./skills/update/SKILL.md"',
     expected: { allow: true },
@@ -100,7 +99,7 @@ const tests: TestCase[] = [
     title:
       'default allowlist entries still apply when config exec allowlist is present',
     allowlist: {
-      'bun run *': {  allow: true },
+      'bun run *': { allow: true },
     },
     command: 'cat "./skills/status-update/SKILL.md"',
     expected: { allow: true },
@@ -116,8 +115,8 @@ const tests: TestCase[] = [
   {
     title: 'multiple segments where all are allowed',
     allowlist: {
-      ls: {  allow: true },
-      pwd: { trusted: true, allow: true },
+      ls: { allow: true },
+      pwd: { allow: true },
     },
     command: 'ls -la && pwd',
     expected: { allow: true },
@@ -133,7 +132,7 @@ const tests: TestCase[] = [
   {
     title: 'wildcard subcommand match for npm run',
     allowlist: {
-      'npm run *': {  allow: true },
+      'npm run *': { allow: true },
     },
     command: 'npm run build --watch',
     expected: { allow: true },
@@ -142,8 +141,8 @@ const tests: TestCase[] = [
     title:
       'wildcard and exact matches combined for multi-segment command (all allowed)',
     allowlist: {
-      'npm run *': {  allow: true },
-      'git status': { trusted: true, allow: true },
+      'npm run *': { allow: true },
+      'git status': { allow: true },
     },
     command: 'npm run dev && git status -sb',
     expected: { allow: true },
@@ -151,7 +150,7 @@ const tests: TestCase[] = [
   {
     title: 'allow wildcard to be used inside subcommands',
     allowlist: {
-      'bun run hub/*': { trusted: true, allow: true },
+      'bun run hub/*': { allow: true },
     },
     command:
       'bun run hub/notion -- search -q "diary" --page-only 2>/dev/null | head -20',
@@ -160,7 +159,7 @@ const tests: TestCase[] = [
   {
     title: 'wildcards inside subcommands only match what they’re supposed to',
     allowlist: {
-      'bun run hub/*': { trusted: true, allow: true },
+      'bun run hub/*': { allow: true },
     },
     command: 'bun run hub_root/dangerous -- search_secrets',
     expected: { allow: false },
@@ -170,7 +169,7 @@ const tests: TestCase[] = [
       'wildcard and exact matches combined for multi-segment command (one denied)',
     allowlist: {
       'npm run *': { allow: true },
-      'git status': { trusted: true, allow: false },
+      'git status': { allow: false },
     },
     command: 'npm run dev && git status -sb',
     expected: { allow: false },
@@ -178,25 +177,25 @@ const tests: TestCase[] = [
   {
     title: 'trusted flag only true when all segments are trusted and allowed',
     allowlist: {
-      ls: { trusted: true, allow: true },
-      pwd: { trusted: true, allow: true },
+      ls: { allow: true },
+      pwd: { allow: true },
     },
     command: 'ls && pwd',
-    expected: { allow: true, trusted: true },
+    expected: { allow: true },
   },
   {
     title: 'trusted flag becomes false when any allowed segment is not trusted',
     allowlist: {
-      ls: { trusted: true, allow: true },
+      ls: { allow: true },
       pwd: { allow: true },
     },
     command: 'ls && pwd',
-    expected: { allow: true, trusted: false },
+    expected: { allow: true },
   },
   {
     title: 'direct full-command match still works',
     allowlist: {
-      'ls -la': {  allow: true },
+      'ls -la': { allow: true },
     },
     command: 'ls -la',
     expected: { allow: true },
@@ -204,8 +203,8 @@ const tests: TestCase[] = [
   {
     title: 'direct full multi-segment match does not grant unsafe segment',
     allowlist: {
-      'safe && rm -rf /': { trusted: true, allow: true },
-      safe: { trusted: true, allow: true },
+      'safe && rm -rf /': { allow: true },
+      safe: { allow: true },
     },
     command: 'safe && rm -rf /',
     expected: { allow: false },
@@ -213,7 +212,7 @@ const tests: TestCase[] = [
   {
     title: 'wildcard cd into any directory',
     allowlist: {
-      'cd *': {  allow: true },
+      'cd *': { allow: true },
     },
     command: 'cd /var/log',
     expected: { allow: true },
@@ -229,7 +228,7 @@ const tests: TestCase[] = [
   {
     title: 'full-path git status with subcommand parsing',
     allowlist: {
-      '/usr/bin/git status': { trusted: true, allow: true },
+      '/usr/bin/git status': { allow: true },
     },
     command: '/usr/bin/git status -sb',
     expected: { allow: true },
@@ -237,7 +236,7 @@ const tests: TestCase[] = [
   {
     title: 'bare git status resolved to full-path entry',
     allowlist: {
-      '/usr/bin/git status': { trusted: true, allow: true },
+      '/usr/bin/git status': { allow: true },
     },
     command: 'git status -sb',
     expected: { allow: true },
@@ -246,7 +245,6 @@ const tests: TestCase[] = [
     title: 'full-path git rev-parse subcommand',
     allowlist: {
       '/usr/bin/git rev-parse --abbrev-ref HEAD': {
-        trusted: true,
         allow: true,
       },
     },
@@ -256,7 +254,7 @@ const tests: TestCase[] = [
   {
     title: 'allowing wildcard doesn’t mean you can’t run the basecommand',
     allowlist: {
-      'jq *': { trusted: true, allow: true },
+      'jq *': { allow: true },
     },
     command: 'jq',
     expected: { allow: true },
@@ -264,7 +262,7 @@ const tests: TestCase[] = [
   {
     title: 'full-path safe bin wildcard jq',
     allowlist: {
-      '/usr/bin/jq *': { trusted: true, allow: true },
+      '/usr/bin/jq *': { allow: true },
     },
     command: '/usr/bin/jq .',
     expected: { allow: true },
@@ -411,11 +409,11 @@ const tests: TestCase[] = [
     title:
       'when both wildcard and exact entries match, both must allow and be trusted',
     allowlist: {
-      'git status *': { trusted: true, allow: true },
-      'git status -sb': { trusted: true, allow: true },
+      'git status *': { allow: true },
+      'git status -sb': { allow: true },
     },
     command: 'git status -sb',
-    expected: { allow: true, trusted: true },
+    expected: { allow: true },
   },
 ];
 
@@ -427,9 +425,6 @@ describe('allowlist', () => {
         const result = getAllowlistForCommand(test.command, config);
 
         expect(result.allow).toBe(test.expected.allow);
-        if ('trusted' in test.expected) {
-          expect(result.trusted).toBe(test.expected.trusted);
-        }
       });
     }
   });

@@ -8,21 +8,23 @@ import {
 } from './command-parser/command-parser';
 import { state as gatewayState } from '../../../../gateway/gateway';
 
-type PolicyEvaluation =
-  | {
-      allowed: true;
-      reason: null;
-    }
-  | {
-      allowed: false;
-      reason: string;
-    };
+type PolicyEvaluation = {
+  allowed: boolean;
+  reason: string | null;
+};
 
 export async function evaluatePolicy(
   toolName: string,
   args: Object,
   context: ToolContext
 ): Promise<PolicyEvaluation> {
+  if (!context.config.tools?.guard?.enabled) {
+    return {
+      allowed: true,
+      reason: null,
+    };
+  }
+
   switch (toolName) {
     case 'exec':
       return evaluateExecPolicy(args as { command: string }, context);
@@ -50,13 +52,11 @@ async function evaluateExecPolicy(
 
   const options = getAllowlistForCommand(command, config);
 
-  if (config.tools?.guard?.enabled && !options.allow) {
-    const firstCommand = parsedCommand.segments[0].commandWithSubcommands!;
-
-    if (!gatewayState.telegram) {
+  if (!options.allow) {
+    if (!gatewayState.getReply) {
       return {
         allowed: false,
-        reason: 'Telegram gateway is not running',
+        reason: 'No getReply() handler registered',
       };
     }
 
@@ -65,9 +65,9 @@ async function evaluateExecPolicy(
 \n
 /deny - deny Greg to run this command
 /once - allow Greg to run this command this time
-/always - allow Greg to run this command always${parsedCommand.segments.length === 1 ? `\n/always_cmd - always allow Greg to run "${firstCommand}"` : ''}`;
+/always - allow Greg to run this command always`;
 
-    const reply = await gatewayState.telegram.getReply(message);
+    const reply = await gatewayState.getReply(message);
 
     if (reply !== '/once' && reply !== '/always' && reply !== `/always_cmd`) {
       const reason = `Command not allowed: ${command}. Permission was denied by the user. User replied: "${reply}".`;
@@ -81,9 +81,10 @@ async function evaluateExecPolicy(
       await saveAlwaysAllowPreferenceForCommand(command, config);
     }
 
-    if (reply === `/always_cmd`) {
-      await saveAlwaysAllowPreferenceForCommand(firstCommand, config);
-    }
+    return {
+      allowed: true,
+      reason: `Command allowed. Permission was granted by the user. User replied: "${reply}".`,
+    };
   }
 
   return {

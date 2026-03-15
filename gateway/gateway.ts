@@ -8,18 +8,32 @@ import type { TelegramGateway } from '../clients/telegram';
 const logger = createLogger('GW');
 
 interface GatewayState {
-  telegram: TelegramGateway | null;
+  getReply: ((message: string) => Promise<string>) | null;
 }
 
 export let state: GatewayState = {
-  telegram: null,
+  getReply: null,
 };
+
+function setGetReply(getReply: (message: string) => Promise<string>): void {
+  state.getReply = async (message: string) => {
+    logger.info(`Getting reply for message: "${message}"`);
+    const reply = await getReply(message);
+    logger.info(`User replied: "${reply}"`);
+    return reply;
+  };
+}
 
 export async function start() {
   const config = await getConfig();
-  await validateConfig(config, {
-    exit: true,
-  });
+
+  logger.info('Validating config...');
+  const failures = await validateConfig(config);
+
+  if (failures.length > 0) {
+    logger.error('Config validation failed. Exiting...');
+    process.exit(1);
+  }
 
   let heartbeat: Heartbeat | null = null;
 
@@ -30,14 +44,6 @@ export async function start() {
     logger.info('Starting heartbeat...');
     heartbeat = new Heartbeat(config.heartbeat);
     heartbeat.start();
-  }
-
-  if (config.clients?.telegram) {
-    const { TelegramGateway } = await import('../clients/telegram');
-    const gateway = await TelegramGateway.create();
-    logger.info('Starting Telegram service...');
-    await gateway.start();
-    state.telegram = gateway;
   }
 
   logger.info('Loading main session...');
@@ -53,4 +59,13 @@ export async function start() {
   process.once('SIGTERM', shutdown);
 
   logger.info('✅ Gateway ready.');
+
+  if (config.clients?.telegram) {
+    logger.info('✉️  Starting Telegram service...');
+    const { TelegramGateway } = await import('../clients/telegram');
+    const gateway = await TelegramGateway.create();
+    await gateway.start();
+    setGetReply(gateway.getReply.bind(gateway));
+    logger.info('✅ Telegram client ready.');
+  }
 }

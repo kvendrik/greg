@@ -1,7 +1,9 @@
 ## Tier 0 - Bugs
 
-- [ ] Messaging from Telegram is completely broken
-- [ ] `greg telegram send "hello" --await-reply` is broken
+- [ ] Clean up Telegram messaging. channelId should not be required for prompt()
+- [ ] Add /1hour to allowlist commands
+- [ ] Forbid modifying certains paths
+
 - [ ] QMD `search_memory` is broken. QMD.healthy() is also broken. `greg tools memory_search --search-query "friends"`
 - [ ] Add tests to ensure Telegram and QMD keep working
 - [ ] Fix other `bun test` failures

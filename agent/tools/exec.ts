@@ -13,12 +13,15 @@ export async function runExec(
   const { command } = params;
 
   const policy = await evaluatePolicy('exec', { command }, context);
+  let resultPrefix = '';
 
   if (!policy.allowed) {
-    return policy.reason;
+    return policy.reason ?? 'Command not allowed';
+  } else if (policy.reason) {
+    resultPrefix += `[Guard Result]${policy.reason}[/Guard Result]\n\n`;
   }
 
-  return new Promise<string>((resolve, reject) => {
+  const execResult = await new Promise<string>((resolve, reject) => {
     const output: string[] = [];
     const errorOutput: string[] = [];
 
@@ -94,6 +97,8 @@ export async function runExec(
       finish(errorMsg);
     });
   });
+
+  return `${resultPrefix}${execResult}`;
 }
 
 export function getExecTools(context: ToolContext): AgentTool[] {

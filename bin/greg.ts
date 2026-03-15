@@ -139,12 +139,10 @@ function runServiceStop(serviceConfig: ServiceConfig): number | null {
   return result.status;
 }
 
-function runServiceRestart(serviceConfig: ServiceConfig): number | null {
-  const result = spawnSync('bun', ['run', serviceConfig.scripts.restart], {
-    stdio: 'inherit',
-    cwd: projectRoot,
-  });
-  return result.status;
+async function runServiceRestart(serviceConfig: ServiceConfig) {
+  const stopExit = runServiceStop(serviceConfig);
+  const startExit = await runServiceStart(serviceConfig);
+  return stopExit === 0 && startExit === 0 ? 0 : 1;
 }
 
 function createServiceCommand(serviceConfig: ServiceConfig): Command {
@@ -158,6 +156,7 @@ function createServiceCommand(serviceConfig: ServiceConfig): Command {
       .option('-d, --detached', 'Do not follow logs after start')
       .action(async (options: { detached?: boolean }) => {
         await runServiceStart(serviceConfig);
+
         if (options.detached) return;
 
         spawnSync('bun', ['run', serviceConfig.scripts.logs], {
@@ -185,7 +184,15 @@ function createServiceCommand(serviceConfig: ServiceConfig): Command {
   cmd.addCommand(
     new Command('restart')
       .description(serviceConfig.descriptions.restart)
-      .action(() => process.exit(runServiceRestart(serviceConfig) ?? 0))
+      .action(async () => {
+        runServiceStop(serviceConfig);
+        await runServiceStart(serviceConfig);
+        spawnSync('bun', ['run', serviceConfig.scripts.logs], {
+          stdio: 'inherit',
+          cwd: projectRoot,
+        });
+        process.exit(0);
+      })
   );
 
   cmd.addCommand(
@@ -291,7 +298,8 @@ program
       .action(async () => {
         const config = await loadConfig();
         const { validate } = await import('../config');
-        await validate(config);
+        const failures = await validate(config);
+        process.exit(failures.length > 0 ? 1 : 0);
       })
   )
   .addCommand(
@@ -311,7 +319,7 @@ program
     const config = await loadConfig();
     const { validate } = await import('../config');
     const { discoverSkills } = await import('../agent/tools/skills');
-    const configFailures = await validate(config, { exit: false });
+    const configFailures = await validate(config);
     const skills = discoverSkills(config);
     for (const skill of skills) {
       if (!skill.requires?.length) continue;
