@@ -2,8 +2,11 @@ import { join, dirname, basename } from 'node:path';
 import { getAllowlistForCommand } from './allowlist';
 import { saveAlwaysAllowPreferenceForCommand } from './allowlist';
 import type { ToolContext } from '../../../../types';
-import { parseCommand } from './command-parser/command-parser';
-import { sendMessage } from '../../../../../clients/telegram/utilities';
+import {
+  parseCommand,
+  type ParsedCommand,
+} from './command-parser/command-parser';
+import { state as gatewayState } from '../../../../../gateway/gateway';
 
 type PolicyEvaluation =
   | {
@@ -35,14 +38,8 @@ async function evaluateExecPolicy(
   { command }: { command: string },
   { config }: ToolContext
 ): Promise<PolicyEvaluation> {
-  // const codeFolderName = basename(
-  //   dirname(join(__dirname, '..', '..', '..', '..'))
-  // );
-  // const workspaceFolderName = basename(dirname(config.workspace));
-
-  // if ()
-
-  const pathSafeResult = evaluatePathSafety(command);
+  const parsedCommand = parseCommand(command);
+  const pathSafeResult = evaluatePathSafety(parsedCommand);
 
   if (!pathSafeResult.safe) {
     return {
@@ -51,11 +48,17 @@ async function evaluateExecPolicy(
     };
   }
 
-  const parsedCommand = parseCommand(command);
   const options = getAllowlistForCommand(command, config);
 
   if (config.tools?.guard?.enabled && !options.allow) {
     const firstCommand = parsedCommand.segments[0].commandWithSubcommands!;
+
+    if (!gatewayState.telegram) {
+      return {
+        allowed: false,
+        reason: 'Telegram gateway is not running',
+      };
+    }
 
     const message = `💂 Greg is asking to run a command.
 \`\`\`\n${command}\n\`\`\`\
@@ -64,11 +67,7 @@ async function evaluateExecPolicy(
 /once - allow Greg to run this command this time
 /always - allow Greg to run this command always${parsedCommand.segments.length === 1 ? `\n/always_cmd - always allow Greg to run "${firstCommand}"` : ''}`;
 
-    const reply = await sendMessage(message, {
-      awaitReply: true,
-      voice: false,
-      type: 'markdown',
-    });
+    const reply = await gatewayState.telegram.getReply(message);
 
     if (reply !== '/once' && reply !== '/always' && reply !== `/always_cmd`) {
       const reason = `Command not allowed: ${command}. Permission was denied by the user. User replied: "${reply}".`;
@@ -93,7 +92,7 @@ async function evaluateExecPolicy(
   };
 }
 
-function evaluatePathSafety(command: string):
+function evaluatePathSafety(command: ParsedCommand):
   | {
       safe: true;
       reason: null;
@@ -102,15 +101,6 @@ function evaluatePathSafety(command: string):
       safe: false;
       reason: string;
     } {
-  const forbiddenPaths = ['policy/'];
-
-  if (forbiddenPaths.some((p) => command.includes(p))) {
-    return {
-      safe: false,
-      reason: `Command contains forbidden path.`,
-    };
-  }
-
   return {
     safe: true,
     reason: null,

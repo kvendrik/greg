@@ -4,10 +4,6 @@ import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { Type } from '@sinclair/typebox';
 import type { ToolContext } from '../../types';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
-import {
-  available as isGuardAvailable,
-  isSafe,
-} from '../utilities/guard/guard';
 
 export function createWebFetchTool({ config }: ToolContext): AgentTool {
   return {
@@ -116,20 +112,6 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
 
         let finalContent =
           (details.title ? `${details.title}\n\n` : '') + details.content;
-
-        // const host = new URL(finalUrl).host;
-        // const hostOptions =
-        //   config.tools?.guard?.allowlist?.webFetch?.[host] ?? null;
-
-        // if ((await isGuardAvailable(config)) && !hostOptions?.trusted) {
-        //   const result = await isSafe(config, content, {
-        //     name: host,
-        //   });
-
-        //   if (!result.safe) {
-        //     finalContent = result.message;
-        //   }
-        // }
 
         return {
           content: [

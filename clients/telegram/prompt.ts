@@ -1,17 +1,14 @@
-import { Bot, type Context } from 'grammy';
-import { FileFlavor } from '@grammyjs/files';
 import {
   Session,
   type PromptInput,
   type Callbacks,
 } from '../../gateway/sdk/sdk';
-import { escapeMarkdownV2, getTelegramEnv } from './utilities';
 import pc from 'picocolors';
 import { createLogger } from '../../utilities/logger';
-import { sendMessage } from './utilities';
+import { sendMessage } from './messaging';
+import { type BotContext } from './bot';
 
 const logger = createLogger('TG');
-export type BotContext = FileFlavor<Context>;
 
 function createSendTypingAction(ctx: BotContext) {
   const typingIntervalMs = 5000;
@@ -52,12 +49,12 @@ interface State {
   initiatedBy: 'user' | 'agent' | null;
 }
 
-export async function createPromper(bot: Bot<BotContext>) {
+export async function createPromper() {
   const sessions = new Map<number | 'main', Session>();
   let state: State = emptyState();
 
   const callbacks: Callbacks = {
-    onTurnStart: (input: PromptInput) => {
+    onTurnStart: () => {
       state.working = true;
       state.buffer = '';
 

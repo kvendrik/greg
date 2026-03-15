@@ -4,8 +4,6 @@ import type { ToolContext } from '../../types';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { searchWithGemini } from './searchProviders/gemini';
 import { searchWithBrave } from './searchProviders/brave';
-import * as guard from '../utilities/guard/guard';
-
 export type { WebFetchResult, WebSearchSuccessDetails } from './types';
 
 const WEB_SEARCH_COUNT_MIN = 1;
@@ -183,16 +181,6 @@ Returns { answer: string, citations: { title: string, url: string }[] }. When yo
               result.citations.map((c) => `- ${c.title} (${c.url})`).join('\n');
 
         let parsedResult = `${result.answer}${citationsSummary}`;
-
-        // if (await guard.available(config)) {
-        //   const guardResult = await guard.isSafe(config, parsedResult, {
-        //     name: `web_search("${query}")`,
-        //   });
-
-        //   if (!guardResult.safe) {
-        //     parsedResult = guardResult.message;
-        //   }
-        // }
 
         return {
           content: [{ type: 'text' as const, text: parsedResult }],

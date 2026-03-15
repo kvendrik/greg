@@ -1,16 +1,13 @@
 import { Bot } from 'grammy';
-import { hydrateFiles } from '@grammyjs/files';
 import { ping } from '../../gateway/sdk/sdk';
-import { createPromper, type BotContext } from './prompt';
+import { createPromper } from './prompt';
 import ffmpeg from 'fluent-ffmpeg';
 import fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { getTelegramEnv, telegramAwaitSocketPath } from './utilities';
-import { TaskChannel } from '../TaskChannel';
-import { sendMessage } from './utilities';
 import { createLogger } from '../../utilities/logger';
-import { escapeMarkdownV2 } from './utilities';
+import { sendMessage } from './messaging';
+import { bot, senderId, type BotContext } from './bot';
 
 const logger = createLogger('TG');
 
@@ -23,56 +20,29 @@ type PromptFn = (
 ) => Promise<void> | void;
 
 export class TelegramGateway {
-  private readonly bot: Bot<BotContext>;
   private readonly prompt: PromptFn;
-  private readonly taskChannel: TaskChannel<{
-    text: string;
-    messageThreadId?: number;
-  }>;
   private readonly mediaGroupCollector = new Map<
     string,
     { contexts: BotContext[]; timer: ReturnType<typeof setTimeout> }
   >();
-  private readonly senderId: string;
   private readonly transcriber: (
     audio: Float32Array,
     options: { return_timestamps: boolean }
   ) => Promise<unknown>;
-  private lastMessageThreadId: number | null = null;
+  private messageInterceptor: ((text: string) => void) | null = null;
 
   constructor(
-    bot: Bot<BotContext>,
     prompt: PromptFn,
-    senderId: string,
     transcriber: (
       audio: Float32Array,
       options: { return_timestamps: boolean }
     ) => Promise<unknown>
   ) {
-    this.bot = bot;
     this.prompt = prompt;
-    this.senderId = senderId;
     this.transcriber = transcriber;
-    this.taskChannel = new TaskChannel<{
-      text: string;
-      messageThreadId?: number;
-    }>(telegramAwaitSocketPath);
   }
 
   static async create(): Promise<TelegramGateway> {
-    const env = getTelegramEnv();
-    const botToken = env.botToken;
-    const senderId = env.senderId;
-
-    const bot = new Bot<BotContext>(botToken);
-    bot.api.config.use(hydrateFiles(bot.token));
-
-    // Suppress ONNX Runtime graph-cleanup warnings (e.g. "Removing initializer ...").
-    // Must be set before the first load of onnxruntime-node.
-    if (process.env.ORT_LOGGING_LEVEL === undefined) {
-      process.env.ORT_LOGGING_LEVEL = '2'; // ERROR only; WARNING=3 would still show
-    }
-
     const { pipeline } = await import('@xenova/transformers');
 
     const transcriber = (await pipeline(
@@ -80,25 +50,31 @@ export class TelegramGateway {
       'Xenova/whisper-small'
     )) as TelegramGateway['transcriber'];
 
-    const prompt: PromptFn = await createPromper(bot);
+    const prompt: PromptFn = await createPromper();
 
-    return new TelegramGateway(bot, prompt, senderId, transcriber);
+    return new TelegramGateway(prompt, transcriber);
   }
 
   async start(): Promise<void> {
-    this.registerTaskHandlers();
     this.registerTextHandler();
     this.registerVoiceHandler();
     this.registerPhotoHandler();
 
-    this.taskChannel.listen();
-    this.bot.start();
-
+    bot.start();
     logger.log('Ready.');
   }
 
+  async getReply(text: string): Promise<string> {
+    await sendMessage(text, {
+      type: 'markdown',
+    });
+    return new Promise<string>((resolve) => {
+      this.messageInterceptor = (text: string) => resolve(text);
+    });
+  }
+
   private isAllowedSender(ctx: BotContext): boolean {
-    return ctx.from?.id.toString() === this.senderId;
+    return ctx.from?.id.toString() === senderId;
   }
 
   private rejectUnauthorized(ctx: BotContext, label: string): void {
@@ -107,72 +83,18 @@ export class TelegramGateway {
     );
   }
 
-  private registerTaskHandlers(): void {
-    this.taskChannel.onTask('await-reply', async ({ text }) => {
-      this.bot.api.sendMessage(this.senderId, escapeMarkdownV2(text), {
-        message_thread_id: this.lastMessageThreadId ?? undefined,
-        parse_mode: 'MarkdownV2',
-      });
-    });
-
-    this.taskChannel.onTask('send-message', async ({ text }) => {
-      await sendMessage(text, {
-        threadId: this.lastMessageThreadId ?? undefined,
-      });
-    });
-
-    this.taskChannel.onTask('edit-topic', async ({ text }) => {
-      if (!this.lastMessageThreadId) {
-        logger.warn('edit-topic requested but lastMessageThreadId is not set');
-        return;
-      }
-      let title = text;
-      let emoji: string | undefined;
-
-      try {
-        const parsed = JSON.parse(text as string) as {
-          title?: unknown;
-          emoji?: unknown;
-        };
-        if (typeof parsed === 'object' && parsed !== null) {
-          if (typeof parsed.title === 'string') {
-            title = parsed.title;
-          }
-          if (typeof parsed.emoji === 'string') {
-            emoji = parsed.emoji;
-          }
-        }
-      } catch {
-        // Fallback: treat raw as the plain title string for backwards compatibility.
-      }
-
-      await this.bot.api.editForumTopic(
-        this.senderId,
-        this.lastMessageThreadId,
-        {
-          name: title,
-          ...(emoji ? { icon_custom_emoji_id: emoji } : {}),
-        }
-      );
-    });
-  }
-
   private registerTextHandler(): void {
-    this.bot.on('message:text', async (ctx) => {
+    bot.on('message:text', async (ctx) => {
       if (!this.isAllowedSender(ctx)) {
         this.rejectUnauthorized(ctx, `Received: ${ctx.message.text}`);
         return;
       }
 
       const text = ctx.message.text ?? '';
-      this.lastMessageThreadId = ctx.message.message_thread_id ?? null;
 
-      if (
-        this.taskChannel.onIncomingMessage({
-          text,
-          messageThreadId: ctx.message.message_thread_id,
-        }).handledByChannel
-      ) {
+      if (this.messageInterceptor) {
+        this.messageInterceptor(text);
+        this.messageInterceptor = null;
         return;
       }
 
@@ -186,7 +108,7 @@ export class TelegramGateway {
   }
 
   private registerVoiceHandler(): void {
-    this.bot.on('message:voice', async (ctx) => {
+    bot.on('message:voice', async (ctx) => {
       if (!this.isAllowedSender(ctx)) {
         this.rejectUnauthorized(ctx, 'Received voice message');
         return;
@@ -228,7 +150,7 @@ export class TelegramGateway {
   }
 
   private registerPhotoHandler(): void {
-    this.bot.on('message:photo', async (ctx) => {
+    bot.on('message:photo', async (ctx) => {
       if (!this.isAllowedSender(ctx)) {
         this.rejectUnauthorized(ctx, 'Received photo');
         return;

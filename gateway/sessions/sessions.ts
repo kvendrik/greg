@@ -1,4 +1,5 @@
-import { Agent, type Callbacks, type AgentMessage } from '../../agent';
+import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import { Agent, type Callbacks } from '../../agent';
 import * as storage from './storage/storage';
 import { createLogger } from '../../utilities/logger';
 import config from '../../.greg';

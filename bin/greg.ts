@@ -6,6 +6,7 @@ import { Command } from 'commander';
 import { name, description, version } from '../package.json';
 import type { Config } from '../config';
 import pc from 'picocolors';
+import { sendMessage } from '../clients/telegram/messaging';
 
 const projectRoot = path.join(import.meta.dirname, '..');
 
@@ -259,29 +260,22 @@ program
     new Command('send')
       .description('Send a message to the configured Telegram user')
       .option('--voice', 'send the message as a voice message')
-      .option('--await-reply', "wait for the user's reply")
       .argument('<message>', 'message to send')
       .action(
         async (
           message: string,
           options: { voice?: boolean; awaitReply?: boolean }
         ) => {
-          const { sendMessage } = await import('../clients/telegram/utilities');
-          const reply = await sendMessage(message, {
-            awaitReply: options.awaitReply ?? false,
+          await sendMessage(message, {
             voice: options.voice ?? false,
           });
-
-          if (options.awaitReply) {
-            console.log(reply);
-            process.exit(0);
-          }
 
           const log = options.voice
             ? '📤 Sent & delivered as voice message'
             : '📤 Sent & delivered as text message';
 
           console.log(pc.green(log));
+
           process.exit(0);
         }
       )
