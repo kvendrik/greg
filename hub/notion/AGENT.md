@@ -1,13 +1,13 @@
 ---
 name: notion-cli
-description: Run and use Notion CLI in hub/notion to search pages, get page JSON, and export page contents as Markdown. Use when the user wants to query Notion, fetch a page, or get Notion content as Markdown.
+description: Run and use Notion CLI to search pages, get page JSON, and export page contents as Markdown. Use when the user wants to query Notion, fetch a page, or get Notion content as Markdown.
 requires:
   - env:NOTION_API_KEY
 ---
 
-# Hub Notion CLI
+# Notion CLI
 
-CLI in `hub/notion` for the Notion API. Run from the **project root** with `bun`.
+CLI for the Notion API.
 
 ## When to use this skill
 

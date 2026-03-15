@@ -1,14 +1,14 @@
 ---
 name: strava-cli
-description: Run and use the Strava CLI in hub/strava to authenticate, refresh tokens, list activities, and fetch activity details. Use when the user wants Strava data, activities, or OAuth/auth for Strava.
+description: Run and use the Strava CLI to authenticate, refresh tokens, list activities, and fetch activity details. Use when the user wants Strava data, activities, or OAuth/auth for Strava.
 requires:
   - env:STRAVA_CLIENT_ID
   - env:STRAVA_CLIENT_SECRET
 ---
 
-# Hub Strava CLI
+# Strava CLI
 
-CLI in `hub/strava` for the Strava API. Run from the **project root** with `bun`.
+CLI for the Strava API
 
 ## When to use this skill
 
@@ -106,7 +106,7 @@ strava activities --json
 | Option                    | Description                                      |
 | ------------------------- | ------------------------------------------------ |
 | `-n, --per-page <number>` | Activities per page 1–200 (default 30)           |
-| `-p, --page <number>`     | Page number for pagination                       |
+| `-p, --page <number>`     | Page number for pagination (default 1)           |
 | `--before <unix>`         | Unix timestamp: only activities before this time |
 | `--after <unix>`          | Unix timestamp: only activities after this time  |
 | `--json`                  | Output raw JSON instead of table                 |
