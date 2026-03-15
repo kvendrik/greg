@@ -8,13 +8,11 @@ import type { AgentConfig, ToolContext } from '../types';
 import { getWorkspacePath } from '../utilities/index';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.join(__dirname, '..', '..');
 
-const SKILLS_DIR = path.join(__dirname, '..', '..', '..', 'skills');
-
-function getWorkspaceSkillsDir(config: AgentConfig): string {
-  return path.join(getWorkspacePath(config), 'skills');
+if (!fs.existsSync(path.join(rootDir, 'package.json'))) {
+  throw new Error('Root directory is not set correctly.');
 }
-const SKILL_FILENAME = 'SKILL.md';
 
 const MAX_NAME_LENGTH = 64;
 const MAX_DESCRIPTION_LENGTH = 1024;
@@ -52,52 +50,50 @@ export interface SkillMeta {
   requires?: string[];
 }
 
+const paths = (config: AgentConfig) => ({
+  globalSkills: path.join(rootDir, 'skills'),
+  workspaceSkills: path.join(getWorkspacePath(config), 'skills'),
+});
+
 /** When the same skill name exists in both project and workspace, workspace wins. */
 export function discoverSkills(config: AgentConfig): SkillMeta[] {
-  const workspaceSkillsDir = path.resolve(getWorkspaceSkillsDir(config));
+  type SkillEntry = { baseDir: string; ent: fs.Dirent; filename: string };
 
-  type SkillEntry = { baseDir: string; ent: fs.Dirent };
-
-  const globalSkillDirs = Array.from(
+  const skillDirs = Array.from(
     new Set([
       // Skills directory packaged with Greg (relative to this file)
-      path.resolve(SKILLS_DIR),
+      { dir: paths(config).globalSkills, filename: 'SKILL.md' },
+      // AGENT files in hub directory
+      { dir: path.join(rootDir, 'hub'), filename: 'AGENT.md' },
       // Skills directory in the current working project (useful in dev)
-      path.resolve(path.join(process.cwd(), 'skills')),
+      {
+        dir: paths(config).workspaceSkills,
+        filename: 'SKILL.md',
+      },
     ])
   );
 
   const entries: SkillEntry[] = [];
 
-  for (const dir of globalSkillDirs) {
+  for (const { dir, filename } of skillDirs) {
     if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
       const dirents = fs.readdirSync(dir, { withFileTypes: true });
       for (const ent of dirents) {
-        entries.push({ baseDir: dir, ent });
+        entries.push({ baseDir: dir, ent, filename });
       }
-    }
-  }
-
-  if (
-    fs.existsSync(workspaceSkillsDir) &&
-    fs.statSync(workspaceSkillsDir).isDirectory()
-  ) {
-    const workspaceDirents = fs.readdirSync(workspaceSkillsDir, {
-      withFileTypes: true,
-    });
-    for (const ent of workspaceDirents) {
-      entries.push({ baseDir: workspaceSkillsDir, ent });
     }
   }
 
   const byName = new Map<string, SkillMeta>();
 
-  for (const { baseDir, ent } of entries) {
+  for (const { baseDir, ent, filename } of entries) {
     if (!ent.isDirectory()) continue;
     const skillPath = path.join(baseDir, ent.name);
-    const skillMdPath = path.join(skillPath, SKILL_FILENAME);
+    const skillMdPath = path.join(skillPath, filename);
+
     if (!fs.existsSync(skillMdPath) || !fs.statSync(skillMdPath).isFile())
       continue;
+
     try {
       const raw = fs.readFileSync(skillMdPath, 'utf8');
       const parsed = matter(raw);
@@ -159,6 +155,9 @@ When a user request matches an available skill, read that skill's full content f
 Some skills list requirements (e.g. a CLI on PATH or an environment variable). If you try to use a skill and its requirements are not available (e.g. the command is not found, or an API returns an auth error), do not keep retrying. Tell the user you have a skill for that task but it cannot be used because a requirement is missing, and suggest they run \`greg doctor\` to see what is needed.
 
 When you learn or establish something reusable (workflow, rule, convention, or capability), you must call save_skill before considering the exchange complete. Examples: a new CLI or editor workflow, a project convention, a preference for how to do X, or any instruction you give that the user might want applied again. If in doubt, save it as a skill.
+
+### Hub
+Skills from hub modules (e.g. Notion) must be run with the \`greg hub\` prefix. Example: \`notion search\` becomes \`greg hub notion search\`.
 `;
 }
 
@@ -222,19 +221,20 @@ description: "${safeDescription}"
     scope: 'global' | 'workspace',
     cfg: AgentConfig
   ): string {
+    const { globalSkills, workspaceSkills } = paths(cfg);
+
     if (scope === 'global') {
-      const globalSkillsDir = path.resolve(SKILLS_DIR);
-      fs.mkdirSync(globalSkillsDir, { recursive: true });
-      const skillDir = path.join(globalSkillsDir, name);
+      fs.mkdirSync(globalSkills, { recursive: true });
+      const skillDir = path.join(globalSkills, name);
       fs.mkdirSync(skillDir, { recursive: true });
-      return path.join(skillDir, SKILL_FILENAME);
+      return path.join(skillDir, 'SKILL.md');
     }
 
-    const workspaceSkillsDir = path.resolve(getWorkspaceSkillsDir(cfg));
+    const workspaceSkillsDir = path.resolve(workspaceSkills);
     fs.mkdirSync(workspaceSkillsDir, { recursive: true });
     const skillDir = path.join(workspaceSkillsDir, name);
     fs.mkdirSync(skillDir, { recursive: true });
-    return path.join(skillDir, SKILL_FILENAME);
+    return path.join(skillDir, 'SKILL.md');
   }
 }
 

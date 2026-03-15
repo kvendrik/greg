@@ -577,3 +577,7 @@ program
   });
 
 export const notionCommand = program;
+
+if (import.meta.main) {
+  program.parse(process.argv);
+}

@@ -520,4 +520,15 @@ program
       })
   );
 
+program
+  .command('skills')
+  .description('Inspect Greg’s skills')
+  .addCommand(
+    new Command('list').description('List all skills').action(async () => {
+      const { discoverSkills } = await import('../agent/tools/skills');
+      const config = await loadConfig();
+      console.log(discoverSkills(config));
+    })
+  );
+
 program.parse();

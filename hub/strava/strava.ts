@@ -2,6 +2,8 @@ import { spawnSync } from 'child_process';
 import { createServer } from 'http';
 import { Command } from 'commander';
 import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 
 const STRAVA_API_BASE = 'https://www.strava.com/api/v3';
 const STRAVA_OAUTH_BASE = 'https://www.strava.com/oauth';
@@ -30,11 +32,21 @@ type TokenResponse = {
   athlete?: unknown;
 };
 
+const DEFAULT_STORAGE_PATH = path.join(os.homedir(), '.strava-tokens.json');
+
+function getStoragePath(): string {
+  const raw = process.env.STRAVA_STORAGE_PATH?.trim();
+  if (!raw) return DEFAULT_STORAGE_PATH;
+  if (raw === '~') return os.homedir();
+  if (raw.startsWith('~/')) return path.join(os.homedir(), raw.slice(2));
+  return raw;
+}
+
 function getTokens(): TokenResponse {
-  const storagePath = process.env.STRAVA_STORAGE_PATH;
-  if (!storagePath || !fs.existsSync(storagePath)) {
+  const storagePath = getStoragePath();
+  if (!fs.existsSync(storagePath)) {
     throw new Error(
-      `Strava storage path (${process.env.STRAVA_STORAGE_PATH}) does not exist. Run \`strava auth\` first.`
+      `Strava storage path (${storagePath}) does not exist. Run \`strava auth\` first.`
     );
   }
   const tokens = JSON.parse(
@@ -333,11 +345,7 @@ program
     DEFAULT_REDIRECT_PORT
   )
   .action(async (opts: { code?: string; redirectPort: number }) => {
-    if (!process.env.STRAVA_STORAGE_PATH) {
-      console.error('STRAVA_STORAGE_PATH is not set.');
-      process.exit(1);
-    }
-
+    const storagePath = getStoragePath();
     const { clientId, clientSecret } = getClientCredentials();
 
     try {
@@ -361,12 +369,8 @@ program
       }
 
       const tokens = await exchangeCodeForToken(clientId, clientSecret, code);
-      fs.writeFileSync(
-        process.env.STRAVA_STORAGE_PATH,
-        JSON.stringify(tokens, null, 2),
-        'utf8'
-      );
-      console.log(`Tokens saved to ${process.env.STRAVA_STORAGE_PATH}`);
+      fs.writeFileSync(storagePath, JSON.stringify(tokens, null, 2), 'utf8');
+      console.log(`Tokens saved to ${storagePath}`);
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err));
       process.exit(1);
@@ -380,11 +384,7 @@ program
   )
   .action(async (_opts: Record<string, never>) => {
     const { clientId, clientSecret } = getClientCredentials();
-    const storagePath = process.env.STRAVA_STORAGE_PATH;
-    if (!storagePath) {
-      console.error('STRAVA_STORAGE_PATH is not set.');
-      process.exit(1);
-    }
+    const storagePath = getStoragePath();
     if (!fs.existsSync(storagePath)) {
       console.error(`${storagePath} does not exist. Run strava auth.`);
       process.exit(1);

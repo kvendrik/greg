@@ -1,4 +1,3 @@
-import { AgentToolResult } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import type { ToolContext } from '../../types';
 import type { AgentTool } from '@mariozechner/pi-agent-core';

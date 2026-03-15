@@ -23,10 +23,6 @@ export interface AgentConfig {
    * Will be created if it doesn't exist.
    */
   workspace: string;
-  /**
-   * Port for the agent server. `greg start` to start the server.
-   */
-  port: number;
   /** Heartbeat: periodic main-session runs using workspace HEARTBEAT.md. */
   heartbeat?: HeartbeatOptions;
   /**

@@ -4,7 +4,6 @@ description: Run and use the Strava CLI in hub/strava to authenticate, refresh t
 requires:
   - env:STRAVA_CLIENT_ID
   - env:STRAVA_CLIENT_SECRET
-  - env:STRAVA_STORAGE_PATH
 ---
 
 # Hub Strava CLI
@@ -28,22 +27,40 @@ Always respond with a **short, human summary** of the results instead of raw JSO
 
 ## Requirements
 
-- **STRAVA_ACCESS_TOKEN** for most commands (get via `auth` first).
-- **auth** and **refresh** need **STRAVA_CLIENT_ID**, **STRAVA_CLIENT_SECRET**, and **STRAVA_STORAGE_PATH** (file path where tokens are stored).
+- **auth** and **refresh** need **STRAVA_CLIENT_ID** and **STRAVA_CLIENT_SECRET**. Tokens are stored in a file; path defaults to **~/.strava-tokens.json** unless **STRAVA_STORAGE_PATH** is set.
+- **activities** and **activity** read the access token from that tokens file (written by `strava auth` or `strava refresh`); you do not set `STRAVA_ACCESS_TOKEN` yourself.
 
-If any of these are missing:
+### How to obtain the required env vars
 
-- Tell the user **which variable is missing**.
-- Show the **exact command(s)** they should run or the file they should configure.
+1. **STRAVA_CLIENT_ID** and **STRAVA_CLIENT_SECRET**
+   - Log in at [Strava](https://www.strava.com), go to [Settings → My API Application](https://www.strava.com/settings/api) (or create an app if you don’t have one).
+   - Note your **Client ID** and **Client Secret**.
+   - Under **Authorization Callback Domain**, set `localhost` (for local OAuth with default port 8080).
+
+2. **STRAVA_STORAGE_PATH** (optional)
+   - Tokens are stored in a file. Default is **~/.strava-tokens.json**. Set this env var only if you want a different path (e.g. a path in your project). The file is created when you run `strava auth`.
+
+3. **Set the env vars** (e.g. in your shell or a `.env` file in the project root):
+   - `STRAVA_CLIENT_ID=<your-client-id>`
+   - `STRAVA_CLIENT_SECRET=<your-client-secret>`
+   - Optionally: `STRAVA_STORAGE_PATH=/path/to/strava-tokens.json`
+
+4. **Get an access token:** run `strava auth`. A browser will open for Strava authorization; after you approve, tokens are written to the storage file (default `~/.strava-tokens.json`). The CLI then uses that file for `activities` and `activity`; no need to set any other env var. Use `strava refresh` when the access token has expired.
+
+If a required env var is missing:
+
+- Tell the user **which variable is missing** and direct them to **How to obtain the required env vars** above.
 - Do not keep retrying the same failing command.
 
 ## How to run
 
-From repo root:
+From **project root**:
 
 ```bash
-greg hub strava -- <command> [options] [args]
+strava <command> [options] [args]
 ```
+
+Example: `strava activities -n 10`.
 
 When you run any Strava CLI command, briefly tell the user:
 
@@ -54,12 +71,12 @@ When you run any Strava CLI command, briefly tell the user:
 
 ### auth
 
-OAuth flow: opens browser for Strava authorization, then saves tokens to `STRAVA_STORAGE_PATH`. Requires `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, and `STRAVA_STORAGE_PATH`.
+OAuth flow: opens browser for Strava authorization, then saves tokens to the storage file (default `~/.strava-tokens.json`, or `STRAVA_STORAGE_PATH` if set). Requires `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET`.
 
 ```bash
-greg hub strava -- auth
-greg hub strava -- auth --code <authorization-code>
-greg hub strava -- auth --redirect-port 8080
+strava auth
+strava auth --code <authorization-code>
+strava auth --redirect-port 8080
 ```
 
 | Option                     | Description                                              |
@@ -69,10 +86,10 @@ greg hub strava -- auth --redirect-port 8080
 
 ### refresh
 
-Refresh access token using the refresh token stored at `STRAVA_STORAGE_PATH`. Requires client ID/secret and existing tokens file.
+Refresh access token using the refresh token in the storage file (default `~/.strava-tokens.json`). Requires client ID/secret and an existing tokens file from `strava auth`.
 
 ```bash
-greg hub strava -- refresh
+strava refresh
 ```
 
 ### activities
@@ -80,10 +97,10 @@ greg hub strava -- refresh
 Fetch latest activities. Default output is a table; use `--json` for raw JSON.
 
 ```bash
-greg hub strava -- activities
-greg hub strava -- activities -n 50 -p 2
-greg hub strava -- activities --after <unix> --before <unix>
-greg hub strava -- activities --json
+strava activities
+strava activities -n 50 -p 2
+strava activities --after <unix> --before <unix>
+strava activities --json
 ```
 
 | Option                    | Description                                      |
@@ -98,7 +115,7 @@ greg hub strava -- activities --json
 
 - **"Summarize my last week of runs"**
   1. Compute the Unix timestamps for the last 7 days.
-  2. Run `activities --after <unix_7_days_ago> --before <unix_now>`.
+  2. Run `strava activities --after <unix_7_days_ago> --before <unix_now>`.
   3. Filter to running activities.
   4. Return a short summary with:
      - Total distance
@@ -107,7 +124,7 @@ greg hub strava -- activities --json
      - Average pace (if available)
 
 - **"What did my last workout look like?"**
-  1. Run `activities -n 1 --json`.
+  1. Run `strava activities -n 1 --json`.
   2. Take the most recent activity and summarize:
      - Name, type, distance, duration
      - Pace/speed and average heart rate (if available).
@@ -118,12 +135,12 @@ greg hub strava -- activities --json
 Fetch a single activity by ID with full details. Outputs JSON.
 
 ```bash
-greg hub strava -- activity <id>
+strava activity <id>
 ```
 
 When a user references “that run” or “my marathon” instead of an ID:
 
-1. Use `activities` with an appropriate date filter or page size to find likely candidates (by **name and date**).
+1. Use `strava activities` with an appropriate date filter or page size to find likely candidates (by **name and date**).
 2. Show the user the top 3–5 matching activities with:
    - ID
    - Name
@@ -131,12 +148,12 @@ When a user references “that run” or “my marathon” instead of an ID:
    - Distance
 3. Ask them which ID to inspect, or pick the most obvious match and say what you chose.
 
-Once you have an ID, run `activity <id>`, then:
+Once you have an ID, run `strava activity <id>`, then:
 
 - Summarize the key stats in a short bullet list.
 - Avoid dumping the full JSON unless the user explicitly asks for raw API output.
 
 ## Notes
 
-- Set **STRAVA_ACCESS_TOKEN** from the token printed after `auth` (or from the file at `STRAVA_STORAGE_PATH`) before running `activities` or `activity`.
-- Strava app callback URL must be set to `http://localhost:8080` (or the chosen `--redirect-port`) for the OAuth flow.
+- **activities** and **activity** read the access token from the tokens file (default `~/.strava-tokens.json`, written by `strava auth` or `strava refresh`).
+- Strava app **Authorization Callback Domain** must include `localhost`; the OAuth redirect URL is `http://localhost:8080` (or the chosen `--redirect-port`).

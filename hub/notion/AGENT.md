@@ -26,21 +26,30 @@ Prefer returning **short, readable summaries or Markdown snippets**, and only re
 
 ## Requirements
 
-- **NOTION_API_KEY** must be set (env or `.env`). User gets it from Notion integration settings.
+- **NOTION_API_KEY** must be set (env or `.env`).
+
+### How to obtain NOTION_API_KEY
+
+1. Open [Notion Integrations](https://www.notion.so/profile/integrations/internal) and click **New integration**.
+2. Name it (e.g. "Notion CLI"), pick the workspace, and click **Submit**.
+3. Open the integration’s **Settings** and copy the **Internal Integration Secret** — this is your `NOTION_API_KEY`.
+4. Share the pages or databases you want to query: open each in Notion, click **•••** (top right) → **Connections** → select your integration.
+5. Set the key in your environment, e.g. `export NOTION_API_KEY="secret_..."` or add `NOTION_API_KEY=secret_...` to a `.env` file in the project root.
 
 If `NOTION_API_KEY` is missing or invalid:
 
-- Tell the user clearly that the Notion CLI cannot run.
-- Explain that they need to create a Notion integration and set `NOTION_API_KEY`.
+- Tell the user clearly that the Notion CLI cannot run and direct them to **How to obtain NOTION_API_KEY** above.
 - Do not keep retrying failing commands.
 
 ## How to run
 
-From repo root:
+From **project root**:
 
 ```bash
-greg hub notion -- <command> [options] [args]
+notion <command> [options] [args]
 ```
+
+Example: `notion search -q "my query"`.
 
 Before running the CLI:
 
@@ -54,10 +63,10 @@ Before running the CLI:
 Search pages (and optionally databases) shared with the integration. Output: `page-id\tTitle` per line.
 
 ```bash
-greg hub notion -- search
-greg hub notion -- search -q "my query"
-greg hub notion -- search --page-only
-greg hub notion -- search -n 50
+notion search
+notion search -q "my query"
+notion search --page-only
+notion search -n 50
 ```
 
 | Option                     | Description                           |
@@ -69,14 +78,14 @@ greg hub notion -- search -n 50
 **Typical flows:**
 
 - **"Find my project brief in Notion"**
-  1. Run `search -q "<keywords>" --page-only`.
+  1. Run `notion search -q "<keywords>" --page-only`.
   2. Show the user the top 5–10 matches with:
      - Page ID
      - Title
   3. Ask which page they care about, or pick the most obvious and say what you chose.
 
 - **"List all pages related to X"**
-  1. Run `search -q "<X>" --page-only -n 50`.
+  1. Run `notion search -q "<X>" --page-only -n 50`.
   2. Group results logically if needed (e.g. by title prefix or database).
 
 ### get \<page-id\>
@@ -84,7 +93,7 @@ greg hub notion -- search -n 50
 Retrieve a single page as raw JSON. Page ID can include or omit hyphens.
 
 ```bash
-greg hub notion -- get <page-id>
+notion get <page-id>
 ```
 
 Use this when the user explicitly wants **raw Notion page JSON** (for debugging or automation).
@@ -101,9 +110,9 @@ Print page contents as **Markdown** (blocks and nested children). Line numbers i
 **Notion pages can be very large.** To avoid loading massive amounts of text at once, **prefer reading in chunks** using `--from` and `--lines`. For example: start with the first 50–100 lines; if the user needs more or a specific section, run another `contents` call with the appropriate `--from` and `--lines`.
 
 ```bash
-greg hub notion -- contents <page-id>
-greg hub notion -- contents <page-id> --from 1 --lines 50
-greg hub notion -- contents <page-id> --from 51 --lines 50
+notion contents <page-id>
+notion contents <page-id> --from 1 --lines 50
+notion contents <page-id> --from 51 --lines 50
 ```
 
 | Option             | Description                                           |
@@ -114,13 +123,13 @@ greg hub notion -- contents <page-id> --from 51 --lines 50
 **Typical flows:**
 
 - **"Show me the contents of this Notion page"**
-  1. Run `contents <page-id> --from 1 --lines <N>` (e.g. 50–100 lines) to get the first chunk.
+  1. Run `notion contents <page-id> --from 1 --lines <N>` (e.g. 50–100 lines) to get the first chunk.
   2. Return the Markdown inside a fenced code block. Say how many lines were shown and that more is available if needed.
-  3. If the user asks for more or a specific part, run `contents` again with the right `--from` and `--lines`.
+  3. If the user asks for more or a specific part, run `notion contents` again with the right `--from` and `--lines`.
 
 - **"Show just the middle of a long page"**
   1. Decide a sensible `--from` and `--lines` range based on what the user asked for.
-  2. Run `contents <page-id> --from <start> --lines <count>`.
+  2. Run `notion contents <page-id> --from <start> --lines <count>`.
   3. Tell the user which slice they are seeing and how to get more.
 
 ## Notes

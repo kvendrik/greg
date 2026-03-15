@@ -4,6 +4,7 @@ memory/.data/
 .DS_Store
 **/.cache
 .pytest_cache/
+.env
 
 # Telegram service await-reply socket (MCP-style)
 /**/*.sock
