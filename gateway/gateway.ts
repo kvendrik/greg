@@ -1,5 +1,4 @@
 import { startServer } from './server';
-import { TelegramGateway } from '../clients/telegram';
 import { Heartbeat } from './heartbeat';
 import * as sessions from './sessions';
 import { createLogger } from '../utilities/logger';
@@ -33,6 +32,7 @@ export async function start() {
   }
 
   if (config.clients?.telegram) {
+    const { TelegramGateway } = await import('../clients/telegram');
     const gateway = await TelegramGateway.create();
     logger.info('Starting Telegram service...');
     await gateway.start();
