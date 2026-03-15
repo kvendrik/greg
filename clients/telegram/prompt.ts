@@ -1,8 +1,4 @@
-import {
-  Session,
-  type PromptInput,
-  type Callbacks,
-} from '../../gateway/sdk/sdk';
+import * as gateway from '../../gateway';
 import pc from 'picocolors';
 import { createLogger } from '../../utilities/logger';
 import { sendMessage } from './messaging';
@@ -50,10 +46,9 @@ interface State {
 }
 
 export async function createPromper() {
-  const sessions = new Map<number | 'main', Session>();
   let state: State = emptyState();
 
-  const callbacks: Callbacks = {
+  const callbacks: gateway.Callbacks = {
     onTurnStart: () => {
       state.working = true;
       state.buffer = '';
@@ -103,15 +98,10 @@ export async function createPromper() {
     },
   };
 
-  return async function prompt(input: PromptInput, ctx?: BotContext) {
-    if (!sessions.has('main')) {
-      const mainSession = await Session.existing('main', 'telegram');
-      await mainSession.connect();
-      mainSession.subscribe(callbacks);
-      sessions.set('main', mainSession);
-    }
+  const mainSession = await gateway.get('main');
+  mainSession.subscribe('telegram', callbacks);
 
-    const session = sessions.get('main')!;
+  return async function prompt(input: gateway.PromptInput, ctx?: BotContext) {
     const typing = ctx ? createSendTypingAction(ctx) : null;
 
     const imageSuffix =
@@ -137,7 +127,9 @@ export async function createPromper() {
 
     input.content = `${input.content}\n\n[Message was sent from Telegram]`;
 
-    await session.prompt(input);
+    await mainSession.prompt(input, {
+      channelId: 'telegram',
+    });
   };
 
   function emptyState(): State {

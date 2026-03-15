@@ -1,9 +1,7 @@
-import { startServer } from './server';
 import { Heartbeat } from './heartbeat';
 import * as sessions from './sessions';
 import { createLogger } from '../utilities/logger';
 import { get as getConfig, validate as validateConfig } from '../config';
-import type { TelegramGateway } from '../clients/telegram';
 
 const logger = createLogger('GW');
 
@@ -15,16 +13,9 @@ export let state: GatewayState = {
   getReply: null,
 };
 
-function setGetReply(getReply: (message: string) => Promise<string>): void {
-  state.getReply = async (message: string) => {
-    logger.info(`Getting reply for message: "${message}"`);
-    const reply = await getReply(message);
-    logger.info(`User replied: "${reply}"`);
-    return reply;
-  };
-}
-
-export async function start() {
+export async function start(): Promise<{
+  setGetReply: (getReply: (message: string) => Promise<string>) => void;
+}> {
   const config = await getConfig();
 
   logger.info('Validating config...');
@@ -36,9 +27,6 @@ export async function start() {
   }
 
   let heartbeat: Heartbeat | null = null;
-
-  logger.info('Starting server...');
-  await startServer(config.port);
 
   if (config.heartbeat?.enabled ?? true) {
     logger.info('Starting heartbeat...');
@@ -60,12 +48,14 @@ export async function start() {
 
   logger.info('✅ Gateway ready.');
 
-  if (config.clients?.telegram) {
-    logger.info('✉️  Starting Telegram service...');
-    const { TelegramGateway } = await import('../clients/telegram');
-    const gateway = await TelegramGateway.create();
-    await gateway.start();
-    setGetReply(gateway.getReply.bind(gateway));
-    logger.info('✅ Telegram client ready.');
-  }
+  return {
+    setGetReply(getReply: (message: string) => Promise<string>): void {
+      state.getReply = async (message: string) => {
+        logger.info(`Getting reply for message: "${message}"`);
+        const reply = await getReply(message);
+        logger.info(`User replied: "${reply}"`);
+        return reply;
+      };
+    },
+  };
 }

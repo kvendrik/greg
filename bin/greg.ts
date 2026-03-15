@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { Command } from 'commander';
 import { name, description, version } from '../package.json';
@@ -137,12 +136,6 @@ function runServiceStop(serviceConfig: ServiceConfig): number | null {
     cwd: projectRoot,
   });
   return result.status;
-}
-
-async function runServiceRestart(serviceConfig: ServiceConfig) {
-  const stopExit = runServiceStop(serviceConfig);
-  const startExit = await runServiceStart(serviceConfig);
-  return stopExit === 0 && startExit === 0 ? 0 : 1;
 }
 
 function createServiceCommand(serviceConfig: ServiceConfig): Command {
@@ -522,203 +515,9 @@ program
     new Command('list')
       .description('List known session IDs')
       .action(async () => {
-        try {
-          const sdk = await import('../gateway/sdk/sdk');
-          const sessionIds = await sdk.listSessions();
-          if (!sessionIds.length) {
-            console.log('No sessions found.');
-            console.log(pc.gray('Run `greg sessions create` to create one.'));
-            return;
-          }
-          for (const sessionId of sessionIds) {
-            console.log(sessionId);
-          }
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          console.error(pc.red(message));
-          process.exitCode = 1;
-        }
+        const { list } = await import('../gateway');
+        console.log(list());
       })
-  )
-  .addCommand(
-    new Command('create')
-      .description('Create a new session')
-      .argument('<sessionId>', 'ID of the session to create')
-      .argument('<channelId>', 'Channel ID')
-      .action(async (sessionId: string, channelId: string) => {
-        try {
-          const sdk = await import('../gateway/sdk/sdk');
-          const session = await sdk.Session.create(sessionId, channelId);
-          console.log(pc.green('Session created.'));
-          console.log(
-            pc.gray(
-              `Use \`greg sessions prompt ${sessionId} ${channelId} <text>\` to send a prompt.`
-            )
-          );
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          console.error(pc.red(message));
-          process.exitCode = 1;
-        }
-      })
-  )
-  .addCommand(
-    new Command('presence')
-      .description(
-        'List all sessions and their connected clients (IP and channel)'
-      )
-      .action(async () => {
-        try {
-          const sdk = await import('../gateway/sdk/sdk');
-          const sessionIds = await sdk.listSessions();
-
-          if (!sessionIds.length) {
-            console.log('No sessions found.');
-            console.log(pc.gray('Run `greg sessions create` to create one.'));
-            return;
-          }
-
-          for (const sessionId of sessionIds) {
-            const { clients } = await sdk.getSessionPresence(sessionId);
-            console.log(pc.bold(sessionId));
-            if (clients.length === 0) {
-              console.log(pc.gray('  (no connected clients)'));
-            } else {
-              for (const { ip, channelId } of clients) {
-                console.log(`  ${ip}  ${pc.cyan(channelId)}`);
-              }
-            }
-          }
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          console.error(pc.red(message));
-          process.exitCode = 1;
-        }
-      })
-  )
-  .addCommand(
-    new Command('prompt')
-      .description('Send a prompt to an existing session')
-      .argument('<sessionId>', 'ID of the session to prompt')
-      .argument('<channelId>', 'Channel ID')
-      .argument('<text>', 'Prompt text')
-      .action(
-        async (sessionId: string, channelId: string, promptText: string) => {
-          if (!promptText) {
-            console.error(pc.red('No prompt text provided.'));
-            process.exitCode = 1;
-            return;
-          }
-
-          let session;
-          try {
-            const sdk = await import('../gateway/sdk/sdk');
-            session = await sdk.Session.existing(sessionId, channelId);
-            await session.connect();
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : String(error);
-            console.error(
-              pc.red(
-                `Session not found or gateway not reachable: ${message}. Ensure the session exists and \`greg gateway\` is running.`
-              )
-            );
-            process.exit(1);
-          }
-
-          session.subscribe({
-            onThinking(chunk) {
-              process.stdout.write(pc.gray(chunk));
-            },
-            onContent(chunk) {
-              process.stdout.write(chunk);
-            },
-            onToolcall(name, args) {
-              const label =
-                args && Object.keys(args).length
-                  ? `${name}(${JSON.stringify(args)})`
-                  : name;
-              process.stdout.write(`\n${pc.gray(`[toolcall] ${label}`)}\n`);
-            },
-            onTurnDone() {
-              process.stdout.write('\n');
-              process.exit(0);
-            },
-            onTurnStop() {
-              process.stdout.write(pc.yellow('\n[stopped]\n'));
-            },
-            onError(error) {
-              console.error(pc.red(`\nError: ${error}`));
-              process.exit(1);
-            },
-          });
-
-          await session.prompt({ content: promptText, images: [] });
-        }
-      )
-  )
-  .addCommand(
-    new Command('logs')
-      .description('Print logs for session')
-      .argument('<sessionId>', 'ID of the session')
-      .action(async (sessionId: string) => {
-        const storage = await import('../gateway/sessions/storage/storage');
-
-        if (!storage.exists(sessionId)) {
-          console.error(pc.red(`Session ${sessionId} not found.`));
-          process.exit(1);
-        }
-
-        const session = await storage.load(sessionId);
-        console.log(JSON.stringify(session.messages, null, 2));
-      })
-  )
-  .addCommand(
-    new Command('compact')
-      .description('Compaction commands for a session')
-      .addCommand(
-        new Command('test')
-          .description(
-            'Returns compacted session for a session without saving it'
-          )
-          .argument('<sessionId>', 'ID of the session')
-          .action(async (sessionId: string) => {
-            const storage = await import('../gateway/sessions/storage/storage');
-
-            if (!storage.exists(sessionId)) {
-              console.error(pc.red(`Session ${sessionId} not found.`));
-              process.exit(1);
-            }
-
-            const session = await storage.load(sessionId);
-            const config = await loadConfig();
-            const { compact } = await import('../agent/compaction');
-
-            const result = await compact(session.messages, {
-              config,
-              signal: new AbortController().signal,
-            });
-
-            console.log(result);
-          })
-      )
   );
-
-program
-  .command('voice')
-  .description('Talk to Greg by voice.')
-  .option(
-    '-d, --device <index>',
-    'AVFoundation microphone device index (default: prompt to choose)'
-  )
-  .action(async () => {
-    const { voiceCommand } = await import('../scripts/voice/index');
-    await voiceCommand.parseAsync(
-      process.argv.slice(process.argv.indexOf('voice'))
-    );
-  });
 
 program.parse();

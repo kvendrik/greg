@@ -1,5 +1,3 @@
-import { Bot } from 'grammy';
-import { ping } from '../../gateway/sdk/sdk';
 import { createPromper } from './prompt';
 import ffmpeg from 'fluent-ffmpeg';
 import fs from 'node:fs';
@@ -96,11 +94,6 @@ export class TelegramGateway {
         return;
       }
 
-      if (!(await ping())) {
-        await ctx.reply('Agent is not running');
-        process.exit(1);
-      }
-
       this.prompt({ content: text, images: [] }, ctx);
     });
   }
@@ -152,11 +145,6 @@ export class TelegramGateway {
       if (!this.isAllowedSender(ctx)) {
         this.rejectUnauthorized(ctx, 'Received photo');
         return;
-      }
-
-      if (!(await ping())) {
-        await ctx.reply('Agent is not running');
-        process.exit(1);
       }
 
       ctx.api.sendChatAction(ctx.chat.id, 'upload_photo');

@@ -1,6 +1,3 @@
-import { start } from './gateway';
-
-start().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export { start } from './gateway';
+export * from './sessions';
+export type { Callbacks, PromptInput } from '../agent';
