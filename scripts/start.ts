@@ -4,7 +4,7 @@ import { createLogger } from '../utilities/logger';
 
 const logger = createLogger('GW');
 
-const { setGetReply } = await start();
+const { setGetReply, stop } = await start();
 const config = await getConfig();
 
 if (config.clients?.telegram) {
@@ -14,4 +14,12 @@ if (config.clients?.telegram) {
   await gateway.start();
   setGetReply(gateway.getReply.bind(gateway));
   logger.info('✅ Telegram client ready.');
+}
+
+process.once('SIGINT', shutdown);
+process.once('SIGTERM', shutdown);
+
+function shutdown() {
+  stop();
+  process.exit(0);
 }

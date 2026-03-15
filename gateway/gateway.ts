@@ -18,6 +18,7 @@ export let state: GatewayState = {
 };
 
 export async function start(): Promise<{
+  stop: () => void;
   setGetReply: (getReply: (message: string) => Promise<string>) => void;
 }> {
   const config = await getConfig();
@@ -41,18 +42,13 @@ export async function start(): Promise<{
   logger.info('Loading main session...');
   await sessions.load('main');
 
-  const shutdown = () => {
-    logger.info('Shutting down...');
-    heartbeat?.stop();
-    process.exit(0);
-  };
-
-  process.once('SIGINT', shutdown);
-  process.once('SIGTERM', shutdown);
-
   logger.info('✅ Gateway ready.');
 
   return {
+    stop() {
+      logger.info('🛑 Shutting down...');
+      heartbeat?.stop();
+    },
     setGetReply(getReply: (message: string) => Promise<string>): void {
       state.getReply = async (message: string) => {
         logger.info(`Getting reply for message: "${message}"`);
