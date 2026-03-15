@@ -8,13 +8,14 @@ import { createLogger } from '../../utilities/logger';
 import { getWorkspacePath } from '../../agent/utilities';
 import * as sessions from '../sessions/sessions';
 import pc from 'picocolors';
-import config from '../../.greg';
+import { get as getConfig } from '../../config';
 
 const logger = createLogger('heartbeat');
 
 const HEARTBEAT_FILENAME = 'HEARTBEAT.md';
 const DEFAULT_INTERVAL = 30; // 30 minutes
 
+const config = await getConfig();
 const heartbeatPath = join(getWorkspacePath(config), HEARTBEAT_FILENAME);
 
 function getInstructions(intervalMinutes: number) {

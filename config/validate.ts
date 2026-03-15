@@ -3,8 +3,6 @@ import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenAI } from '@google/genai';
 import { Bot } from 'grammy';
 import pc from 'picocolors';
-
-import { isSafe as isGuardSafe } from '../agent/tools/utilities/guard/guard';
 import type { Config } from './types';
 
 function assertModelsStructure(config: Config): void {
@@ -22,17 +20,6 @@ function assertModelsStructure(config: Config): void {
     throw new Error(
       `Config models must have exactly one fallback entry, got ${fallbackCount}`
     );
-  }
-}
-
-async function validateGuardLoad(config: Config): Promise<void> {
-  const result = await isGuardSafe(config, 'x', {
-    name: 'test',
-    logging: false,
-  });
-
-  if (!result.safe) {
-    throw new Error(result.message);
   }
 }
 
@@ -160,13 +147,6 @@ export async function validate(
     checks.push({
       name: 'Telegram',
       run: () => validateTelegramBotToken(config.clients!.telegram!.botToken),
-    });
-  }
-
-  if (config.tools?.guard?.enabled) {
-    checks.push({
-      name: 'Guard',
-      run: () => validateGuardLoad(config),
     });
   }
 

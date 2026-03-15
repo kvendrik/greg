@@ -1,6 +1,7 @@
 import { Bot, type Context } from 'grammy';
 import { FileFlavor } from '@grammyjs/files';
 import { hydrateFiles } from '@grammyjs/files';
+import * as config from '../../config';
 
 const env = await getTelegramEnv();
 const botToken = env.botToken;
@@ -16,12 +17,11 @@ async function getTelegramEnv(): Promise<{
   botToken: string;
   senderId: string;
 }> {
-  const config = (await import('../../.greg')).default;
-  const clients = config.clients;
+  const clients = (await config.get()).clients;
 
   if (!clients?.telegram) {
     console.warn(`
-  Telegram client is not configured. Please configure it in your config.ts file.
+  Telegram client is not configured. Please configure it.
   
   \`\`\`ts
   const config: Config = {

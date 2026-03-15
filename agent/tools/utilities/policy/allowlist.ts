@@ -1,5 +1,5 @@
-import type { AgentConfig } from '../../../../types';
-import { getWorkspacePath } from '../../../../utilities';
+import type { AgentConfig } from '../../../types';
+import { getWorkspacePath } from '../../../utilities';
 import path from 'node:path';
 import fs from 'node:fs';
 import { minimatch } from 'minimatch';
@@ -7,11 +7,7 @@ import { parseCommand } from './command-parser/command-parser';
 import type { ParsedCommandSegment } from './command-parser/command-parser';
 import { defaultExecAllowlist } from './default_exec_allowlist';
 
-/**
- * Trusted means the output is trusted to be safe and won't be ran through the guard.
- * Allow means the input is allowed to run.
- */
-export type AllowListEntry = { allow: boolean };
+export type AllowListEntry = { allow: boolean; trusted?: boolean };
 export type AllowList = Record<string, AllowListEntry>;
 
 /** True if the allowlist key contains glob metacharacters (* ? [ ]). */
@@ -87,6 +83,12 @@ export function getAllowlistForCommand(
       fs.readFileSync(workspaceAllowlistPath, 'utf8')
     );
     mergedAllowlist = { ...mergedAllowlist, ...workspaceAllowlistData };
+  }
+
+  const configAllowlist = (config as AgentConfig & { allowlist?: AllowList })
+    .allowlist;
+  if (configAllowlist) {
+    mergedAllowlist = { ...mergedAllowlist, ...configAllowlist };
   }
 
   if (Object.keys(mergedAllowlist).length === 0) {
@@ -196,6 +198,7 @@ function getAllowlistForCommandFromList(
 
   const directEntry = list?.[command];
   let aggregateAllow = true;
+  let aggregateTrusted = true;
 
   for (const segment of parsedCommand.segments) {
     const segmentEntry = getAllowlistForSegmentFromList(segment, list);
@@ -204,14 +207,18 @@ function getAllowlistForCommandFromList(
       aggregateAllow = false;
       break;
     }
+    if (segmentEntry.trusted !== true) {
+      aggregateTrusted = false;
+    }
   }
 
   if (!directEntry) {
-    return { allow: aggregateAllow };
+    return { allow: aggregateAllow, trusted: aggregateTrusted };
   }
 
   return {
     allow: aggregateAllow && directEntry.allow,
+    trusted: aggregateTrusted && directEntry.trusted === true,
   };
 }
 
@@ -221,9 +228,16 @@ function getAllowlistForSegmentFromList(
 ): AllowListEntry {
   const trimmedSegment = segment.raw.trim();
   const directEntry = list?.[trimmedSegment];
-  if (directEntry) return directEntry;
+  if (directEntry)
+    return {
+      allow: directEntry.allow,
+      trusted: directEntry.trusted === true,
+    };
 
-  const candidates: string[] = [trimmedSegment];
+  // Use argv-based form (env vars and similar stripped by parser) for matching.
+  const strippedSegment =
+    segment.argv.length > 0 ? segment.argv.join(' ') : trimmedSegment;
+  const candidates: string[] = [strippedSegment, trimmedSegment];
 
   if (segment.commandWithSubcommands) {
     candidates.push(segment.commandWithSubcommands);
@@ -241,9 +255,9 @@ function getAllowlistForSegmentFromList(
 
   // For path-like globs (e.g. "bun run hub/*"), match only the segment before " -- "
   // so "bun run hub_root/dangerous -- x" does not match "bun run hub/*".
-  const candidatesForGlob = trimmedSegment.includes(' -- ')
+  const candidatesForGlob = strippedSegment.includes(' -- ')
     ? [
-        trimmedSegment.split(' -- ')[0]!.trim(),
+        strippedSegment.split(' -- ')[0]!.trim(),
         ...candidates.filter((c) => !c.includes(' -- ')),
       ]
     : candidates;
@@ -297,9 +311,11 @@ function getAllowlistForSegmentFromList(
   }
 
   const allAllowed = matches.every(([, entry]) => entry.allow);
+  const allTrusted = matches.every(([, entry]) => entry.trusted === true);
 
   return {
     allow: allAllowed,
+    trusted: allTrusted,
   };
 }
 

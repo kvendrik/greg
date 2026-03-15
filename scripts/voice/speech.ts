@@ -3,7 +3,9 @@ import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ElevenLabsClient } from 'elevenlabs';
-import config from '../../.greg';
+import { get as getConfig } from '../../config';
+
+const config = await getConfig();
 
 export type VoiceOption = { voice_id: string; name: string; category?: string };
 

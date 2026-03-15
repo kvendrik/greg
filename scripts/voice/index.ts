@@ -8,7 +8,9 @@ import {
   realtimeTranscribeFromMic,
 } from './transcribe';
 import { synthesizeAndPlay } from './speech';
-import config from '../../.greg';
+import { get as getConfig } from '../../config';
+
+const config = await getConfig();
 
 async function main(
   deviceIndex: number,

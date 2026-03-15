@@ -1,7 +1,6 @@
 import { serve, type Server, type ServerWebSocket } from 'bun';
 import { APIUserAbortError } from '@anthropic-ai/sdk';
 import pc from 'picocolors';
-import config from '../.greg';
 import type { PromptInput } from '../agent';
 import { createSender, parsePromptBody } from './utilities';
 import * as sessions from './sessions';
@@ -38,7 +37,7 @@ let server: Server<WebSocketData> | null = null;
 const activeSessionIds = new Set<string>();
 const sessionPresence = new Map<string, PresenceClient[]>();
 
-export async function startServer(port = Number(config.port)) {
+export async function startServer(port: number) {
   if (server) {
     return server;
   }

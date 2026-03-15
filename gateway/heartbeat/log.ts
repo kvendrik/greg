@@ -2,12 +2,13 @@ import { readFile, writeFile, appendFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { HeartbeatRunLogEntry } from './types';
 import { getWorkspacePath } from '../../agent/utilities';
-import config from '../../.greg';
+import { get as getConfig } from '../../config';
 
 const RUNS_FILENAME = 'heartbeat/runs.jsonl';
 const DEFAULT_MAX_BYTES = 500_000;
 const DEFAULT_KEEP_LINES = 500;
 
+const config = await getConfig();
 const runsPath = join(getWorkspacePath(config), RUNS_FILENAME);
 
 export async function get(

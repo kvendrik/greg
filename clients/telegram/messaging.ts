@@ -3,7 +3,9 @@ import { convert } from 'telegram-markdown-v2';
 import { type Context, InputFile } from 'grammy';
 import { bot, senderId } from './bot';
 import { synthesizeToBuffer } from '../../scripts/voice/speech';
-import config from '../../.greg';
+import { get as getConfig } from '../../config';
+
+const config = await getConfig();
 
 /**
  * Sends a message: via send CLI when awaitReply is false; via service socket when true.

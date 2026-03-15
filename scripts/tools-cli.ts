@@ -1,7 +1,9 @@
 import { Command } from 'commander';
-import config from '../.greg';
+import { get as getConfig } from '../config';
 import { get as getTools } from '../agent/tools';
 import type { ToolContext } from '../agent/types';
+
+const config = await getConfig();
 
 function camelCase(s: string): string {
   return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());

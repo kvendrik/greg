@@ -1,12 +1,12 @@
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import path from 'node:path';
 import fs from 'node:fs';
-import { execSync } from 'node:child_process';
-import config from '../../../.greg';
+import { get as getConfig } from '../../../config';
 import { getWorkspacePath } from '../../../agent/utilities';
 import type { Agent, Callbacks } from '../../../agent';
 import { createLogger } from '../../../utilities/logger';
 
+const config = await getConfig();
 const logger = createLogger('Session Storage');
 
 export type StorageSession = {

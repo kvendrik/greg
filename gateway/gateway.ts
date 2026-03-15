@@ -1,10 +1,9 @@
 import { startServer } from './server';
 import { TelegramGateway } from '../clients/telegram';
-import * as classifier from '../classifier';
 import { Heartbeat } from './heartbeat';
 import * as sessions from './sessions';
 import { createLogger } from '../utilities/logger';
-import config from '../.greg';
+import { get as getConfig, validate as validateConfig } from '../config';
 
 const logger = createLogger('GW');
 
@@ -17,17 +16,15 @@ export let state: GatewayState = {
 };
 
 export async function start() {
-  let stopClassifier: (() => void) | undefined;
-  let stopCron: (() => void) | undefined;
+  const config = await getConfig();
+  await validateConfig(config, {
+    exit: true,
+  });
+
   let heartbeat: Heartbeat | null = null;
 
-  if (config.tools?.guard?.enabled) {
-    logger.info('Starting guard classifier...');
-    stopClassifier = classifier.start();
-  }
-
   logger.info('Starting server...');
-  await startServer();
+  await startServer(config.port);
 
   if (config.heartbeat?.enabled ?? true) {
     logger.info('Starting heartbeat...');
@@ -48,8 +45,6 @@ export async function start() {
   const shutdown = () => {
     logger.info('Shutting down...');
     heartbeat?.stop();
-    stopCron?.();
-    stopClassifier?.();
     process.exit(0);
   };
 

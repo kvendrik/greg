@@ -5,12 +5,5 @@ memory/.data/
 **/.cache
 .pytest_cache/
 
-# Guard ONNX models (too large for GitHub; fetch from Hugging Face or copy locally)
-agent/tools/utilities/guard/models/
-
-# Classifier binary and model
-classifier/classifier
-classifier/models/
-
 # Telegram service await-reply socket (MCP-style)
 /**/*.sock

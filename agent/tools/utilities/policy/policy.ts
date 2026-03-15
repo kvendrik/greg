@@ -1,12 +1,12 @@
 import { join, dirname, basename } from 'node:path';
 import { getAllowlistForCommand } from './allowlist';
 import { saveAlwaysAllowPreferenceForCommand } from './allowlist';
-import type { ToolContext } from '../../../../types';
+import type { ToolContext } from '../../../types';
 import {
   parseCommand,
   type ParsedCommand,
 } from './command-parser/command-parser';
-import { state as gatewayState } from '../../../../../gateway/gateway';
+import { state as gatewayState } from '../../../../gateway/gateway';
 
 type PolicyEvaluation =
   | {

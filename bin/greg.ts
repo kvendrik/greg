@@ -7,13 +7,13 @@ import { name, description, version } from '../package.json';
 import type { Config } from '../config';
 import pc from 'picocolors';
 import { sendMessage } from '../clients/telegram/messaging';
+import * as config from '../config';
 
 const projectRoot = path.join(import.meta.dirname, '..');
 
 async function loadConfig(): Promise<Config> {
   try {
-    const { default: config } = await import('../.greg');
-    return config as Config;
+    return (await config.get()) as Config;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(
@@ -297,11 +297,7 @@ program
     new Command('path')
       .description('Get the current config path')
       .action(() => {
-        const tsPath = path.join(projectRoot, '.greg.ts');
-        const jsPath = path.join(projectRoot, '.greg.js');
-        console.log(
-          existsSync(tsPath) ? tsPath : existsSync(jsPath) ? jsPath : tsPath
-        );
+        console.log(config.path);
       })
   );
 

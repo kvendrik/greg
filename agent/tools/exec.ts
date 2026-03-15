@@ -2,7 +2,7 @@ import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import { spawn } from 'child_process';
 import type { ToolContext } from '../types';
-import { evaluatePolicy } from './utilities/guard/policy/policy';
+import { evaluatePolicy } from './utilities/policy';
 import pc from 'picocolors';
 
 export async function runExec(

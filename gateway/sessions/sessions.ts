@@ -2,7 +2,9 @@ import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import { Agent, type Callbacks } from '../../agent';
 import * as storage from './storage/storage';
 import { createLogger } from '../../utilities/logger';
-import config from '../../.greg';
+import { get as getConfig } from '../../config';
+
+const config = await getConfig();
 
 const logger = createLogger('Sessions Manager');
 
