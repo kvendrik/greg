@@ -6,7 +6,6 @@ import { Command } from 'commander';
 import { name, description, version } from '../package.json';
 import type { Config } from '../config';
 import pc from 'picocolors';
-import { sendMessage } from '../clients/telegram/messaging';
 import * as config from '../config';
 
 const projectRoot = path.join(import.meta.dirname, '..');
@@ -266,6 +265,8 @@ program
           message: string,
           options: { voice?: boolean; awaitReply?: boolean }
         ) => {
+          const { sendMessage } = await import('../clients/telegram/messaging');
+
           await sendMessage(message, {
             voice: options.voice ?? false,
           });

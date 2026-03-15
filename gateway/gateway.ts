@@ -3,6 +3,7 @@ import { Heartbeat } from './heartbeat';
 import * as sessions from './sessions';
 import { createLogger } from '../utilities/logger';
 import { get as getConfig, validate as validateConfig } from '../config';
+import type { TelegramGateway } from '../clients/telegram';
 
 const logger = createLogger('GW');
 
