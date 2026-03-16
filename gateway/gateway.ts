@@ -33,7 +33,7 @@ export async function start(): Promise<{
 
   let heartbeat: Heartbeat | null = null;
 
-  if (config.heartbeat?.enabled ?? true) {
+  if (config.heartbeat?.enabled) {
     logger.info('Starting heartbeat...');
     heartbeat = new Heartbeat(config.heartbeat);
     heartbeat.start();

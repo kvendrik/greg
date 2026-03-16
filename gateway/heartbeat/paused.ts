@@ -1,13 +1,14 @@
 import { exists, mkdir, writeFile, unlink } from 'node:fs/promises';
-import { dirname } from 'node:path';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { get as getConfig } from '../../config';
+import { getWorkspacePath } from '../../agent/utilities';
 
 const HEARTBEAT_DIR = 'heartbeat';
 const PAUSED_FILENAME = '.paused';
 
+const config = await getConfig();
 const pausedFilePath = join(
-  (await getConfig()).workspace,
+  getWorkspacePath(config),
   HEARTBEAT_DIR,
   PAUSED_FILENAME
 );

@@ -13,7 +13,6 @@ import { get as getConfig } from '../../config';
 const logger = createLogger('heartbeat');
 
 const HEARTBEAT_FILENAME = 'HEARTBEAT.md';
-const DEFAULT_INTERVAL = 30; // 30 minutes
 
 const config = await getConfig();
 const heartbeatPath = join(getWorkspacePath(config), HEARTBEAT_FILENAME);
@@ -41,14 +40,14 @@ export class Heartbeat {
   private running = false;
   private shuttingDown = false;
 
-  constructor(options?: Omit<HeartbeatOptions, 'enabled'>) {
-    this.intervalMs = (options?.interval ?? DEFAULT_INTERVAL) * 60 * 1000;
-    this.activeHours = options?.activeHours ?? null;
+  constructor(options: Omit<HeartbeatOptions, 'enabled'>) {
+    this.intervalMs = options.interval * 60 * 1000;
+    this.activeHours = options.activeHours ?? null;
 
     this.systemPrompt =
-      options?.prompt && options?.prompt.trim().length > 0
+      options.prompt && options?.prompt.trim().length > 0
         ? options?.prompt.trim()
-        : getInstructions(options?.interval ?? DEFAULT_INTERVAL);
+        : getInstructions(options.interval);
   }
 
   start() {
@@ -91,26 +90,27 @@ export class Heartbeat {
 
     if (heartbeatPrompt === '') {
       logger.info('No heartbeat checklist found. Skipping heartbeat.');
+      this.running = false;
+      if (!this.shuttingDown) this.schedule();
       return;
     }
 
     const prompt = `${this.systemPrompt}\n\n---\n\n${heartbeatPrompt}`;
 
     logger.info(`Running heartbeat...\n\n${prompt}\n\n`);
-    const { success, error } = await this.runPrompt(prompt);
 
-    logger.info(`Heartbeat result... \nsuccess=${success}\nerror="${error}"`);
-    await log.append({
-      startedAt,
-      finishedAt: new Date().toISOString(),
-      success,
-      error,
-    });
-
-    this.running = false;
-
-    if (!this.shuttingDown) {
-      this.schedule();
+    try {
+      const { success, error } = await this.runPrompt(prompt);
+      logger.info(`Heartbeat result... \nsuccess=${success}\nerror="${error}"`);
+      await log.append({
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        success,
+        error,
+      });
+    } finally {
+      this.running = false;
+      if (!this.shuttingDown) this.schedule();
     }
   }
 

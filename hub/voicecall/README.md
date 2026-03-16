@@ -4,15 +4,13 @@ Task-based voice calls agent controllable through a SDK or CLI.
 
 ## Get started
 
-Start by running the `doctor` command to ensure you have all environment dependencies set up:
+Start by running the `doctor` command to ensure you have all dependencies set up:
 
 ```bash
 voicecall doctor
 ```
 
 ## CLI
-
-You can find the required env variables in `./config.ts`. CLI will throw if anything is not set.
 
 ```bash
 voicecall call
