@@ -277,18 +277,42 @@ export const voice = {
 
   async end_call(callId: string): Promise<CallResult> {
     await ensureServer();
-    const call = getCall(callId);
+    const existingCall =
+      activeCalls.get(callId)?.call ?? pendingCalls.get(callId);
     await twilioClient
       .calls(callId)
       .update({ status: 'completed' })
       .catch(() => {});
-    await cleanupCall(callId, 'completed');
-    return toResult(call);
+    if (existingCall) {
+      await cleanupCall(callId, 'completed');
+      return toResult(existingCall);
+    }
+
+    // Call has already been cleaned up locally (e.g. remote hangup).
+    // Return a synthetic "completed" result so callers can finish gracefully.
+    return {
+      callId,
+      status: 'completed',
+      transcript: [],
+    };
   },
 
   get_status(callId: string): CallResult {
-    // Does not require server; just returns last known state
-    return toResult(getCall(callId));
+    // Does not require server; just returns last known state.
+    const call = activeCalls.get(callId)?.call ?? pendingCalls.get(callId);
+
+    // If the call is no longer tracked locally, treat it as completed so
+    // higher-level helpers (e.g. polling) can terminate cleanly when the
+    // remote side ends the call before we do.
+    if (!call) {
+      return {
+        callId,
+        status: 'completed',
+        transcript: [],
+      };
+    }
+
+    return toResult(call);
   },
 };
 
