@@ -5,16 +5,15 @@ import {
   ModelRegistry,
   SessionManager,
 } from '@mariozechner/pi-coding-agent';
-import { getModel } from '@mariozechner/pi-ai';
-import { systemPrompt } from './systemPrompt';
-import { config } from './config';
-import { VoiceCall } from './VoiceCall';
 
 // ─── Task-driven conversation ─────────────────────────────────────────────────
 
 async function createTaskSession(task: string, context: string) {
   const authStorage = AuthStorage.create();
   const modelRegistry = new ModelRegistry(authStorage);
+
+  const config = (await import('./config')).config;
+  const systemPrompt = (await import('./systemPrompt')).systemPrompt;
 
   const { session } = await createAgentSession({
     model: config.llm,
@@ -115,6 +114,8 @@ voicecallCommand
   .action(async (opts: { to: string; task: string; context: string }) => {
     let isHandlingTurn = false;
     let lastConclusion: string | null = null;
+
+    const VoiceCall = (await import('./VoiceCall')).VoiceCall;
 
     const call = await VoiceCall.create({ to: opts.to });
     await call.connect();
