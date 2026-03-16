@@ -480,7 +480,7 @@ export class VoiceCall {
       const callerText = newLines
         .filter((line) => line.startsWith('caller:'))
         .map((line) => line.replace('caller: ', ''))
-        .join(' ')
+        .join('\n')
         .trim();
 
       if (!callerText) return;
