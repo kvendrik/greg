@@ -1,8 +1,10 @@
-import { config } from '../config';
+import { config, validate as validateConfig } from '../config';
 import twilio from 'twilio';
 import ngrok from '@ngrok/ngrok';
 import { WebSocket } from 'ws';
 import { ElevenLabsClient } from 'elevenlabs';
+
+validateConfig();
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 

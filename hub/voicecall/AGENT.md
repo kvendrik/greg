@@ -5,7 +5,7 @@ requires:
   - env:TWILIO_ACCOUNT_SID
   - env:TWILIO_AUTH_TOKEN
   - env:TWILIO_FROM_NUMBER
-  - env:ELEVENLABS_API_KEY
+  - env:ELEVENLABS_KEY
   - env:ELEVENLABS_VOICE_ID
   - env:NGROK_AUTHTOKEN
   - env:ANTHROPIC_API_KEY
@@ -15,6 +15,8 @@ requires:
 
 Task‑driven outbound voice calls from the CLI, powered by Twilio, ElevenLabs, ngrok, and an LLM backend.
 
+**Provide as much context as possible.** Before running `voicecall call`, gather from the user (or from available data) every detail that would help the voice agent succeed: who is calling on whose behalf, relationship to the callee, time preferences, constraints, fallback options, and any other background the callee might need. Put that into `--context`. A call with rich, specific context is far more likely to succeed than one with minimal context.
+
 ### Quick start
 
 1. **Install dependencies** (from the repo root, using Bun):
@@ -23,22 +25,22 @@ Task‑driven outbound voice calls from the CLI, powered by Twilio, ElevenLabs, 
 bun install
 ```
 
-2. **Copy and fill your env file**:
+2. **Set required env variables** (see `./config.ts` for the full list):
+
+- **Twilio**: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`
+- **ElevenLabs**: `ELEVENLABS_KEY`, `ELEVENLABS_VOICE_ID`
+- **LLM**: `ANTHROPIC_API_KEY`
+- **ngrok**: `NGROK_AUTHTOKEN`
+
+The CLI throws at startup with a clear error if any required variable is missing.
+
+3. **Validate the config**
 
 ```bash
-cp .env.example .env
+voicecall validate
 ```
 
-Then edit `.env` and set:
-
-- **Twilio**: account SID, auth token, verified caller ID, TwiML app / phone number.
-- **ElevenLabs**: API key and voice config.
-- **LLM**: provider + API key (see `config.ts` for exact variable names).
-- **ngrok**: auth token if you are not already logged in.
-
-All required variables are validated by `config.ts` at startup; the process fails fast with a clear error if anything is missing.
-
-3. **Run a call from the CLI**:
+4. **Run a call from the CLI**:
 
 From the repo root:
 
@@ -68,12 +70,13 @@ The CLI will:
   ```bash
   voicecall call \
     --to "+12065551234" \
-    --task "Ask when my order #1234 will ship and summarize the answer"
+    --task "Ask when my order #1234 will ship and summarize the answer" \
+    --context "You are my assistant."
   ```
 
-- **Richer context**
+- **Richer context (default behavior)**
 
-  When the relationship or constraints matter, supply `--context`:
+  **Always supply as much useful context as you can** in `--context`. Do not default to a minimal one-liner; treat context as the main lever for call success.
   - When constructing a `voicecall call` CLI command, always ask:
     - What background details does the callee need?
     - What constraints or preferences does the caller have?
@@ -100,7 +103,7 @@ The CLI will:
       --context "I cannot make the original 3pm time today because of a conflict. Offer any 10–11am slot this week; prioritize Tuesday or Wednesday."
     ```
 
-  As a rule of thumb: **if a human assistant would need to know it to make the call effective, include it in `--context`.**
+  As a rule of thumb: **if a human assistant would need to know it to make the call effective, include it in `--context`.** When in doubt, include it—more context (within the safety rules below) is better than less.
 
   **Do NOT** put the following into `--context` (or otherwise reveal it to the callee) unless the user has explicitly asked for it and it is clearly required for the task:
   - Full payment details (credit card numbers, CVV, bank account numbers, full IBANs).
@@ -112,7 +115,7 @@ The CLI will:
 
 - **Tuning timeouts / behavior**
 
-  Defaults are set in `config.ts` (conversation timeout, ports, etc.). If you want to change them, update the relevant env vars listed in `.env.example`.
+  Defaults are set in `config.ts` (conversation timeout, ports, etc.). If you want to change them, update the relevant env vars or config in `config.ts`.
 
 ### Error handling (what you’ll see)
 

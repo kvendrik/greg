@@ -1,28 +1,25 @@
-import { getModel } from '@mariozechner/pi-ai';
+export function validate() {
+  const missingEnvVars = Object.entries({
+    TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
+    TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
+    TWILIO_FROM_NUMBER: process.env.TWILIO_FROM_NUMBER,
+    ELEVENLABS_KEY: process.env.ELEVENLABS_KEY,
+    ELEVENLABS_VOICE_ID: process.env.ELEVENLABS_VOICE_ID,
+    NGROK_AUTHTOKEN: process.env.NGROK_AUTHTOKEN,
+  })
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
 
-const missingEnvVars = Object.entries({
-  TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
-  TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
-  TWILIO_FROM_NUMBER: process.env.TWILIO_FROM_NUMBER,
-  ELEVENLABS_KEY: process.env.ELEVENLABS_KEY,
-  ELEVENLABS_VOICE_ID: process.env.ELEVENLABS_VOICE_ID,
-  NGROK_AUTHTOKEN: process.env.NGROK_AUTHTOKEN,
-  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-})
-  .filter(([, value]) => !value)
-  .map(([name]) => name);
-
-if (missingEnvVars.length > 0) {
-  throw new Error(
-    `Missing required environment variables for voice calling: ${missingEnvVars.join(
-      ', '
-    )}`
-  );
+  if (missingEnvVars.length > 0) {
+    throw new Error(
+      `Missing required environment variables for voice calling: ${missingEnvVars.join(
+        ', '
+      )}`
+    );
+  }
 }
 
 export const config = {
-  llm: getModel('anthropic', 'claude-sonnet-4-6'),
-
   port: 3334,
   maxCallDurationSeconds: 60 * 10, // 10 minutes,
 
