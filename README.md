@@ -13,7 +13,7 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ less 
 - 📦 **Auto-Compaction**. When a session reaches 80% of its maximum context window Greg summarizes it and compacts his context. This ensures you can keep talking forever.
 - 🚏 **Supports Most Popular Models**. Greg uses [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) and therefore supports most popular models. He ships with a fallback system that allows you to configure what model should be used in case your preferred model isn't available. You can also define additional models and invoke them for whatever prompt you want using `/` commands.
 - ❤️ **Heartbeat**. Greg comes with an OpenClaw-style heartbeat. Every X minutes he goes over a `HEARTBEAT.md` file and can send you updates. (`off` by default)
-- 💂 **Exec Guarding**. If Greg tries to run command line commands that you've not approved a seperate system will ask for your permission first. (`off` by default)
+- 💂 **Exec Guarding**. If Greg tries to run command line commands that you've not approved a separate system will ask for your permission first. (`off` by default)
 - 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of sending voice messages by transcribing his responses using ElevenLabs. This does require a ElevenLabs API key. See "Voice Messages" below for more info.
 - 📞 **Voice Calls**. Greg ships with a CLI that allows him to place voice calls using ElevenLabs and Twilio. Running `greg doctor` will help you understand what environment variables are needed to make this work.
 
@@ -57,9 +57,10 @@ const config: Config = {
   tools: {
     webSearch: {
       // Defining this enables the web_search tool. Optional, but recommended.
-      // Uses Gemini to use Google Search Grounding and therefore requires a key
+      // Uses Gemini for Google Search Grounding. Alternatively use provider: 'brave'.
       // https://cloud.google.com/gemini-api/docs/get-started
-      geminiKey: '...',
+      provider: 'gemini',
+      key: '...',
     },
     browser: {
       // Enables the browser automation tool using Browser Use and their blazingly
@@ -86,7 +87,7 @@ const config: Config = {
 export default config;
 ```
 
-(See the [`Config type`](/config/types.ts)) for all config options)
+(See the [`Config type`](config/types.ts) for all config options.)
 
 3. Then pick how you want to interact with Greg!
 
@@ -141,7 +142,11 @@ Here's an example:
 import * as gateway from '../gateway';
 
 const { stop } = await gateway.start();
-const session = await gateway.get('main');
+
+// This gets the main session, which the gateway loads
+// by default on startup. It's also possible to load and prompt
+// a new session through: `await gateway.load('my-new-session')`.
+const session = gateway.get('main');
 
 session.subscribe('my-custom-channel', {
   onTurnStart: () => {},
@@ -154,6 +159,8 @@ session.subscribe('my-custom-channel', {
 });
 
 await session.prompt('Hey Greg!', {
+  // can also be set to `all` to broadcast a result
+  // to all channels subscribed to the session
   channelId: 'my-custom-channel',
 });
 
@@ -195,6 +202,16 @@ const config = {
 };
 ```
 
+By default he prompts the `main` session and doesn't send the results anywhere. Make sure to tell him what to do with anything he might want to tell you in his `HEARTBEAT.md` file:
+
+```md
+# Heartbeat check
+
+Send me a quick check-in on Telegram through `greg telegram send --message`.
+```
+
+The Telegram integration also connects to the `main` session by default. The heartbeat and the integration running within the same session ensures that Greg will understand what you're talking about if you respond to something he said because of a heartbeat.
+
 ## 💂 Guard
 
 Greg also comes with a guard (disabled by default). Whenever Greg tries to run a command line command (his `exec()` tool) the guard checks if the command is allowed by either the list of commands that are allowed by default (`agent/tools/utilities/policy/default_exec_allowlist.ts`) or your workspace’s allowlist (`[config.workspace]/exec_allowlist.json`).
@@ -231,8 +248,8 @@ const config = {
     elevenlabs: {
       key: '...',
       voiceId: '...',
-    };
-  };
+    },
+  },
   clients: {
     telegram: {
       /**
