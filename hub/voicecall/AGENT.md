@@ -34,10 +34,10 @@ bun install
 
 The CLI throws at startup with a clear error if any required variable is missing.
 
-3. **Validate the config**
+3. **Check CLI health** — run `voicecall doctor` to ensure env and config are OK before placing calls. Use it when troubleshooting failures.
 
 ```bash
-voicecall validate
+voicecall doctor
 ```
 
 4. **Run a call from the CLI**:

@@ -330,6 +330,63 @@ program
   );
 
 program
+  .command('doctor')
+  .description(
+    'Check env vars and auth (tokens present and valid or need refresh)'
+  )
+  .action(() => {
+    const storagePath = getStoragePath();
+    let ok = true;
+
+    const clientId = process.env.STRAVA_CLIENT_ID?.trim();
+    const clientSecret = process.env.STRAVA_CLIENT_SECRET?.trim();
+
+    if (!clientId) {
+      console.log('STRAVA_CLIENT_ID: not set');
+      ok = false;
+    } else {
+      console.log('STRAVA_CLIENT_ID: set');
+    }
+    if (!clientSecret) {
+      console.log('STRAVA_CLIENT_SECRET: not set');
+      ok = false;
+    } else {
+      console.log('STRAVA_CLIENT_SECRET: set');
+    }
+
+    console.log(`Token file: ${storagePath}`);
+
+    if (!fs.existsSync(storagePath)) {
+      console.log('Auth: no token file. Run `strava auth`.');
+      ok = false;
+    } else {
+      try {
+        const raw = fs.readFileSync(storagePath, 'utf8');
+        const tokens = JSON.parse(raw) as TokenResponse;
+        if (!tokens.access_token || !tokens.refresh_token) {
+          console.log('Auth: token file incomplete. Run `strava auth` first.');
+          ok = false;
+        } else if (tokens.expires_at < Date.now() / 1000) {
+          console.log('Auth: access token expired. Run `strava refresh`.');
+          ok = false;
+        } else {
+          const secsLeft = Math.round(tokens.expires_at - Date.now() / 1000);
+          console.log(
+            `Auth: OK (expires in ${Math.floor(secsLeft / 3600)}h ${Math.floor((secsLeft % 3600) / 60)}m)`
+          );
+        }
+      } catch {
+        console.log(
+          'Auth: token file invalid or unreadable. Run `strava auth` first.'
+        );
+        ok = false;
+      }
+    }
+
+    process.exit(ok ? 0 : 1);
+  });
+
+program
   .command('auth')
   .description(
     'Retrieve access token using client ID and secret (OAuth flow or with --code).'

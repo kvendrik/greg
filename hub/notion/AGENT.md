@@ -27,6 +27,7 @@ Prefer returning **short, readable summaries or Markdown snippets**, and only re
 ## Requirements
 
 - **NOTION_API_KEY** must be set (env or `.env`).
+- Run **`notion doctor`** to verify the key and API access before running other commands; use it when troubleshooting failures.
 
 ### How to obtain NOTION_API_KEY
 
@@ -57,6 +58,14 @@ Before running the CLI:
 - If results might be large, say that you will **summarize or truncate** the output.
 
 ## Commands
+
+### doctor
+
+Check that NOTION_API_KEY is set and valid (performs a minimal API call). Exit code 0 = OK, 1 = missing key or auth failure. Run this first when checking CLI health or after setup.
+
+```bash
+notion doctor
+```
 
 ### search
 

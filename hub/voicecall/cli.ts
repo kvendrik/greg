@@ -10,7 +10,7 @@ voicecallCommand
   .version('0.0.0');
 
 voicecallCommand
-  .command('validate')
+  .command('doctor')
   .description('Validate the config')
   .action(() => validateConfig());
 

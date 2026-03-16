@@ -519,6 +519,33 @@ program
   );
 
 program
+  .command('doctor')
+  .description('Check NOTION_API_KEY and validate auth with the API')
+  .action(async () => {
+    let ok = true;
+    const key = process.env.NOTION_API_KEY?.trim();
+    if (!key) {
+      console.log('NOTION_API_KEY: not set');
+      process.exit(1);
+    }
+    console.log('NOTION_API_KEY: set');
+
+    try {
+      const notion = new Client({ auth: key });
+      await notion.search({ page_size: 1 });
+      console.log('Auth: OK');
+    } catch (err) {
+      ok = false;
+      if (isNotionClientError(err)) {
+        console.log(`Auth: ${err.message}`);
+      } else {
+        console.log('Auth: request failed');
+      }
+    }
+    process.exit(ok ? 0 : 1);
+  });
+
+program
   .command('search')
   .description('Search pages shared with your integration')
   .option('-q, --query <string>', 'Filter by title')

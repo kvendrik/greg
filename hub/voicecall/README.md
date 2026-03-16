@@ -4,10 +4,10 @@ Task-based voice calls agent controllable through a SDK or CLI.
 
 ## Get started
 
-Start by running the `validate` command to ensure you have all environment dependencies set up:
+Start by running the `doctor` command to ensure you have all environment dependencies set up:
 
 ```bash
-voicecall validate
+voicecall doctor
 ```
 
 ## CLI

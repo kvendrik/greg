@@ -29,6 +29,7 @@ Always respond with a **short, human summary** of the results instead of raw JSO
 
 - **auth** and **refresh** need **STRAVA_CLIENT_ID** and **STRAVA_CLIENT_SECRET**. Tokens are stored in a file; path defaults to **~/.strava-tokens.json** unless **STRAVA_STORAGE_PATH** is set.
 - **activities** and **activity** read the access token from that tokens file (written by `strava auth` or `strava refresh`); you do not set `STRAVA_ACCESS_TOKEN` yourself.
+- Run **`strava doctor`** to check env vars and whether auth is OK or needs refresh; use it when checking CLI health or troubleshooting.
 
 ### How to obtain the required env vars
 
@@ -68,6 +69,14 @@ When you run any Strava CLI command, briefly tell the user:
 - The **time window or activity** you are targeting (if applicable).
 
 ## Commands
+
+### doctor
+
+Check env vars (STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET) and auth: token file present, tokens valid, or need to run `strava auth` / `strava refresh`. Exit code 0 = OK, 1 = issue. Run this first when checking CLI health.
+
+```bash
+strava doctor
+```
 
 ### auth
 
