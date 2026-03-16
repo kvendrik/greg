@@ -86,7 +86,7 @@ export default config;
 
 3. Then pick how you want to interact with Greg!
 
-The default way of interacting with Greg is through Telegram. In the config set:
+The default way of interacting with Greg is through Telegram (see "Custom clients" below for other options). In the config set:
 
 ```ts
 const config = {
