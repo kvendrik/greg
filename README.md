@@ -9,9 +9,13 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ less 
 - 🌍 **Browser Automation**. When a simple fetch isn't enough, Greg is also capable of controlling your Chrome browser and can therefore do anything online you can do.
 - 👨‍💻 **Command-line Access**. Greg has access to your command line and can therefore do most of the things you do on your computer.
 - 🔨 **Skills**. Greg learns on his own. If he has trouble figuring something out, help him, and then simply say "What have you learned? Write a skill for yourself so you know this next time". He'll create a skill for himself so that in the future he won't struggle.
+- 💾 **Session Persistance**. Greg persists sessions as JSONL files in your workspace. This way he won't lose context between restarts.
+- 📦 **Auto-Compaction**. When a session reaches 80% of its maximum context window Greg summarizes it and compacts his context. This ensures you can keep talking forever.
 - 🚏 **Supports Most Popular Models**. Greg uses [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) and therefore supports most popular models. He ships with a fallback system that allows you to configure what model should be used in case your preferred model isn't available. You can also define additional models and invoke them for whatever prompt you want using `/` commands.
 - ❤️ **Heartbeat**. Greg comes with an OpenClaw-style heartbeat. Every X minutes he goes over a `HEARTBEAT.md` file and can send you updates. (`off` by default)
 - 💂 **Exec Guarding**. If Greg tries to run command line commands that you've not approved a seperate system will ask for your permission first. (`off` by default)
+- 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of sending voice messages by transcribing his responses using ElevenLabs. This does require a ElevenLabs API key. See "Voice Messages" below for more info.
+- 📞 **Voice Calls**. Greg ships with a CLI that allows him to place voice calls using ElevenLabs and Twilio. Running `greg doctor` will help you understand what environment variables are needed to make this work.
 
 Oh and you don't have to call him Greg. Just say "From now on your name is John" and that's it.
 
@@ -39,7 +43,7 @@ const config: Config = {
     {
       role: 'primary',
       model: getModel('anthropic', 'claude-sonnet-4-6'),
-      key: 'XXX', // https://console.anthropic.com/settings/keys
+      key: '...', // https://console.anthropic.com/settings/keys
     },
     {
       role: 'fallback',
@@ -47,7 +51,7 @@ const config: Config = {
       // e.g. "/openai How’s the weather today?" will use this model over Sonnet
       command: 'openai',
       model: getModel('openai', 'gpt-5.2'),
-      key: 'XXX', // https://platform.openai.com/api-keys
+      key: '...', // https://platform.openai.com/api-keys
     },
   ],
   tools: {
@@ -55,13 +59,13 @@ const config: Config = {
       // Defining this enables the web_search tool. Optional, but recommended.
       // Uses Gemini to use Google Search Grounding and therefore requires a key
       // https://cloud.google.com/gemini-api/docs/get-started
-      geminiKey: 'XXX',
+      geminiKey: '...',
     },
     browser: {
       // Enables the browser automation tool using Browser Use and their blazingly
       // fast finetuned model. Optional, but recommended.
       // https://cloud.browser-use.com/settings?tab=api-keys&new=1
-      key: 'XXX',
+      key: '...',
     },
     guard: {
       // Enable the Guard so only Greg won't run commands you haven't approved.
@@ -96,11 +100,11 @@ const config = {
       /**
        * https://core.telegram.org/bots#how-do-i-create-a-bot
        */
-      botToken: 'XXX',
+      botToken: '...',
       /**
        * Your user ID (e.g. from [@userinfobot](https://t.me/userinfobot)).
        */
-      senderId: 'XXX',
+      senderId: '...',
     };
   };
   ...
@@ -166,11 +170,13 @@ You can call `bun run scripts/custom-start.ts` directly, but I'd recommend updat
 
 ## 🔨 Skills
 
-Greg can be taught how to do anything by simply telling him to read an AgentSkill and to save it for later use. Doing so will cause Greg to save a new skill to your workspace.
+Greg can be taught how to do anything by simply telling him to read an [AgentSkill](https://agentskills.io) and to save it for later use. Doing so will cause Greg to save a new skill to your workspace.
 
 ## 📦 Hub
 
-Greg also ships with a couple of CLI's that I couldn't find good versions of elsewhere. These are available in `/hub`. Greg already knows how to use them but they require auth tokens. When Greg tries to use them at the start he'll come back to you saying he needs access.
+Greg also ships with a couple of CLI's that I couldn't find good versions of elsewhere. These are available through the `greg hub` command.
+
+Greg already knows how to use them as all `hub/*/AGENT.md` files are loaded as skills by default. `greg doctor` will warn you if any of the CLIs doesn't have its dependencies installed. Greg might try to use one of the CLI's, discover he can’t because he's missing dependencies, and ask you about it.
 
 ## ❤️ Heartbeat
 
@@ -206,4 +212,39 @@ setGetReply(async (question) => {
   return getUserReplyFromSomeWhere(question);
 });
 ...
+```
+
+## 🗣️ Voice Messages
+
+Greg can send you voice messages through his Telegram integration:
+
+```bash
+greg telegram send "Hey! How are you?" --voice
+```
+
+For this to work you do need to set a ElevenLabs API key and voice ID in your config:
+
+```ts
+const config = {
+  ...
+  voice: {
+    elevenlabs: {
+      key: '...',
+      voiceId: '...',
+    };
+  };
+  clients: {
+    telegram: {
+      /**
+       * https://core.telegram.org/bots#how-do-i-create-a-bot
+       */
+      botToken: '...',
+      /**
+       * Your user ID (e.g. from [@userinfobot](https://t.me/userinfobot)).
+       */
+      senderId: '...',
+    };
+  };
+  ...
+};
 ```
