@@ -9,13 +9,13 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ less 
 - 🌍 **Browser Automation**. When a simple fetch isn't enough, Greg is also capable of controlling your Chrome browser and can therefore do anything online you can do.
 - 👨‍💻 **Command-line Access**. Greg has access to your command line and can therefore do most of the things you do on your computer.
 - 🔨 **Skills**. Greg learns on his own. If he has trouble figuring something out, help him, and then simply say "What have you learned? Write a skill for yourself so you know this next time". He'll create a skill for himself so that in the future he won't struggle.
-- 💾 **Session Persistance**. Greg persists sessions as JSONL files in your workspace. This way he won't lose context between restarts.
+- 💾 **Session Persistence**. Greg persists sessions as JSONL files in your workspace. This way he won't lose context between restarts.
 - 📦 **Auto-Compaction**. When a session reaches 80% of its maximum context window Greg summarizes it and compacts his context. This ensures you can keep talking forever.
 - 🚏 **Supports Most Popular Models**. Greg uses [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) and therefore supports most popular models. He ships with a fallback system that allows you to configure what model should be used in case your preferred model isn't available. You can also define additional models and invoke them for whatever prompt you want using `/` commands.
 - ❤️ **Heartbeat**. Greg comes with an OpenClaw-style heartbeat. Every X minutes he goes over a `HEARTBEAT.md` file and can send you updates. (`off` by default)
 - 💂 **Exec Guarding**. If Greg tries to run command line commands that you've not approved a separate system will ask for your permission first. (`off` by default)
-- 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of sending voice messages by transcribing his responses using ElevenLabs. This does require a ElevenLabs API key. See "Voice Messages" below for more info.
-- 📞 **Voice Calls**. Greg ships with a CLI that allows him to place voice calls using ElevenLabs and Twilio. Running `greg doctor` will help you understand what environment variables are needed to make this work.
+- 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of sending voice messages by transcribing his responses using [ElevenLabs](https://elevenlabs.io/). This does require a ElevenLabs API key. See "Voice Messages" below for more info.
+- 📞 **Voice Calls**. Greg ships with [tools](hub/voicecall) that allow him to place voice calls using [ElevenLabs](https://elevenlabs.io/) and [Twilio](https://www.twilio.com). Running `greg doctor` will help you understand what environment variables are needed to make this work.
 
 Oh and you don't have to call him Greg. Just say "From now on your name is John" and that's it.
 
@@ -23,7 +23,7 @@ Oh and you don't have to call him Greg. Just say "From now on your name is John"
 
 1. Clone this repository and `cd` into it
 
-```
+```bash
 git clone git@github.com:kvendrik/greg.git
 ```
 
@@ -239,7 +239,7 @@ Greg can send you voice messages through his Telegram integration:
 greg telegram send "Hey! How are you?" --voice
 ```
 
-For this to work you do need to set a ElevenLabs API key and voice ID in your config:
+For this to work you do need to set a [ElevenLabs](https://elevenlabs.io/) API key and voice ID in your config:
 
 ```ts
 const config = {
