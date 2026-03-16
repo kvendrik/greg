@@ -164,6 +164,7 @@ voicecallCommand
         process.exit(0);
       }
 
+      await Bun.sleep(1000);
       isHandlingTurn = false;
     });
 
@@ -173,6 +174,6 @@ voicecallCommand
         `Conclusion: ${lastConclusion ? lastConclusion : 'Task was not completed.'}`
       );
       console.log('─────────────────────────────\n');
-      process.exit(1);
+      process.exit(lastConclusion ? 0 : 1);
     });
   });

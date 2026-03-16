@@ -77,6 +77,7 @@ The CLI will:
   - When constructing a `voicecall call` CLI command, always ask:
     - What background details does the callee need?
     - What constraints or preferences does the caller have?
+    - Especially for **times and scheduling**, prefer giving a **time range or multiple acceptable options** instead of a single exact time.
   - Encode those details in `--context` rather than overloading `--task`.
   - Never provide sensitive information like the names of events on the persons calendar
 
@@ -87,7 +88,7 @@ The CLI will:
     voicecall call \
       --to "+12065551234" \
       --task "Schedule a dentist appointment for me" \
-      --context "I am available next Monday–Thursday between 9am and 2pm, prefer mornings, and I need a routine check‑up and cleaning."
+      --context "I am available next Monday–Thursday between 9am and 2pm, prefer mornings, and I need a routine check‑up and cleaning. If 9am is not available, any time between 9am and 11am on those days is fine."
     ```
 
   - **Rescheduling a meeting**
