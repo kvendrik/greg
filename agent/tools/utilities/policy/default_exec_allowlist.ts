@@ -6,7 +6,13 @@ export const defaultExecAllowlist: AllowList = {
   'echo *': { allow: true },
   'cd *': { allow: true },
   'printf *': { allow: true },
-  'greg *': { allow: true },
+
+  'greg logs *': { allow: true },
+  'greg restart': { allow: true },
+  'greg stop': { allow: true },
+  'greg start': { allow: true },
+  'greg heartbeat *': { allow: true },
+  'greg doctor': { allow: true },
 
   'git status *': { allow: true },
   'git diff *': { allow: true },
