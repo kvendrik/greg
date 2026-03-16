@@ -90,6 +90,36 @@ async function taskDrivenTurn(
   return { reply, taskComplete, conclusion };
 }
 
+async function generateConclusionFromSession(
+  session: Awaited<ReturnType<typeof createTaskSession>>,
+  fallbackConclusion: string | null
+): Promise<string> {
+  if (fallbackConclusion) return fallbackConclusion;
+
+  const summary = await new Promise<string>((resolve) => {
+    let text = '';
+
+    const unsubscribe = session.subscribe((event) => {
+      if (
+        event.type === 'message_update' &&
+        event.assistantMessageEvent?.type === 'text_delta'
+      ) {
+        text += event.assistantMessageEvent.delta;
+      }
+      if (event.type === 'agent_end') {
+        unsubscribe();
+        resolve(text.trim());
+      }
+    });
+
+    session.prompt(
+      'The caller has ended the call, but you did not explicitly mark the task as done. Based on the entire conversation so far, write a concise one-sentence conclusion describing the outcome. Do not include any JSON, just plain text.'
+    );
+  });
+
+  return summary || 'Task was not completed.';
+}
+
 // ─── CLI ──────────────────────────────────────────────────────────────────────
 
 export const voicecallCommand = new Command();
@@ -170,11 +200,16 @@ voicecallCommand
     });
 
     call.onEnd(async () => {
-      console.log('\n─────────────────────────────');
-      console.log(
-        `Conclusion: ${lastConclusion ? lastConclusion : 'Task was not completed.'}`
+      const conclusionText = await generateConclusionFromSession(
+        taskSession,
+        lastConclusion
       );
+
+      console.log('\n─────────────────────────────');
+      console.log(`Conclusion: ${conclusionText}`);
       console.log('─────────────────────────────\n');
+
+      taskSession.dispose();
       process.exit(lastConclusion ? 0 : 1);
     });
   });
