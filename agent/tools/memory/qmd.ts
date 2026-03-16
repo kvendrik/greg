@@ -67,6 +67,7 @@ function runQmd(
       cwd: options?.cwd ?? process.cwd(),
       shell: false,
     });
+
     if (options?.background) {
       // Fire-and-forget: allow the process to continue independently and
       // resolve immediately without waiting for output or exit. Still log
@@ -81,8 +82,10 @@ function runQmd(
       resolve({ stdout: '', stderr: '', code: 0 });
       return;
     }
+
     let stdout = '';
     let stderr = '';
+
     const timeout = setTimeout(() => {
       child.kill('SIGTERM');
       resolve({
@@ -91,12 +94,15 @@ function runQmd(
         code: 1,
       });
     }, RUN_QMD_TIMEOUT_MS);
+
     child.stdout?.on('data', (chunk) => {
       stdout += chunk.toString();
     });
+
     child.stderr?.on('data', (chunk) => {
       stderr += chunk.toString();
     });
+
     child.on('close', (code, signal) => {
       clearTimeout(timeout);
       resolve({
@@ -105,6 +111,7 @@ function runQmd(
         code: code ?? (signal ? 1 : 0),
       });
     });
+
     child.on('error', (err) => {
       clearTimeout(timeout);
       resolve({
@@ -138,7 +145,13 @@ export class QMD {
 
   static async healthy(): Promise<boolean> {
     const result = await runQmd(['status']);
-    return result.code === 0;
+    if (result.code !== 0) {
+      logger.error(
+        `QMD health check failed:\n${result.stderr || result.stdout}`
+      );
+      return false;
+    }
+    return true;
   }
 
   /**
