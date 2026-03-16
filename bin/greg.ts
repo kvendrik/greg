@@ -398,7 +398,14 @@ heartbeatCommand
       .description('Run a heartbeat immediately')
       .action(async () => {
         const heartbeat = await import('../gateway/heartbeat');
-        const hb = new heartbeat.Heartbeat();
+        const config = await loadConfig();
+
+        if (!config.heartbeat) {
+          console.error(pc.red('Heartbeat not configured.'));
+          process.exit(1);
+        }
+
+        const hb = new heartbeat.Heartbeat(config.heartbeat);
         await hb.run();
       })
   )
