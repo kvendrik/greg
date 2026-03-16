@@ -312,9 +312,21 @@ program
     const config = await loadConfig();
     const { validate } = await import('../config');
     const { discoverSkills } = await import('../agent/tools/skills');
+
     const configFailures = await validate(config);
     const skills = discoverSkills(config);
+
+    if (!config.clients?.telegram) {
+      console.warn(
+        pc.yellow(
+          'Warning: Telegram client is not configured. Either configure it or use a custom client.'
+        )
+      );
+    }
+
     for (const skill of skills) {
+      const relativePath = path.relative(projectRoot, skill.location);
+
       if (!skill.requires?.length) continue;
       for (const req of skill.requires) {
         const isEnv = req.startsWith('env:');
@@ -324,12 +336,14 @@ program
           if (value === undefined || value === '') {
             console.warn(
               pc.yellow(
-                `Warning: skill "${skill.name}" cannot be used — env ${key} is not set`
+                `[${skill.name}] Warning: "${skill.name}" cannot be used — env ${key} is not set (${relativePath})`
               )
             );
           } else {
             console.log(
-              pc.green(`Skill "${skill.name}": env ${key} ${pc.green('✓')}`)
+              pc.green(
+                `[${skill.name}] env ${key} ${pc.green('✓')} (${relativePath})`
+              )
             );
           }
         } else {
@@ -340,20 +354,24 @@ program
           if (result.status !== 0) {
             console.warn(
               pc.yellow(
-                `Warning: skill "${skill.name}" cannot be used — CLI "${key}" not found`
+                `[${skill.name}] Warning: "${skill.name}" cannot be used — CLI "${key}" not found (${relativePath})`
               )
             );
           } else {
             console.log(
-              pc.green(`Skill "${skill.name}": ${key} ${pc.green('✓')}`)
+              pc.green(
+                `[${skill.name}] ${key} ${pc.green('✓')} (${relativePath})`
+              )
             );
           }
         }
       }
     }
+
     if (configFailures.length > 0) {
       console.error(pc.red('Config validation failed.'));
     }
+
     process.exit(configFailures.length > 0 ? 1 : 0);
   });
 

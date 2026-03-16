@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenAI } from '@google/genai';
-import { Bot } from 'grammy';
+import { Bot, GrammyError } from 'grammy';
 import pc from 'picocolors';
 import type { Config } from './types';
 
@@ -47,17 +47,35 @@ async function validateGoogleKey(key: string): Promise<void> {
 
 async function validateTelegramBotToken(token: string): Promise<void> {
   const bot = new Bot(token);
-  await bot.api.getMe();
+  try {
+    const me = await bot.api.getMe();
+    if (!me?.id) {
+      throw new Error('Telegram Bot Token invalid');
+    }
+  } catch (err) {
+    if (err instanceof GrammyError && err.error_code === 401) {
+      throw new Error('Telegram Bot Token invalid (401 Unauthorized)');
+    }
+    if (err instanceof Error && err.message.includes('Telegram Bot Token')) {
+      throw err;
+    }
+    throw new Error(
+      `Telegram Bot Token invalid: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
 }
 
+const BROWSER_USE_ACCOUNT_URL =
+  'https://api.browser-use.com/api/v2/billing/account';
+
 async function validateBrowserUseKey(key: string): Promise<void> {
-  const res = await fetch('https://api.browser-use.com/api/v1/me', {
-    headers: { Authorization: `Bearer ${key}` },
+  const res = await fetch(BROWSER_USE_ACCOUNT_URL, {
+    headers: { 'x-api-key': key },
   });
   if (res.status === 401) {
     throw new Error('Browser Use API key invalid (401 Unauthorized)');
   }
-  if (!res.ok && res.status !== 404) {
+  if (res.status !== 200) {
     const body = await res.text();
     throw new Error(
       `Browser Use API error (${res.status}): ${body || res.statusText}`
@@ -140,7 +158,7 @@ export async function validate(config: Config): Promise<string[]> {
 
   if (config.clients?.telegram?.botToken) {
     checks.push({
-      name: 'Telegram',
+      name: 'Telegram Bot Token',
       run: () => validateTelegramBotToken(config.clients!.telegram!.botToken),
     });
   }
