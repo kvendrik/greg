@@ -127,7 +127,7 @@ You should see logs that indicate that both the gateway and the Telegram service
 
 ## Custom clients
 
-If you would like to use something else than Telegram you have to create a client yourself. To do this, create a script like the default `scripts/start.ts` script.
+If you would like to use something else than Telegram you have to create a client yourself. To do this, create a script like the default [`scripts/start.ts`](scripts/start.ts) script.
 
 Here's an example:
 
