@@ -15,6 +15,11 @@ function runGreg(args: string[]): {
     encoding: 'utf-8',
     env: { ...process.env },
   });
+  if (result.status !== 0) {
+    console.error(
+      `greg ${args.join(' ')} failed:\n${result.stderr || result.stdout}`
+    );
+  }
   return {
     stdout: result.stdout ?? '',
     stderr: result.stderr ?? '',
