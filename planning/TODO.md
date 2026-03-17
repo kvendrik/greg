@@ -2,6 +2,7 @@
 
 - [ ] Allow agent to background long running jobs like `tg --voice` or `voicecall`
 - [ ] QMD `search_memory` is broken. QMD.healthy() is also broken. `greg tools memory_search --search-query "friends"`
+- [ ] Store subagent system prompt in SYSTEM.md again for easier editing
 
 ## Security
 
