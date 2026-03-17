@@ -2,6 +2,7 @@ import type { Model, Api } from '@mariozechner/pi-ai';
 import type { HeartbeatOptions } from '../gateway/heartbeat/types';
 export type { Config as BaseConfig } from '../config';
 import type { BackgroundUpdate as SubAgentBackgroundUpdate } from './tools/spawn/spawn';
+import type { AllowList } from './tools/utilities/policy/allowlist';
 
 export interface ToolContext {
   config: AgentConfig;
@@ -94,13 +95,27 @@ export interface AgentConfig {
        */
       key: string;
     };
-    guard?: {
+    guard: {
       /**
-       * Enables the guard tool.
-       * This means that the agent will run all output from
-       * the browser, web, and exec tools through a guard to attempt to detect malicious content.
+       * Enables the guard tool which will block exec commands that are not allowed.
+       * `true` by default.
        */
       enabled: boolean;
+      exec?: {
+        /**
+         * Ask for permission to run a command when it's not allowed.
+         * `false` by default. Allowed commands are saved to `[workspace]/exec_allowlist.json`.
+         */
+        askPermission?: boolean;
+        /**
+         * Map of command patterns to allow/deny. Keys support exact commands,
+         * base commands (e.g. "ls"), and glob patterns (*, ?, []).
+         *
+         * @example
+         * { "ls": { allow: true }, "git status *": { allow: true }, "npm run *": { allow: true }, "rm -rf *": { allow: false } }
+         */
+        allowlist?: AllowList;
+      };
     };
   };
 }

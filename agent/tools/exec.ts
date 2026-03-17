@@ -2,6 +2,7 @@ import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import { spawn } from 'child_process';
 import type { ToolContext } from '../types';
+import { parseCommand } from './utilities/command-parser/command-parser';
 import { evaluatePolicy } from './utilities/policy';
 import pc from 'picocolors';
 
@@ -12,7 +13,18 @@ export async function runExec(
 ): Promise<string> {
   const { command } = params;
 
-  const policy = await evaluatePolicy('exec', { command }, context);
+  const parsed = parseCommand(command);
+  const policy = await evaluatePolicy('exec', { command: parsed }, context);
+
+  if (parsed.segments.length === 0) {
+    return 'Empty command.';
+  }
+
+  if (parsed.segments.length > 1) {
+    return 'Command chaining (&&, |, ;) is not supported. Run one command at a time.';
+  }
+
+  const primarySegment = parsed.segments[0]!;
   let resultPrefix = '';
 
   if (!policy.allowed) {
@@ -25,9 +37,9 @@ export async function runExec(
     const output: string[] = [];
     const errorOutput: string[] = [];
 
-    const child = spawn(command, [], {
+    const child = spawn(primarySegment.command!, primarySegment.argv.slice(1), {
       stdio: ['inherit', 'pipe', 'pipe'],
-      shell: true,
+      shell: false,
     });
 
     child.unref();
@@ -106,9 +118,12 @@ export function getExecTools(context: ToolContext): AgentTool[] {
     {
       name: 'exec',
       label: 'exec',
-      description: 'Run a command in the terminal.',
+      description: `Run a single allowlisted command. One command per call only (no chaining with &&, |, or ;). Shell redirection (>, >>) is not supported—output goes to the tool result. Only commands on the exec allowlist are permitted.`,
       parameters: Type.Object({
-        command: Type.String({ description: 'The command to run' }),
+        command: Type.String({
+          description:
+            'A single command and its arguments, e.g. "git status" or "ls -la". No pipes, no &&/;, no > or >>.',
+        }),
       }),
       execute: async (_id, params, signal, _onUpdate) => {
         const { command } = params as { command: string };

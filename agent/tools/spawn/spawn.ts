@@ -4,6 +4,7 @@ import { mkdir, exists, writeFile, readdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { customAlphabet } from 'nanoid';
+import { getModel } from '@mariozechner/pi-ai';
 import type { AgentConfig } from '../../index';
 import type { ToolContext } from '../../types';
 import * as sessions from '../../../gateway/sessions';
@@ -18,84 +19,114 @@ export type BackgroundUpdate = {
 export const createRunId = () =>
   customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 10)(5);
 
-export async function createSpawnTools({
-  config,
-  onBackgroundUpdate,
-}: ToolContext): Promise<AgentTool[]> {
-  const subagentsPath = join(getWorkspacePath(config), 'subagents');
-  await mkdir(subagentsPath, { recursive: true });
+interface SubagentConfig {
+  name: string;
+  emoji: string;
+  systemPrompt: string;
+  model: { provider: string; id: string };
+  tools: ('web_search' | 'web_fetch' | 'exec')[];
+  execAllowedCommands?: string[];
+}
 
-  const listTool: AgentTool = {
-    name: 'list_agents',
-    label: 'list agents',
-    description:
-      'List all spawned subagents. Returns a JSON array of { name, working, model, systemPrompt } for each. Call this first to see which agents exist before using prompt_agent.',
-    parameters: Type.Object({}),
-    execute: async (_id: string) => {
-      const entries = await readdir(subagentsPath, { withFileTypes: true });
-      const subagents = entries
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name);
-
-      const agents = subagents.map((agentName) => {
-        const subagentConfig = createSubagentConfig(
-          agentName,
-          join(subagentsPath, agentName)
-        );
-
-        let working = false;
-
-        try {
-          working = sessions.get('main', subagentConfig)?.working ?? false;
-        } catch {
-          // do nothing
-          // get() call will error if session is not loaded
-          // so if we end up here its just not loaded
-        }
-
+function subagentConfigSchema(config: AgentConfig) {
+  const schema = Type.Object({
+    name: Type.String({
+      description:
+        'Unique, short, human-like name for the sub-agent (used as its ID and workspace folder). Examples: "Nova", "Griffin", "Agent 42". Must not already exist.',
+    }),
+    emoji: Type.String({
+      description:
+        'Emoji to use for the sub-agent. Pick something that matches their function and personality. Examples: "👋", "🤔", "👾", "👻", "👽", "🤖", "🤔", "👋".',
+    }),
+    systemPrompt: Type.String({
+      description:
+        "Full system prompt that defines the sub-agent's role, goals, and constraints. This is the only instruction the sub-agent gets; be specific.",
+    }),
+    model: Type.Enum(
+      config.models.reduce((acc, m) => {
+        const label = m.role
+          ? `${m.model.provider}/${m.model.name} (${m.role})`
+          : `${m.model.provider}/${m.model.name} (${m.model.id})`;
         return {
-          name: agentName,
-          working,
-          model: subagentConfig.models[0].model.name,
-          systemPrompt: readFileSync(
-            join(subagentsPath, agentName, 'SYSTEM.md'),
-            'utf8'
-          ),
+          ...acc,
+          [label]: { provider: m.model.provider, id: m.model.id },
         };
-      });
+      }, {}),
+      {
+        description:
+          'Model the sub-agent will use. Pick from the options (labels show name and role).',
+      }
+    ),
+    tools: Type.Array(
+      Type.Enum({
+        web_search: 'web_search',
+        web_fetch: 'web_fetch',
+        exec: 'exec',
+      }),
+      {
+        description:
+          'Tools the sub-agent will have access to. Pick from the options.',
+      }
+    ),
+    execAllowedCommands: Type.Optional(
+      Type.Array(
+        Type.String({
+          description:
+            'Required when allowing the exec tool. Commands the sub-agent will be allowed to run. Supports exact commands, base commands (e.g. "ls"), and glob patterns (*, ?, []). Examples: "ls", "git status *", "npm run *", "rm -rf *".',
+        })
+      )
+    ),
+  });
 
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify(agents),
-          },
-        ],
-        details: {},
-      };
+  return {
+    schema,
+    validate(config: SubagentConfig) {
+      if (config.tools.includes('exec') && !config.execAllowedCommands) {
+        return {
+          valid: false,
+          message:
+            'execAllowedCommands is required when allowing the exec tool.',
+        };
+      }
+      return { valid: true, message: null };
     },
   };
+}
+
+export async function createSpawnTools({
+  config: parentConfig,
+  onBackgroundUpdate,
+}: ToolContext): Promise<AgentTool[]> {
+  const subagentsPath = join(getWorkspacePath(parentConfig), 'subagents');
+  await mkdir(subagentsPath, { recursive: true });
+
+  const configSchema = subagentConfigSchema(parentConfig);
 
   const spawnTool: AgentTool = {
     name: 'spawn_agent',
     label: 'spawn agent',
     description:
       'Create and start a sub-agent that runs in the background. Use when a task is long-running, parallel, or better handled by a dedicated agent. After spawning, use the prompt_agent tool to send prompts to this agent. The sub-agent has its own workspace and only web_search and web_fetch tools.',
-    parameters: Type.Object({
-      name: Type.String({
-        description:
-          'Unique, short, human-like name for the sub-agent (used as its ID and workspace folder). Examples: "Nova", "Griffin", "Agent 42". Must not already exist.',
-      }),
-      systemPrompt: Type.String({
-        description:
-          "Full system prompt that defines the sub-agent's role, goals, and constraints. This is the only instruction the sub-agent gets; be specific.",
-      }),
-    }),
+    parameters: configSchema.schema,
     execute: async (_id: string, params) => {
-      const { name, systemPrompt } = params as {
-        name: string;
-        systemPrompt: string;
-      };
+      const { emoji, name, systemPrompt, model, tools, execAllowedCommands } =
+        params as SubagentConfig;
+
+      const { valid, message } = configSchema.validate(
+        params as SubagentConfig
+      );
+
+      if (!valid) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: message!,
+            },
+          ],
+          details: {},
+        };
+      }
 
       const workspace = join(subagentsPath, name);
 
@@ -113,12 +144,23 @@ export async function createSpawnTools({
 
       await mkdir(workspace, { recursive: true });
 
-      const model = config.models.find(
-        (model) => model.role === 'primary'
-      )!.model;
+      const config: SubagentConfig = {
+        emoji,
+        name,
+        systemPrompt,
+        model,
+        tools,
+        execAllowedCommands,
+      };
+      await writeFile(
+        join(workspace, 'config.json'),
+        JSON.stringify(config, null, 2)
+      );
+      await sessions.create('main', createAgentConfig(config));
 
-      await writeFile(join(workspace, 'SYSTEM.md'), systemPrompt);
-      await sessions.create('main', createSubagentConfig(name, workspace));
+      const modelLabel = parentConfig.models.find(
+        (m) => m.model.id === model.id && m.model.provider === model.provider
+      )?.model.name!;
 
       return {
         content: [
@@ -126,11 +168,60 @@ export async function createSpawnTools({
             type: 'text' as const,
             text: `
                 Spawned!
+                - Emoji: ${emoji}
                 - Created agent with name ${name}.
                 - Use \`prompt_agent\` tool to prompt the agent.
-                - Agent runs on ${model.name} and has access to \`web_search\` and \`web_fetch\` tools.
+                - Agent runs on ${modelLabel}
+                - Has access to ${tools.join(', ')} tools.
                 - Agent runs on \`main\` session. Workspace is: \`${workspace}\`.
+                - System Prompt: "${systemPrompt}"
             `,
+          },
+        ],
+        details: {},
+      };
+    },
+  };
+
+  const listTool: AgentTool = {
+    name: 'list_agents',
+    label: 'list agents',
+    description:
+      'List all spawned subagents. Returns a JSON array of { name, working, model, systemPrompt } for each. Call this first to see which agents exist before using prompt_agent.',
+    parameters: Type.Object({}),
+    execute: async (_id: string) => {
+      const entries = await readdir(subagentsPath, { withFileTypes: true });
+      const subagents = entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name);
+
+      const agents = await Promise.all(
+        subagents.map(async (agentName) => {
+          const config = await getSubagentConfig(agentName);
+          const agentConfig = createAgentConfig(config);
+
+          let working = false;
+
+          try {
+            working = sessions.get('main', agentConfig)?.working ?? false;
+          } catch {
+            // do nothing
+            // get() call will error if session is not loaded
+            // so if we end up here its just not loaded
+          }
+
+          return {
+            ...config,
+            working,
+          };
+        })
+      );
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(agents),
           },
         ],
         details: {},
@@ -142,22 +233,27 @@ export async function createSpawnTools({
     name: 'update_agent',
     label: 'update agent',
     description:
-      'Update the system prompt of an existing spawned subagent. Use this to change the agent’s behavior without recreating it. The agent keeps its workspace and history; only SYSTEM.md is overwritten.',
-    parameters: Type.Object({
-      name: Type.String({
-        description:
-          'Unique, short, human-like name for the sub-agent (used as its ID and workspace folder). Examples: "Nova", "Griffin", "Agent 42". Must not already exist.',
-      }),
-      systemPrompt: Type.String({
-        description:
-          "Full system prompt that defines the sub-agent's role, goals, and constraints. This is the only instruction the sub-agent gets; be specific.",
-      }),
-    }),
+      'Update the system prompt and/or model of an existing spawned subagent. Use this to change the agent’s behavior without recreating it. The agent keeps its workspace and history; only SYSTEM.md is overwritten.',
+    parameters: configSchema.schema,
     execute: async (_id: string, params) => {
-      const { name, systemPrompt } = params as {
-        name: string;
-        systemPrompt: string;
-      };
+      const { emoji, name, systemPrompt, model, tools, execAllowedCommands } =
+        params as SubagentConfig;
+
+      const { valid, message } = configSchema.validate(
+        params as SubagentConfig
+      );
+
+      if (!valid) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: message!,
+            },
+          ],
+          details: {},
+        };
+      }
 
       const workspace = join(subagentsPath, name);
 
@@ -173,13 +269,29 @@ export async function createSpawnTools({
         };
       }
 
-      await writeFile(join(workspace, 'SYSTEM.md'), systemPrompt);
+      const config = await getSubagentConfig(name);
+      await writeFile(
+        join(subagentsPath, name, 'config.json'),
+        JSON.stringify(
+          { ...config, emoji, systemPrompt, model, tools, execAllowedCommands },
+          null,
+          2
+        )
+      );
 
       return {
         content: [
           {
             type: 'text' as const,
-            text: `System prompt of agent "${name}" updated to "${systemPrompt}".`,
+            text: `
+                Updated "${name}"!
+                - Emoji: ${emoji}
+                - Runs on ${model.provider}/${model.id}
+                - Has access to ${tools.join(', ')} tools.
+                - Agent runs on \`main\` session. Workspace is: \`${workspace}\`.
+                - Use \`prompt_agent\` tool to prompt the agent.
+                - System Prompt: "${systemPrompt}"
+            `,
           },
         ],
         details: {},
@@ -204,10 +316,10 @@ export async function createSpawnTools({
     execute: async (_id, params, signal) => {
       const { name, prompt } = params as { name: string; prompt: string };
 
-      const workspace = join(subagentsPath, name);
-      const subagentConfig = createSubagentConfig(name, workspace);
+      const config = await getSubagentConfig(name);
+      const agentConfig = createAgentConfig(config);
 
-      if (!sessions.exists('main', subagentConfig)) {
+      if (!sessions.exists('main', agentConfig)) {
         return {
           content: [
             {
@@ -219,10 +331,9 @@ export async function createSpawnTools({
         };
       }
 
-      const systemPrompt = readFileSync(join(workspace, 'SYSTEM.md'), 'utf8');
-      const session = await sessions.load('main', subagentConfig, {
+      const session = await sessions.load('main', agentConfig, {
         getSystemPrompt(toolInstructions: string) {
-          return `${systemPrompt}\n\n${toolInstructions}`;
+          return `${config.systemPrompt}\n\n${toolInstructions}`;
         },
       });
 
@@ -279,13 +390,12 @@ export async function createSpawnTools({
           'Name of the subagent to fetch (must match a name from list_agents).',
       }),
     }),
-    execute: async (_id, params, signal) => {
+    execute: async (_id, params) => {
       const { name } = params as { name: string };
+      const config = await getSubagentConfig(name);
+      const agentConfig = createAgentConfig(config);
 
-      const workspace = join(subagentsPath, name);
-      const subagentConfig = createSubagentConfig(name, workspace);
-
-      if (!sessions.exists('main', subagentConfig)) {
+      if (!sessions.exists('main', agentConfig)) {
         return {
           content: [
             {
@@ -297,14 +407,11 @@ export async function createSpawnTools({
         };
       }
 
-      const systemPrompt = readFileSync(join(workspace, 'SYSTEM.md'), 'utf8');
-      const storage = new Storage(subagentConfig);
-
       let loaded = false;
       let working = false;
 
       try {
-        const loadedSession = sessions.get('main', subagentConfig);
+        const loadedSession = sessions.get('main', agentConfig);
         if (loadedSession) {
           loaded = true;
           working = loadedSession?.working ?? false;
@@ -320,11 +427,9 @@ export async function createSpawnTools({
           {
             type: 'text' as const,
             text: JSON.stringify({
-              name,
+              ...config,
               loaded,
               working,
-              model: subagentConfig.models[0].model.name,
-              systemPrompt,
             }),
           },
         ],
@@ -351,13 +456,13 @@ export async function createSpawnTools({
         })
       ),
     }),
-    execute: async (_id, params, signal) => {
+    execute: async (_id, params) => {
       const { name, limit } = params as { name: string; limit?: number };
 
-      const workspace = join(subagentsPath, name);
-      const subagentConfig = createSubagentConfig(name, workspace);
+      const config = await getSubagentConfig(name);
+      const agentConfig = createAgentConfig(config);
 
-      if (!sessions.exists('main', subagentConfig)) {
+      if (!sessions.exists('main', agentConfig)) {
         return {
           content: [
             {
@@ -369,7 +474,7 @@ export async function createSpawnTools({
         };
       }
 
-      const storage = new Storage(subagentConfig);
+      const storage = new Storage(agentConfig);
       const storedSession = await storage.load('main');
 
       const allMessages = storedSession.messages ?? [];
@@ -403,10 +508,11 @@ export async function createSpawnTools({
     }),
     execute: async (_id, params) => {
       const { name } = params as { name: string };
-      const workspace = join(subagentsPath, name);
-      const subagentConfig = createSubagentConfig(name, workspace);
 
-      if (!sessions.exists('main', subagentConfig)) {
+      const config = await getSubagentConfig(name);
+      const agentConfig = createAgentConfig(config);
+
+      if (!sessions.exists('main', agentConfig)) {
         return {
           content: [
             {
@@ -418,7 +524,7 @@ export async function createSpawnTools({
         };
       }
 
-      sessions.destroy('main', subagentConfig);
+      sessions.destroy('main', agentConfig);
 
       return {
         content: [
@@ -442,15 +548,60 @@ export async function createSpawnTools({
     destroyTool,
   ];
 
-  function createSubagentConfig(name: string, workspace: string): AgentConfig {
+  async function getSubagentConfig(name: string): Promise<SubagentConfig> {
+    const path = join(subagentsPath, name, 'config.json');
+
+    if (!(await exists(path))) {
+      throw new Error(`Subagent config file ${path} not found`);
+    }
+
+    const config = readFileSync(path, 'utf8');
+    return JSON.parse(config);
+  }
+
+  function createAgentConfig({
+    name,
+    model,
+    tools,
+    execAllowedCommands,
+  }: SubagentConfig): AgentConfig {
+    const modelConfig =
+      parentConfig.models.find(
+        (m) => m.model.id === model.id && m.model.provider === model.provider
+      ) ?? null;
+
+    if (!modelConfig) {
+      throw new Error(`Model ${model.id} not found in parent config.`);
+    }
+
     return {
       id: name,
-      workspace,
-      models: config.models,
+      workspace: join(subagentsPath, name),
+      models: [
+        {
+          role: 'primary',
+          model: modelConfig.model,
+          key: modelConfig.key,
+        },
+      ],
       tools: {
-        allow: ['web_search', 'web_fetch'],
-        webSearch: config.tools?.webSearch,
-        guard: config.tools?.guard,
+        allow: tools,
+        webSearch: tools.includes('web_search')
+          ? parentConfig.tools?.webSearch
+          : undefined,
+        guard: {
+          enabled: parentConfig.tools?.guard?.enabled ?? false,
+          exec: {
+            askPermission: false,
+            allowlist: execAllowedCommands?.reduce(
+              (acc, command) => ({
+                ...acc,
+                [command]: { allow: true },
+              }),
+              {}
+            ),
+          },
+        },
       },
     };
   }

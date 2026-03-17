@@ -3,9 +3,8 @@ import { getWorkspacePath } from '../../../utilities';
 import path from 'node:path';
 import fs from 'node:fs';
 import { minimatch } from 'minimatch';
-import { parseCommand } from './command-parser/command-parser';
-import type { ParsedCommandSegment } from './command-parser/command-parser';
-import { defaultExecAllowlist } from './default_exec_allowlist';
+import { parseCommand } from '../command-parser/command-parser';
+import type { ParsedCommandSegment } from '../command-parser/command-parser';
 
 export type AllowListEntry = { allow: boolean };
 export type AllowList = Record<string, AllowListEntry>;
@@ -61,17 +60,17 @@ export function getAllowlistForCommand(
   command: string,
   config: AgentConfig
 ): AllowListEntry {
-  // Start from the curated default allowlist, then let workspace- and
-  // config-level entries extend/override it.
-  //
-  // This means:
-  // - Defaults are always available out of the box (e.g. `cat`).
-  // - Workspace `exec_allowlist.json` can refine/override defaults.
-  // - Config-level `allowlist.exec` has the highest precedence and can
-  //   both add new entries and override defaults/workspace entries
-  //   (e.g. to explicitly deny `git status` even though it's allowed
-  //   by default).
-  let mergedAllowlist: AllowList = { ...defaultExecAllowlist };
+  const allowlist = getAllowlist(config);
+  return getAllowlistForCommandFromList(command, resolveCommands(allowlist));
+}
+
+export function getAllowlist(config: AgentConfig): AllowList {
+  let mergedAllowlist: AllowList = {};
+
+  const configAllowlist = config.tools?.guard?.exec?.allowlist ?? null;
+  if (configAllowlist) {
+    mergedAllowlist = { ...mergedAllowlist, ...configAllowlist };
+  }
 
   const workspaceAllowlistPath = path.join(
     getWorkspacePath(config),
@@ -85,23 +84,14 @@ export function getAllowlistForCommand(
     mergedAllowlist = { ...mergedAllowlist, ...workspaceAllowlistData };
   }
 
-  const configAllowlist = (config as AgentConfig & { allowlist?: AllowList })
-    .allowlist;
-  if (configAllowlist) {
-    mergedAllowlist = { ...mergedAllowlist, ...configAllowlist };
-  }
-
   if (Object.keys(mergedAllowlist).length === 0) {
-    return { allow: false };
+    return {};
   }
 
-  const normalizedAllowlist =
-    normalizeAllowlistWithResolvedCommands(mergedAllowlist);
-
-  return getAllowlistForCommandFromList(command, normalizedAllowlist);
+  return mergedAllowlist;
 }
 
-function normalizeAllowlistWithResolvedCommands(list: AllowList): AllowList {
+function resolveCommands(list: AllowList): AllowList {
   const normalized: AllowList = { ...list };
 
   for (const [rawKey, entry] of Object.entries(list)) {

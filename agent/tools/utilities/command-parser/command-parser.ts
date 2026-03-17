@@ -15,7 +15,7 @@ export type ParsedCommandSegment = {
   /**
    * The base command of this segment, usually argv[0], or null when empty.
    */
-  command: string | null;
+  command: string;
   /**
    * Absolute path to the resolved command binary when found via PATH lookup,
    * or null when it cannot be resolved. If the command already contains a
@@ -35,6 +35,10 @@ export type ParsedCommandSegment = {
 
 export type ParsedCommand = {
   /**
+   * The original command.
+   */
+  command: string;
+  /**
    * Parsed segments separated by |, ||, && or ; operators.
    */
   segments: ParsedCommandSegment[];
@@ -51,8 +55,9 @@ export type ParsedCommand = {
  */
 export function parseCommand(command: string): ParsedCommand {
   const trimmed = command.trim();
+
   if (!trimmed) {
-    return { segments: [], operators: [] };
+    return { command: '', segments: [], operators: [] };
   }
 
   const segments: string[] = [];
@@ -115,11 +120,12 @@ export function parseCommand(command: string): ParsedCommand {
     const commandWithSubcommands =
       commandWord && subcommands.length > 0
         ? `${commandWord} ${subcommands.join(' ')}`
-        : commandWord ?? '';
+        : (commandWord ?? '');
 
     return {
       raw: segment,
       argv,
+      args: argv.slice(1),
       command: commandWord,
       resolvedCommandPath,
       subcommands,
@@ -135,6 +141,7 @@ export function parseCommand(command: string): ParsedCommand {
   );
 
   return {
+    command,
     segments: parsedSegments,
     operators: normalizedOperators,
   };

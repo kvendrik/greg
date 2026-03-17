@@ -4,6 +4,7 @@ import { exists } from 'node:fs/promises';
 
 export type { Config } from './types';
 export { validate } from './validate';
+export * as allowlistSets from './allowlist-sets';
 
 export const path = join(import.meta.dirname, '..', '.greg.ts');
 

@@ -1,11 +1,10 @@
-import { join, dirname, basename } from 'node:path';
-import { getAllowlistForCommand } from './allowlist';
+import { getAllowlistForCommand, getAllowlist } from './allowlist';
 import { saveAlwaysAllowPreferenceForCommand } from './allowlist';
 import type { ToolContext } from '../../../types';
 import {
   parseCommand,
   type ParsedCommand,
-} from './command-parser/command-parser';
+} from '../command-parser/command-parser';
 import { state as gatewayState } from '../../../../gateway/gateway';
 
 type PolicyEvaluation = {
@@ -18,7 +17,7 @@ export async function evaluatePolicy(
   args: Object,
   context: ToolContext
 ): Promise<PolicyEvaluation> {
-  if (!context.config.tools?.guard?.enabled) {
+  if (context.config.tools?.guard.enabled === false) {
     return {
       allowed: true,
       reason: null,
@@ -27,7 +26,7 @@ export async function evaluatePolicy(
 
   switch (toolName) {
     case 'exec':
-      return evaluateExecPolicy(args as { command: string }, context);
+      return evaluateExecPolicy(args as { command: ParsedCommand }, context);
     default:
       return {
         allowed: true,
@@ -37,11 +36,10 @@ export async function evaluatePolicy(
 }
 
 async function evaluateExecPolicy(
-  { command }: { command: string },
+  { command }: { command: ParsedCommand },
   { config }: ToolContext
 ): Promise<PolicyEvaluation> {
-  const parsedCommand = parseCommand(command);
-  const pathSafeResult = evaluatePathSafety(parsedCommand);
+  const pathSafeResult = evaluatePathSafety(command);
 
   if (!pathSafeResult.safe) {
     return {
@@ -50,40 +48,47 @@ async function evaluateExecPolicy(
     };
   }
 
-  const options = getAllowlistForCommand(command, config);
+  const options = getAllowlistForCommand(command.command, config);
 
   if (!options.allow) {
-    if (!gatewayState.getReply) {
-      return {
-        allowed: false,
-        reason: 'No getReply() handler registered',
-      };
-    }
+    if (config.tools?.guard?.exec?.askPermission === true) {
+      if (!gatewayState.getReply) {
+        return {
+          allowed: false,
+          reason: 'No getReply() handler registered',
+        };
+      }
 
-    const message = `💂 Greg is asking to run a command.
+      const message = `💂 ${config.id} is asking to run a command.
 \`\`\`\n${command}\n\`\`\`\
 \n
-/deny - deny Greg to run this command
-/once - allow Greg to run this command this time
-/always - allow Greg to run this command always`;
+/deny - deny to run this command
+/once - allow to run this command this time
+/always - allow to always run this command`;
 
-    const reply = await gatewayState.getReply(message);
+      const reply = await gatewayState.getReply(message);
 
-    if (reply !== '/once' && reply !== '/always' && reply !== `/always_cmd`) {
-      const reason = `Command not allowed: ${command}. Permission was denied by the user. User replied: "${reply}".`;
+      if (reply !== '/once' && reply !== '/always' && reply !== `/always_cmd`) {
+        const reason = `Command not allowed: ${command.command}. Permission was denied by the user. User replied: "${reply}".`;
+        return {
+          allowed: false,
+          reason,
+        };
+      }
+
+      if (reply === '/always') {
+        await saveAlwaysAllowPreferenceForCommand(command.command, config);
+      }
+
       return {
-        allowed: false,
-        reason,
+        allowed: true,
+        reason: `Command allowed. Permission was granted by the user. User replied: "${reply}".`,
       };
-    }
-
-    if (reply === '/always') {
-      await saveAlwaysAllowPreferenceForCommand(command, config);
     }
 
     return {
-      allowed: true,
-      reason: `Command allowed. Permission was granted by the user. User replied: "${reply}".`,
+      allowed: false,
+      reason: `Command not allowed: \`${command.command}\`. Allowed commands: ${Object.keys(getAllowlist(config)).join(', ') || 'none'}.`,
     };
   }
 
