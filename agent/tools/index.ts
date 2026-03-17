@@ -78,7 +78,8 @@ export async function get(
     !deniedTools?.includes('subagents') &&
     allowedTools.includes('subagents')
   ) {
-    tools.push(...createSpawnTools(context));
+    const spawnTools = await createSpawnTools(context);
+    tools.push(...spawnTools);
   }
 
   return {

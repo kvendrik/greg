@@ -25,6 +25,8 @@ program
 async function main() {
   const toolContext: ToolContext = {
     config,
+    onBackgroundUpdate: (...args) =>
+      console.log('Background update:', JSON.stringify(args, null, 2)),
   };
   const tools = await getTools(new Date().toISOString(), toolContext);
 
@@ -71,11 +73,7 @@ async function main() {
       const signal = new AbortController().signal;
       try {
         const result = await tool.execute('cli', args, signal, () => {});
-        const text =
-          result.content?.find(
-            (c): c is { type: 'text'; text: string } => c.type === 'text'
-          )?.text ?? JSON.stringify(result);
-        console.log(text);
+        console.log(JSON.stringify(result, null, 2));
         process.exit(0);
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));

@@ -125,14 +125,13 @@ async function runServiceStart(
       env: {
         ...process.env,
         ...(await startScript.getEnv()),
-        GREG_CLIENT: client,
       },
     });
   } else {
     spawnSync('bun', ['run', startScript], {
       stdio: 'inherit',
       cwd: projectRoot,
-      env: { ...process.env, GREG_CLIENT: client },
+      env: { ...process.env },
     });
   }
 
@@ -159,9 +158,8 @@ function createServiceCommand(serviceConfig: ServiceConfig): Command {
     new Command('start')
       .description(serviceConfig.descriptions.start)
       .option('-d, --detached', 'Do not follow logs after start')
-      .option('-c, --client <client>', 'Specify a client to start')
       .action(async (options: { detached?: boolean; client?: string }) => {
-        await runServiceStart(serviceConfig, { client: options.client });
+        await runServiceStart(serviceConfig);
       })
   );
 

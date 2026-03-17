@@ -8,10 +8,7 @@ import { listCommands, parseCommands } from './commands';
 import { get as getTools } from './tools';
 import { formatDate, getWorkspacePath } from './utilities';
 import type { AgentConfig, ToolContext } from './types';
-import pc from 'picocolors';
-import { createLogger } from '../utilities/logger';
-
-const logger = createLogger('Agent');
+import { createLogger, type Logger } from '../utilities/logger';
 
 export type Callbacks = Partial<{
   onTurnStart: (prompt: PromptInput) => void;
@@ -41,12 +38,14 @@ export interface AgentOptions extends ToolContext {
 }
 
 export class Agent {
-  private abortController: AbortController | null = null;
-  private core: CoreAgent;
-  private lastModel: Model<Api> | null = null;
+  private readonly core: CoreAgent;
+  private readonly logger: Logger;
   private readonly primaryModel: Model<Api>;
   private readonly config: AgentConfig;
-  private callbacks: Map<string, Callbacks[]> = new Map();
+  private readonly callbacks: Map<string, Callbacks[]> = new Map();
+
+  private abortController: AbortController | null = null;
+  private lastModel: Model<Api> | null = null;
 
   private constructor(core: CoreAgent, config: AgentConfig) {
     this.core = core;
@@ -54,6 +53,7 @@ export class Agent {
       (model) => model.role === 'primary'
     )!.model;
     this.config = config;
+    this.logger = createLogger(`agent/${config.id}`);
   }
 
   get working(): boolean {
@@ -138,13 +138,13 @@ export class Agent {
 
     switch (options.channelId) {
       case 'all':
-        logger.info('Prompting all channels...');
+        this.logger.info('Prompting all channels...');
         break;
       case null:
-        logger.info('Prompting no channels...');
+        this.logger.info('Prompting no channels...');
         break;
       default:
-        logger.info(`Prompting channel "${options.channelId}"...`);
+        this.logger.info(`Prompting channel "${options.channelId}"...`);
         break;
     }
 
@@ -265,10 +265,10 @@ export class Agent {
       nowIso
     )}. User sent this prompt: "${parsed.cleanPrompt}"`;
 
-    console.info(pc.gray(`\n"${messageWithMeta}"`));
+    this.logger.info(`\n"${messageWithMeta}"`);
 
     const modelLabel = this.core.state.model?.name;
-    console.info(pc.gray(`Using ${modelLabel}.`));
+    this.logger.info(`Using ${modelLabel}.`);
 
     const unsubscribe = this.core.subscribe((event) => {
       switch (event.type) {
@@ -287,21 +287,19 @@ export class Agent {
             event.toolName,
             (event as { args?: Record<string, unknown> }).args ?? {}
           );
-          console.info(
-            pc.cyan(
-              `[${event.toolName}(${JSON.stringify((event as { args?: unknown }).args)})]`
-            )
+          this.logger.info(
+            `[${event.toolName}(${JSON.stringify((event as { args?: unknown }).args)})]`
           );
           break;
         case 'tool_execution_end':
-          console.info(pc.gray(JSON.stringify(event.result)));
+          this.logger.info(JSON.stringify(event.result));
           callbacks.onToolcallResult?.(
             event.toolName,
             JSON.stringify(event.result)
           );
           break;
         case 'agent_end':
-          console.info(pc.green('Done.\n'));
+          this.logger.info('Done.\n');
           callbacks.onTurnDone?.(event.messages);
           break;
         default:
@@ -355,10 +353,8 @@ export class Agent {
             return;
           }
 
-          console.info(
-            pc.yellow(
-              `${modelLabel} is overloaded. Trying again with ${fallbackModel.name}.`
-            )
+          this.logger.warn(
+            `${modelLabel} is overloaded. Trying again with ${fallbackModel.name}.`
           );
 
           this.core.setModel(fallbackModel);
@@ -404,10 +400,13 @@ export class Agent {
     const conversationStartIso = new Date().toISOString();
     const tools = await getTools(conversationStartIso, {
       config,
-      onBackgroundUpdate(update) {
-        logger.info(`[Background update] Prompting: "${update.message}"`);
+      onBackgroundUpdate: (update) => {
+        this.logger.info(`[Background update] Prompting: "${update.message}"`);
         agent.prompt(
-          { content: update.message, images: [] },
+          {
+            content: `[Update from background tool ${update.tool}]: "${update.message}"`,
+            images: [],
+          },
           { channelId: 'all' }
         );
       },

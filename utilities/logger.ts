@@ -1,6 +1,14 @@
 type Log = (string | object)[];
 
-export function createLogger(serviceId: string) {
+export interface Logger {
+  log: (...logs: Log) => void;
+  info: (...logs: Log) => void;
+  warn: (...logs: Log) => void;
+  error: (...logs: Log) => void;
+  write: (...logs: Log) => void;
+}
+
+export function createLogger(serviceId: string): Logger {
   const timeFormat = new Intl.DateTimeFormat('en-GB', {
     hour: '2-digit',
     minute: '2-digit',

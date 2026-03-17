@@ -886,23 +886,23 @@ export async function load(
     fs.mkdirSync(sessionsPath, { recursive: true });
   }
 
-  logger.info('Checking QMD health...');
-  if (!(await QMD.healthy())) {
-    logger.error(
-      'QMD is not healthy. Please run `bun run qmd status` manually.'
-    );
-    process.exit(1);
-  }
+  // logger.info('Checking QMD health...');
+  // if (!(await QMD.healthy())) {
+  //   logger.error(
+  //     'QMD is not healthy. Please run `bun run qmd status` manually.'
+  //   );
+  //   process.exit(1);
+  // }
 
-  logger.info('Loading session notes collection...');
-  const notesQmd = createNotesQmd(config);
-  await notesQmd.ensureCollection(notesPath);
-  await notesQmd.updateAndEmbed({ background: true });
+  // logger.info('Loading session notes collection...');
+  // const notesQmd = createNotesQmd(config);
+  // await notesQmd.ensureCollection(notesPath);
+  // await notesQmd.updateAndEmbed({ background: true });
 
-  logger.info('Loading session logs collection...');
-  const sessionsQmd = createSessionsQmd(config);
-  await sessionsQmd.ensureCollection(sessionsPath, { mask: '**/*.jsonl' });
-  await sessionsQmd.updateAndEmbed({ background: true });
+  // logger.info('Loading session logs collection...');
+  // const sessionsQmd = createSessionsQmd(config);
+  // await sessionsQmd.ensureCollection(sessionsPath, { mask: '**/*.jsonl' });
+  // await sessionsQmd.updateAndEmbed({ background: true });
 
   return {
     tools: buildTools(config),
