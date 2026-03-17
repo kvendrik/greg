@@ -4,7 +4,7 @@ import type { AllowList } from '../agent/tools/utilities/policy/allowlist';
  * Read-only commands only. No writes to disk, no fetching from the network.
  * Excludes e.g. curl, wget, git fetch, git pull, npm install.
  */
-export const readOnlyCommands: AllowList = {
+export const commonLocalCommands: AllowList = {
   'pwd *': { allow: true },
   'ls *': { allow: true },
   'echo *': { allow: true },

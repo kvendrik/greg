@@ -38,7 +38,6 @@ import { getModel } from '@mariozechner/pi-ai';
 const config: Config = {
   id: 'greg',
   workspace: '~/.greg',
-  port: '3000',
   models: [
     {
       role: 'primary',
