@@ -191,7 +191,7 @@ export async function createSpawnTools({
     name: 'prompt_agent',
     label: 'prompt agent',
     description:
-      'Send a prompt to a spawned subagent. The agent runs the prompt and returns a transcript of its response and tool calls. Use list_agents first to get valid agent names.',
+      'Send a prompt to a spawned subagent. This is fire-and-forget: the subagent runs the prompt asynchronously and will send a background update when done. Do NOT combine this with immediate polling of status or messages unless the user explicitly asks for it. Use list_agents first to get valid agent names.',
     parameters: Type.Object({
       name: Type.String({
         description:
@@ -272,7 +272,7 @@ export async function createSpawnTools({
     name: 'get_agent_status',
     label: 'get agent status',
     description:
-      'Fetch the full state of one spawned subagent: its system prompt and full message history. Use when you need to see what the agent was told, what it has done so far, or to inspect context before prompting it. Returns JSON: { name, systemPrompt, messages }. Use list_agents to get valid names.',
+      'Fetch the current status of a spawned subagent. Use ONLY when the user explicitly asks to inspect an agent (for example: “show me Scout’s status / system prompt”). Do NOT call this automatically after prompt_agent; subagents report back via background updates. Returns JSON: { name, loaded, working, model, systemPrompt }. Use list_agents to get valid names.',
     parameters: Type.Object({
       name: Type.String({
         description:
@@ -337,7 +337,7 @@ export async function createSpawnTools({
     name: 'get_agent_messages',
     label: 'get agent messages',
     description:
-      'Fetch all stored messages for a spawned sub-agent. Beware: by default this returns the entire session history, which can be large. Use the optional "limit" parameter to only retrieve the most recent N messages (tail).',
+      'Fetch stored messages for a spawned subagent when the USER explicitly requests to read that agent’s history (for example: “show me Scout’s last 5 messages”). Do NOT call this automatically after prompt_agent; prompting is fire-and-forget and the subagent will push a background update when it has something to report. Beware: by default this returns the entire session history, which can be large. Use the optional "limit" parameter to only retrieve the most recent N messages (tail).',
     parameters: Type.Object({
       name: Type.String({
         description:

@@ -397,11 +397,12 @@ export class Agent {
     onCompact,
     getSystemPrompt = getDefaultSystemPrompt,
   }: AgentOptions): Promise<Agent> {
+    const logger = createLogger(`agent/${config.id}`);
     const conversationStartIso = new Date().toISOString();
     const tools = await getTools(conversationStartIso, {
       config,
       onBackgroundUpdate: (update) => {
-        this.logger.info(`[Background update] Prompting: "${update.message}"`);
+        logger.info(`[Background update] Prompting: "${update.message}"`);
         agent.prompt(
           {
             content: `[Update from background tool ${update.tool}]: "${update.message}"`,
