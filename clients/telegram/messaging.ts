@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { type Context, InputFile } from 'grammy';
 import { bot, senderId } from './bot';
-import { synthesizeToBuffer } from '../../scripts/voice/speech';
+import { synthesizeToBuffer } from '../voice/speech';
 import { get as getConfig } from '../../config';
 import { convert } from 'telegram-markdown-v2';
 

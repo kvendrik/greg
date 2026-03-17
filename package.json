@@ -7,7 +7,7 @@
     "greg": "bin/greg.ts"
   },
   "scripts": {
-    "gateway": "pm2 start \"bun run scripts/start.ts\" --name greg:gateway --no-autorestart",
+    "gateway": "pm2 start \"bun run clients/telegram/start.ts\" --name greg:gateway --no-autorestart",
     "gateway:stop": "pm2 delete greg:gateway",
     "gateway:restart": "pm2 restart greg:gateway",
     "gateway:logs": "pm2 logs greg:gateway",

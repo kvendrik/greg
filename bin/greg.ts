@@ -375,6 +375,16 @@ program
   });
 
 program
+  .command('tui')
+  .description('Start an interactive TUI chat client')
+  .action(() => {
+    spawn('bun', ['run', path.join(projectRoot, 'clients/tui.ts')], {
+      stdio: 'inherit',
+      cwd: projectRoot,
+    }).on('exit', (code) => process.exit(code ?? 0));
+  });
+
+program
   .command('tools')
   .description('Use Greg’s tools directly from the command line')
   .allowUnknownOption()
