@@ -446,6 +446,7 @@ export class Agent {
         );
 
         if (didCompact) {
+          core.replaceMessages(newMessages);
           await onCompact?.(newMessages);
         }
 

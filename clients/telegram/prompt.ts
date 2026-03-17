@@ -83,17 +83,18 @@ export async function createPromper() {
     },
     onTurnStop: async () => {
       state.typingAction?.stop();
-      await sendMessage('Stopped.');
       state.buffer = '';
       logger.write(`stopped.\n`);
       state = emptyState();
     },
     onError: async (error: string) => {
+      state.typingAction?.stop();
+
       if (error) {
         console.error(pc.red(`Error: ${error}`));
-        state.typingAction?.stop();
         await sendMessage(error);
       }
+
       state = emptyState();
     },
   };
@@ -110,7 +111,7 @@ export async function createPromper() {
 
     logger.info(`\n\nPrompting: "${preview}"`);
 
-    typing?.start();
+    //typing?.start();
 
     state = {
       working: true,

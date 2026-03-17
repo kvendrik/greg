@@ -38,11 +38,11 @@ export const readOnlyCommands: AllowList = {
   'file *': { allow: true },
   'stat *': { allow: true },
   'readlink *': { allow: true },
-  'whoami': { allow: true },
+  whoami: { allow: true },
   'id *': { allow: true },
   'env *': { allow: true },
   'date *': { allow: true },
-  'hostname': { allow: true },
+  hostname: { allow: true },
   'uname *': { allow: true },
   'diff *': { allow: true },
   'cut *': { allow: true },
@@ -52,4 +52,46 @@ export const readOnlyCommands: AllowList = {
   'du *': { allow: true },
   'df *': { allow: true },
   'tree *': { allow: true },
+};
+
+export const clientCommands: AllowList = {
+  'greg telegram *': {
+    allow: true,
+  },
+};
+
+export const gogCommands: AllowList = {
+  'gog calendar *': {
+    allow: true,
+  },
+  'gog tasks *': {
+    allow: true,
+  },
+  'gog gmail messages search *': {
+    allow: true,
+  },
+  'gog gmail thread get *': {
+    allow: true,
+  },
+  'gog gmail get *': {
+    allow: true,
+  },
+  'gog gmail drafts create *': {
+    allow: true,
+  },
+  'gog gmail drafts update *': {
+    allow: true,
+  },
+  'gog gmail drafts list *': {
+    allow: true,
+  },
+};
+
+export const hubCommands: AllowList = {
+  'greg hub notion *': {
+    allow: true,
+  },
+  'greg hub strava *': {
+    allow: true,
+  },
 };

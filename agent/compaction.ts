@@ -96,7 +96,10 @@ export async function compactContext(
 
   const model = config.models.find((model) => model.role === 'primary')!.model;
   const contextWindow = model?.contextWindow ?? 128_000;
-  const softLimit = Math.floor(contextWindow * 0.8);
+
+  // compaction can take a long time so the soft limit is 60% of the context window
+  // so that it's faster. better to do it in chunks.
+  const softLimit = Math.floor(contextWindow * 0.6);
   const currentTokens = deriveContextTokens(messages);
 
   if (currentTokens <= softLimit) {
@@ -110,12 +113,15 @@ export async function compactContext(
     `Current context size ${currentTokens} tokens above ${softLimit} tokens`
   );
 
-  const compactedMessages = await compact(messages, {
+  const lastMessage = messages[messages.length - 1];
+  const allWithoutLastMessage = messages.slice(0, -1);
+
+  const compactedMessages = await compact(allWithoutLastMessage, {
     config,
     signal: effectiveSignal,
   });
 
-  return { messages: compactedMessages, didCompact: true };
+  return { messages: [...compactedMessages, lastMessage], didCompact: true };
 }
 
 export async function compact(

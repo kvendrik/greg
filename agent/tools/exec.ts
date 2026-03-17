@@ -16,15 +16,6 @@ export async function runExec(
   const parsed = parseCommand(command);
   const policy = await evaluatePolicy('exec', { command: parsed }, context);
 
-  if (parsed.segments.length === 0) {
-    return 'Empty command.';
-  }
-
-  if (parsed.segments.length > 1) {
-    return 'Command chaining (&&, |, ;) is not supported. Run one command at a time.';
-  }
-
-  const primarySegment = parsed.segments[0]!;
   let resultPrefix = '';
 
   if (!policy.allowed) {
@@ -37,9 +28,9 @@ export async function runExec(
     const output: string[] = [];
     const errorOutput: string[] = [];
 
-    const child = spawn(primarySegment.command!, primarySegment.argv.slice(1), {
+    const child = spawn(command, {
       stdio: ['inherit', 'pipe', 'pipe'],
-      shell: false,
+      shell: true,
     });
 
     child.unref();
@@ -118,11 +109,10 @@ export function getExecTools(context: ToolContext): AgentTool[] {
     {
       name: 'exec',
       label: 'exec',
-      description: `Run a single allowlisted command. One command per call only (no chaining with &&, |, or ;). Shell redirection (>, >>) is not supported—output goes to the tool result. Only commands on the exec allowlist are permitted.`,
+      description: `Run a command`,
       parameters: Type.Object({
         command: Type.String({
-          description:
-            'A single command and its arguments, e.g. "git status" or "ls -la". No pipes, no &&/;, no > or >>.',
+          description: 'A command and its arguments',
         }),
       }),
       execute: async (_id, params, signal, _onUpdate) => {

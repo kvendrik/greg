@@ -1,10 +1,17 @@
 import { Type } from '@sinclair/typebox';
 import { join } from 'node:path';
-import { mkdir, exists, writeFile, readdir } from 'node:fs/promises';
+import {
+  mkdir,
+  exists,
+  writeFile,
+  readdir,
+  rename,
+  unlink,
+} from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { customAlphabet } from 'nanoid';
-import { getModel } from '@mariozechner/pi-ai';
+import { getAllowlist } from '../utilities/policy/allowlist';
 import type { AgentConfig } from '../../index';
 import type { ToolContext } from '../../types';
 import * as sessions from '../../../gateway/sessions';
@@ -28,7 +35,7 @@ interface SubagentConfig {
   execAllowedCommands?: string[];
 }
 
-function subagentConfigSchema(config: AgentConfig) {
+function subagentConfigSchema(parentConfig: AgentConfig) {
   const schema = Type.Object({
     name: Type.String({
       description:
@@ -43,7 +50,7 @@ function subagentConfigSchema(config: AgentConfig) {
         "Full system prompt that defines the sub-agent's role, goals, and constraints. This is the only instruction the sub-agent gets; be specific.",
     }),
     model: Type.Enum(
-      config.models.reduce((acc, m) => {
+      parentConfig.models.reduce((acc, m) => {
         const label = m.role
           ? `${m.model.provider}/${m.model.name} (${m.role})`
           : `${m.model.provider}/${m.model.name} (${m.model.id})`;
@@ -80,14 +87,30 @@ function subagentConfigSchema(config: AgentConfig) {
 
   return {
     schema,
-    validate(config: SubagentConfig) {
-      if (config.tools.includes('exec') && !config.execAllowedCommands) {
+    validate(subagentConfig: SubagentConfig) {
+      if (
+        subagentConfig.tools.includes('exec') &&
+        !subagentConfig.execAllowedCommands
+      ) {
         return {
           valid: false,
           message:
             'execAllowedCommands is required when allowing the exec tool.',
         };
       }
+
+      if (subagentConfig.execAllowedCommands) {
+        const allowlist = getAllowlist(parentConfig);
+        for (const command of subagentConfig.execAllowedCommands) {
+          if (!allowlist[command]) {
+            return {
+              valid: false,
+              message: `Command "${command}" is not allowed. Allowed commands: ${Object.keys(allowlist).join(', ')}`,
+            };
+          }
+        }
+      }
+
       return { valid: true, message: null };
     },
   };
@@ -168,6 +191,7 @@ export async function createSpawnTools({
             type: 'text' as const,
             text: `
                 Spawned!
+
                 - Emoji: ${emoji}
                 - Created agent with name ${name}.
                 - Use \`prompt_agent\` tool to prompt the agent.
@@ -175,6 +199,8 @@ export async function createSpawnTools({
                 - Has access to ${tools.join(', ')} tools.
                 - Agent runs on \`main\` session. Workspace is: \`${workspace}\`.
                 - System Prompt: "${systemPrompt}"
+
+                Give the user a full overview of the agents details.
             `,
           },
         ],
@@ -222,6 +248,82 @@ export async function createSpawnTools({
           {
             type: 'text' as const,
             text: JSON.stringify(agents),
+          },
+        ],
+        details: {},
+      };
+    },
+  };
+
+  const renameTool: AgentTool = {
+    name: 'rename_agent',
+    label: 'rename agent',
+    description:
+      'Rename an existing spawned subagent. Updates the agent’s directory and config name while preserving its workspace contents.',
+    parameters: Type.Object({
+      oldName: Type.String({
+        description:
+          'Current name of the subagent to rename (must match a name returned by list_agents).',
+      }),
+      newName: Type.String({
+        description:
+          'New unique name for the subagent. Must not already exist.',
+      }),
+    }),
+    execute: async (_id: string, params) => {
+      const { oldName, newName } = params as {
+        oldName: string;
+        newName: string;
+      };
+
+      const oldWorkspace = join(subagentsPath, oldName);
+
+      if (!(await exists(oldWorkspace))) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Agent with name ${oldName} doesn’t exist.`,
+            },
+          ],
+          details: {},
+        };
+      }
+
+      const newWorkspace = join(subagentsPath, newName);
+
+      if (await exists(newWorkspace)) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Agent with name ${newName} already exists.`,
+            },
+          ],
+          details: {},
+        };
+      }
+
+      const currentConfig = await getSubagentConfig(oldName);
+
+      await rename(oldWorkspace, newWorkspace);
+      await writeFile(
+        join(newWorkspace, 'config.json'),
+        JSON.stringify(
+          {
+            ...currentConfig,
+            name: newName,
+          },
+          null,
+          2
+        )
+      );
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Renamed agent "${oldName}" to "${newName}"`,
           },
         ],
         details: {},
@@ -509,10 +611,7 @@ export async function createSpawnTools({
     execute: async (_id, params) => {
       const { name } = params as { name: string };
 
-      const config = await getSubagentConfig(name);
-      const agentConfig = createAgentConfig(config);
-
-      if (!sessions.exists('main', agentConfig)) {
+      if (!(await exists(join(subagentsPath, name)))) {
         return {
           content: [
             {
@@ -524,13 +623,13 @@ export async function createSpawnTools({
         };
       }
 
-      sessions.destroy('main', agentConfig);
+      await unlink(join(subagentsPath, name));
 
       return {
         content: [
           {
             type: 'text' as const,
-            text: `Destroyed agent "${name}". Its session data has been removed.`,
+            text: `Destroyed agent "${name}"`,
           },
         ],
         details: {},
@@ -544,6 +643,7 @@ export async function createSpawnTools({
     promptTool,
     getTool,
     getMessagesTool,
+    renameTool,
     updateTool,
     destroyTool,
   ];
