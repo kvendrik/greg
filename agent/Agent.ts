@@ -34,8 +34,10 @@ type Image = {
 
 export type PromptInput = { content: string; images: Image[] };
 
-interface AgentOptions extends ToolContext {
+export interface AgentOptions extends ToolContext {
   messages: AgentMessage[];
+  onCompact?: (newMessages: AgentMessage[]) => Promise<void>;
+  getSystemPrompt?: (toolInstructions: string, config: AgentConfig) => string;
 }
 
 export class Agent {
@@ -68,6 +70,10 @@ export class Agent {
       ...(this.callbacks.get(channelId) ?? []),
       callbacks,
     ]);
+  }
+
+  unsubscribe(channelId: string) {
+    this.callbacks.delete(channelId);
   }
 
   private getCallbacks(
@@ -122,6 +128,7 @@ export class Agent {
     options: {
       channelId: 'all' | string | null;
       callbacks?: Partial<Callbacks>;
+      signal?: AbortSignal;
     }
   ): Promise<void> {
     const callbacks =
@@ -233,6 +240,21 @@ export class Agent {
     }
 
     this.abortController = new AbortController();
+
+    if (options.signal?.aborted) {
+      this.abortController.abort();
+      this.abortController = null;
+      callbacks.onTurnStop?.();
+      return;
+    }
+
+    options.signal?.addEventListener(
+      'abort',
+      () => {
+        this.abortController?.abort();
+      },
+      { once: true }
+    );
 
     this.core.setModel(model);
     this.lastModel = model;
@@ -377,11 +399,19 @@ export class Agent {
     config,
     messages,
     onCompact,
-  }: AgentOptions & {
-    onCompact(newMessages: AgentMessage[]): Promise<void>;
-  }): Promise<Agent> {
+    getSystemPrompt = getDefaultSystemPrompt,
+  }: AgentOptions): Promise<Agent> {
     const conversationStartIso = new Date().toISOString();
-    const tools = await getTools(conversationStartIso, { config });
+    const tools = await getTools(conversationStartIso, {
+      config,
+      onBackgroundUpdate(update) {
+        logger.info(`[Background update] Prompting: "${update.message}"`);
+        agent.prompt(
+          { content: update.message, images: [] },
+          { channelId: 'all' }
+        );
+      },
+    });
 
     const primaryModel = config.models.find(
       (model) => model.role === 'primary'
@@ -416,18 +446,19 @@ export class Agent {
         );
 
         if (didCompact) {
-          await onCompact(newMessages);
+          await onCompact?.(newMessages);
         }
 
         return newMessages;
       },
     });
 
-    return new Agent(core, config);
+    const agent = new Agent(core, config);
+    return agent;
   }
 }
 
-function getSystemPrompt(
+function getDefaultSystemPrompt(
   toolInstructions: string,
   config: AgentConfig
 ): string {

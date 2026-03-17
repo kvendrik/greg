@@ -1,9 +1,11 @@
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { HeartbeatOptions } from '../gateway/heartbeat/types';
 export type { Config as BaseConfig } from '../config';
+import type { BackgroundUpdate as SubAgentBackgroundUpdate } from './tools/spawn/spawn';
 
 export interface ToolContext {
   config: AgentConfig;
+  onBackgroundUpdate: (update: SubAgentBackgroundUpdate) => void;
 }
 
 type OptionalToolId =
@@ -11,7 +13,10 @@ type OptionalToolId =
   | 'exec'
   | 'browser_use'
   | 'web_search'
-  | 'web_fetch';
+  | 'web_fetch'
+  | 'subagents'
+  | 'skills'
+  | 'files';
 
 export interface AgentConfig {
   /**
@@ -66,9 +71,13 @@ export interface AgentConfig {
   )[];
   tools?: {
     /**
-     * Deny optional tools. Skill and file tools are always allowed.
+     * Deny tools.
      */
     deny?: OptionalToolId[];
+    /**
+     * Allow tools.
+     */
+    allow?: OptionalToolId[];
     browser?: {
       /**
        * Enables the browser automation tool using Browser Use

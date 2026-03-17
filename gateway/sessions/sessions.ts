@@ -1,71 +1,101 @@
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import { Agent, type Callbacks } from '../../agent';
-import * as storage from './storage/storage';
+import {
+  Agent,
+  type Callbacks,
+  type AgentConfig,
+  type AgentOptions,
+} from '../../agent';
+import { Storage } from './storage/storage';
 import { createLogger } from '../../utilities/logger';
 import { get as getConfig } from '../../config';
+import { getWorkspacePath } from '../../agent/utilities';
 
-const config = await getConfig();
-
+const globalConfig = await getConfig();
 const logger = createLogger('Sessions Manager');
 
 export type Session = {
   id: string;
+  working: typeof Agent.prototype.working;
   subscribe: typeof Agent.prototype.subscribe;
+  unsubscribe: typeof Agent.prototype.unsubscribe;
   abort: typeof Agent.prototype.abort;
   prompt: typeof Agent.prototype.prompt;
-  channels: string[];
 };
 
-const loadedSessions = new Map<string, Session>();
+// {[sessionId: string]: { [resolvedWorkspacePath: string]: Session }}
+const loadedSessions: Map<string, Map<string, Session>> = new Map();
 
-export function list(): Array<{
-  id: string;
-  loaded: boolean;
-  channels?: string[];
-}> {
-  return storage.list().map((sessionId) => {
-    const loadedSession = loadedSessions.get(sessionId);
-    return loadedSession
-      ? {
-          id: sessionId,
-          loaded: true,
-          channels: loadedSession.channels,
-        }
-      : {
-          id: sessionId,
-          loaded: false,
-        };
-  });
+export function list(config: AgentConfig = globalConfig): string[] {
+  const storage = new Storage(config);
+  return storage.list();
 }
 
-export function exists(sessionId: string): boolean {
+export function exists(
+  sessionId: string,
+  config: AgentConfig = globalConfig
+): boolean {
+  const storage = new Storage(config);
   return storage.exists(sessionId);
 }
 
-export function destroy(sessionId: string): void {
-  if (loadedSessions.has(sessionId)) {
-    const session = loadedSessions.get(sessionId)!;
+export function destroy(
+  sessionId: string,
+  config: AgentConfig = globalConfig
+): void {
+  const storage = new Storage(config);
+  const workspacePath = getWorkspacePath(config);
+  const session = loadedSessions.get(workspacePath)?.get(sessionId) ?? null;
+
+  if (session) {
     session.abort();
-    loadedSessions.delete(sessionId);
+    loadedSessions.get(workspacePath)?.delete(sessionId);
   }
+
   return storage.destroy(sessionId);
 }
 
-export function get(sessionId: string): Session {
-  if (!loadedSessions.has(sessionId)) {
+export function get(
+  sessionId: string,
+  config: AgentConfig = globalConfig
+): Session {
+  const workspacePath = getWorkspacePath(config);
+  const session = loadedSessions.get(workspacePath)?.get(sessionId) ?? null;
+
+  if (!session) {
     throw new Error(`Session ${sessionId} not found`);
   }
-  return loadedSessions.get(sessionId)!;
+
+  return session;
 }
 
-export async function load(sessionId: string): Promise<Session> {
-  if (loadedSessions.has(sessionId)) {
-    return loadedSessions.get(sessionId)!;
+export async function create(
+  sessionId: string,
+  config: AgentConfig = globalConfig
+): Promise<void> {
+  const storage = new Storage(config);
+  await storage.create(sessionId);
+}
+
+export async function load(
+  sessionId: string,
+  config: AgentConfig = globalConfig,
+  options: { getSystemPrompt?: AgentOptions['getSystemPrompt'] } = {}
+): Promise<Session> {
+  const workspacePath = getWorkspacePath(config);
+  const loadedSession =
+    loadedSessions.get(workspacePath)?.get(sessionId) ?? null;
+
+  if (loadedSession) {
+    return loadedSession;
   }
 
-  const sessionStorage = await (storage.exists(sessionId)
-    ? storage.load(sessionId)
-    : storage.create(sessionId));
+  const storage = new Storage(config);
+
+  if (!storage.exists(sessionId)) {
+    throw new Error(`Session ${sessionId} not found`);
+  }
+
+  const sessionStorage = await storage.load(sessionId);
 
   logger.info(
     `[${sessionId}] Creating agent with ${sessionStorage.messages.length} messages...`
@@ -77,24 +107,27 @@ export async function load(sessionId: string): Promise<Session> {
     async onCompact(newMessages: AgentMessage[]) {
       await storage.replace(sessionId, newMessages);
     },
+    getSystemPrompt: options.getSystemPrompt,
   });
 
   logger.info(`[${sessionId}] Created agent. Session ready.`);
 
-  const tools: Session = {
+  const session: Session = {
     id: sessionId,
+    working: agent.working,
     subscribe(channelId: string, callbacks: Callbacks) {
-      if (!this.channels.includes(channelId)) {
-        this.channels.push(channelId);
-      }
       return agent.subscribe(channelId, sessionStorage.proxy(callbacks, agent));
     },
+    unsubscribe: agent.unsubscribe.bind(agent),
     abort: agent.abort.bind(agent),
     prompt: agent.prompt.bind(agent),
-    channels: [],
   };
 
-  loadedSessions.set(sessionId, tools);
+  if (!loadedSessions.has(workspacePath)) {
+    loadedSessions.set(workspacePath, new Map());
+  }
 
-  return tools;
+  loadedSessions.get(workspacePath)!.set(sessionId, session);
+
+  return session;
 }

@@ -158,11 +158,14 @@ session.subscribe('my-custom-channel', {
   onError: async (error: string) => {},
 });
 
-await session.prompt('Hey Greg!', {
-  // can also be set to `all` to broadcast a result
-  // to all channels subscribed to the session
-  channelId: 'my-custom-channel',
-});
+await session.prompt(
+  { content: 'Hey Greg!', images: [] },
+  {
+    // can also be set to `all` to broadcast a result
+    // to all channels subscribed to the session
+    channelId: 'my-custom-channel',
+  }
+);
 
 process.once('SIGINT', shutdown);
 process.once('SIGTERM', shutdown);

@@ -99,9 +99,10 @@ async function runServiceStatus(
 
 async function runServiceStart(
   serviceConfig: ServiceConfig,
-  options: { exitIfAlreadyRunning?: boolean } = {}
+  options: { exitIfAlreadyRunning?: boolean; client?: string } = {}
 ): Promise<void> {
-  const { exitIfAlreadyRunning = true } = options;
+  const { exitIfAlreadyRunning = true, client } = options;
+
   if (serviceConfig.checkPm2BeforeStart) {
     const statusResult = spawnSync(
       'bunx',
@@ -114,20 +115,31 @@ async function runServiceStart(
       return;
     }
   }
+
   const startScript = serviceConfig.scripts.start;
+
   if (typeof startScript === 'object') {
     spawnSync('bun', ['run', startScript.cmd], {
       stdio: 'inherit',
       cwd: projectRoot,
-      env: { ...process.env, ...(await startScript.getEnv()) },
+      env: {
+        ...process.env,
+        ...(await startScript.getEnv()),
+        GREG_CLIENT: client,
+      },
     });
   } else {
     spawnSync('bun', ['run', startScript], {
       stdio: 'inherit',
       cwd: projectRoot,
-      env: { ...process.env },
+      env: { ...process.env, GREG_CLIENT: client },
     });
   }
+
+  spawnSync('bun', ['run', serviceConfig.scripts.logs], {
+    stdio: 'inherit',
+    cwd: projectRoot,
+  });
 }
 
 function runServiceStop(serviceConfig: ServiceConfig): number | null {
@@ -147,15 +159,9 @@ function createServiceCommand(serviceConfig: ServiceConfig): Command {
     new Command('start')
       .description(serviceConfig.descriptions.start)
       .option('-d, --detached', 'Do not follow logs after start')
-      .action(async (options: { detached?: boolean }) => {
-        await runServiceStart(serviceConfig);
-
-        if (options.detached) return;
-
-        spawnSync('bun', ['run', serviceConfig.scripts.logs], {
-          stdio: 'inherit',
-          cwd: projectRoot,
-        });
+      .option('-c, --client <client>', 'Specify a client to start')
+      .action(async (options: { detached?: boolean; client?: string }) => {
+        await runServiceStart(serviceConfig, { client: options.client });
       })
   );
 
@@ -180,11 +186,6 @@ function createServiceCommand(serviceConfig: ServiceConfig): Command {
       .action(async () => {
         runServiceStop(serviceConfig);
         await runServiceStart(serviceConfig);
-        spawnSync('bun', ['run', serviceConfig.scripts.logs], {
-          stdio: 'inherit',
-          cwd: projectRoot,
-        });
-        process.exit(0);
       })
   );
 
