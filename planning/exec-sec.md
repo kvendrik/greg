@@ -4,7 +4,7 @@
 
 ### Score
 
-**9 / 10** for Greg-as-used. Greg’s logs show constant `&&`, pipes, redirects, `$()` and temp-file flows; Option 2 keeps that capability but moves it into structured primitives, removing shell-string quoting/injection as the default failure mode and making enforcement feasible.
+**9.6 / 10** for Greg-as-used (once implemented). Matches OpenClaw’s shape (structured exec + OS sandbox + file tools) with a **declarative** argv-profile layer; remaining delta is SBPL/tool-layer parity in practice.
 
 ## Non-negotiables
 
@@ -12,6 +12,11 @@
 - **Allowlist is resolved paths** (no basename matching).
 - **Every subprocess tree runs under `sandbox-exec`** (exec + pipeline segments).
 - **Writes go through file tools** (workspace + `/tmp/greg/**`), not shell redirects.
+
+## Modes (OpenClaw-style)
+
+- **Default mode (silent)**: run only if it passes allowlisted bin + argv profile + FS policy + sandbox. Otherwise deny.
+- **Ask mode (interactive)**: if denied and `tools.guard.ask:true`, ask for `/once`. If approved, run once (still sandboxed).
 
 ## What “good” looks like (architecture)
 
@@ -21,6 +26,79 @@
   - Output capture is explicit (final output and/or per-segment), with size limits.
 - **File tools**: the only way to write files (including temp files). Prefer a consistent scratch root: `/tmp/greg/**`.
 - **OS layer**: generate SBPL from the same path policy and wrap processes with `sandbox-exec`.
+
+## Implementation order (LLM checklist)
+
+0. **Decide escape hatch**
+   - Prefer none. If needed, make it **approval-gated**, **default-deny metasyntax**, and still run under **`sandbox-exec`** + FS policy.
+1. **Config + types**
+   - Add `tools.guard.exec.allowResolvedBins` + `tools.guard.exec.profiles`.
+   - Validate config at startup (unknown profile name, missing profile, invalid flag spec → fail closed).
+   - Define FS policy defaults: workspace `rw` + `/tmp/greg/** rw` + protected subtrees (most-specific-wins).
+2. **Policy evaluation (single place)**
+   - Implement in `agent/tools/exec/policy.ts` and make it the one source of truth for both `execve` and `execve_pipeline`.
+3. **Validation order (exec + each pipeline step)**
+   - Resolve `command` → absolute path.
+   - Check resolved path exists in `allowResolvedBins` (else deny).
+   - Load profile → parse/validate argv (`allowFlags` strict default-deny + `allowSubcommands`).
+   - Enforce FS policy for `cwd` + any `value.type:"path"` values (workspace + `/tmp/greg/**` + protected subtrees).
+4. **Execution hardening**
+   - Wrap subprocess tree in `sandbox-exec` using SBPL generated from the same FS policy.
+   - Apply env hardening defaults (PATH override/ignore, strip `DYLD_*`, validate/default `cwd`).
+5. **Ask mode**
+   - If denied and `tools.guard.ask:true`, prompt for `/once` and allow exactly once; still run through step 4.
+6. **Capability migration (reduce shell-like patterns)**
+   - Replace redirect/temp-file patterns with file tools; standardize scratch under `/tmp/greg/**`.
+   - Ensure pipelines cover common filters (stderr merge modes + output caps) without shell metasyntax.
+7. **Flip gates**
+   - Enable `sandbox-exec` by default only after the acceptance tests pass under sandbox.
+
+## OpenClaw-style “per-binary argv profiles” (Greg translation)
+
+Enforce in `agent/tools/exec/policy.ts`, keyed by **resolved binary path**. For `execve_pipeline`, apply profiles **per step**.
+
+Profile schema (generic, no hardcoded validators):
+
+- **`allowSubcommands`**: `"all"` or list of token-path arrays (e.g. `["remote","add"]`).
+- **`allowFlags`**: flag allowlist; _only_ listed flags are allowed (with optional value constraints). No `denyFlags` support (default-deny).
+
+### Suggested config shape (conceptual)
+
+Replace string-glob “allowed commands” with:
+
+- `allowResolvedBins[resolvedPath] -> profileName`
+- `profiles[profileName] -> { allowSubcommands, allowFlags }`
+
+Example:
+
+```json
+{
+  "tools": {
+    "guard": {
+      "enabled": true,
+      "ask": true,
+      "exec": {
+        "allowResolvedBins": {
+          "/usr/bin/git": { "profile": "git_safe" },
+          "/usr/bin/head": { "profile": "head_safe" }
+        },
+        "profiles": {
+          "git_safe": {
+            "allowSubcommands": [["status"], ["diff"], ["remote", "add"]],
+            "allowFlags": { "--no-pager": { "takesValue": false } }
+          },
+          "head_safe": {
+            "allowSubcommands": "all",
+            "allowFlags": { "-n": { "takesValue": true, "value": { "type": "int", "min": 1, "max": 100 } } }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Note: because profiles are `allowFlags`-only, any unlisted flag is denied (e.g. `--work-tree`, `-C`, `--bytes`).
 
 ## Policy model (fits how Greg actually works)
 
@@ -33,84 +111,33 @@
   - allowlist by **resolved absolute path**
   - treat runtimes/interpreters (`bash`, `sh`, `node`, `python`, `bun`) as higher risk; keep them tight / approval-gated where possible
 
-## Phased execution checklist (minimize breakage)
+## Parsing + validation semantics (make this unambiguous)
 
-- **Phase 0 (inventory, no behavior change)**
-  - enumerate top binaries from real usage (git, grep, awk, sed, head/tail/wc, bun/node/python, project CLIs)
-  - build initial resolved-path allowlist
-  - define initial FS policy: workspace + `/tmp/greg/**`
-  - add `sandbox-exec` wrapper behind a flag (off)
+### Algorithm (generic)
 
-- **Phase 1 (pipelines without shell)**
-  - implement pipeline tool
-  - migrate common patterns: `| head`, `| tail`, `| grep`, and “merge stderr then filter” (`2>&1 | head`)
-  - make stderr handling explicit per segment (capture/merge/ignore)
+Given `args` + profile:
 
-- **Phase 2 (replace redirects + temp files)**
-  - replace `> /tmp/x` with file-write tool under `/tmp/greg/**`
-  - replace `$(cat /tmp/x)` with file-read tool + pass content/bytes explicitly to next tool
+- Parse left→right; support `--flag`, `--flag=value`, `-f`, `-f value`.
+- Bundled `-abc` only if each flag exists in `allowFlags` with `takesValue:false`, else reject.
+- Any flag not in `allowFlags` → reject.
+- For `takesValue:true`, consume value (`--flag=value` or next token) and validate:
+  - `type:"int"`: enforce `min/max`
+  - `type:"path"`: resolve vs `cwd` (or workspace) and enforce FS roots + protected subtrees
+- Subcommand tokens = `args` with recognized flags (+their values) removed. Enforce:
+  - `"all"` or prefix-match any listed token-path
 
-- **Phase 3 (turn on `sandbox-exec`)**
-  - generate SBPL from FS policy (prefer exact and `/prefix/**` patterns)
-  - wrap every exec + pipeline segment with `sandbox-exec -p <profile> …`
-  - verify baseline allowances needed for common tools don’t regress (git, grep, etc.)
+## Subprocess environment hardening (macOS)
 
-- **Phase 4 (escape hatches)**
-  - if a raw shell command path must exist: keep it **approval-gated**, still `sandbox-exec` wrapped, and default-deny metasyntax
+Even with resolved-bin allowlisting, subprocess behavior can be influenced by env. Defaults should be safe:
 
-## Tests (must match real failure modes)
+- **PATH**: ignore/override user-provided `env.PATH` (set a minimal known-safe PATH, or require absolute resolved bins only).
+- **Loader variables**: reject/strip `DYLD_*` variables (macOS), plus other exec-affecting variables as needed.
+- **CWD**: default to workspace root when `cwd` not provided; if provided, enforce it is under allowed roots.
+
+## Acceptance tests (must match real failure modes)
 
 - **Bare filename**: within workspace allowed; outside denied.
 - **Non-argv effects**: e.g. extraction/compilation can’t write outside allowed roots.
 - **Pipeline semantics**: stdout/stderr behavior matches expected “merge then filter”.
 - **Protected subtree**: repo writable but `repo/tools/**` not writable; git still works.
 
-## TODO (implementation checklist)
-
-- [x] Confirm macOS-only rollout; document out-of-scope platforms for now
-- [ ] Decide whether a raw shell escape hatch exists; if yes, make it approval-gated and default-deny metasyntax
-
-- [ ] Define rule precedence for FS policy (e.g. “most specific match wins”) and test it with protected-subtree cases
-- [ ] Implement/solidify filesystem policy defaults: workspace `rw`, `/tmp/greg/** rw`, deny everything else
-- [ ] Add protected-subtree denies (e.g. allow repo writes but deny `repo/tools/**`)
-
-- [ ] Build resolved-binary allowlist (absolute resolved paths only; no basenames)
-- [ ] Decide posture for interpreters/runtimes (`bash`, `sh`, `node`, `python`, `bun`): tight allowlist vs approval-gated
-
-- [ ] Ensure exec runs only `{ bin, args[] }` with `shell:false` semantics (no command strings)
-- [ ] Resolve `bin` and enforce allowlist before spawn
-- [ ] Make stdout/stderr handling explicit (capture/merge/ignore) and enforce output limits
-- [ ] Define the supported IO matrix for exec:
-  - [ ] capture stdout only
-  - [ ] capture stderr only
-  - [ ] capture both separately
-  - [ ] merge stderr→stdout (equivalent to shell `2>&1`)
-  - [ ] ignore stderr (equivalent to shell `2>/dev/null`)
-
-- [ ] Implement pipeline tool with `segments: Array<{ bin, args[] }>` and explicit wiring (no shell)
-- [ ] Enforce allowlist per pipeline segment (resolved binary)
-- [ ] Support “merge stderr then filter” workflows without `2>&1` syntax (pipeline-level `stderrMode: 'merge'`)
-- [ ] Define pipeline DoD (parity targets):
-  - [ ] `cmd | head -n N`
-  - [ ] `cmd | tail -n N`
-  - [ ] `cmd | grep ...`
-  - [ ] `cmd` with merged stderr piped into a filter (the `2>&1 | head` class)
-  - [ ] output-size caps apply to intermediate and final outputs
-
-- [ ] Route all file writes through file tools (remove reliance on shell redirects)
-- [ ] Standardize scratch/temp under `/tmp/greg/**` (create/read/write)
-- [ ] Migrate common patterns: `> /tmp/x` and `$(cat /tmp/x)` to file tools + explicit inputs
-
-- [ ] Implement SBPL generation from FS policy (prefer exact and `/prefix/**` patterns)
-- [ ] Wrap every exec/pipeline subprocess tree with `sandbox-exec -p <profile> …`
-- [ ] Validate baseline allowances for common tools (git/grep/etc.) without widening FS access
-- [ ] Define sandbox DoD (when it’s safe to flip default on):
-  - [ ] end-to-end tests pass under sandbox (no “it works unsandboxed only” gaps)
-  - [ ] `sandbox-exec` failures are surfaced as structured, user-facing errors (not stack traces)
-  - [ ] policy patterns used for SBPL stay “strong” (exact + `/prefix/**`), no broad globs
-  - [ ] protected-subtree denies are enforced by both tool-layer checks and SBPL (where representable)
-
-- [ ] Add tests: bare filenames, non-argv effects, pipeline semantics, protected subtree enforcement
-- [ ] Add “flip gates”:
-  - [ ] Gate A: pipeline DoD met → migrate common shell patterns to pipeline tool by default
-  - [ ] Gate B: sandbox DoD met → enable `sandbox-exec` by default for exec + pipeline
