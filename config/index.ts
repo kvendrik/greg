@@ -1,6 +1,7 @@
 import type { Config } from './types';
 import { join } from 'node:path';
 import { exists } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 
 export type { Config } from './types';
 export { validate } from './validate';
@@ -13,6 +14,7 @@ export async function get(): Promise<Config> {
     throw new Error(`Config file not found at ${path}`);
   }
 
-  const config = await import('../.greg');
-  return config.default;
+  // Config is user-specific and usually gitignored. Avoid static module resolution.
+  const configModule = await import(pathToFileURL(path).href);
+  return (configModule as { default: Config }).default;
 }

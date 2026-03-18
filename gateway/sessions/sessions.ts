@@ -104,6 +104,7 @@ export async function load(
   const agent = await Agent.create({
     config,
     messages: sessionStorage.messages,
+    onBackgroundUpdate: () => {},
     async onCompact(newMessages: AgentMessage[]) {
       await storage.replace(sessionId, newMessages);
     },
@@ -114,7 +115,9 @@ export async function load(
 
   const session: Session = {
     id: sessionId,
-    working: agent.working,
+    get working() {
+      return agent.working;
+    },
     subscribe(channelId: string, callbacks: Callbacks) {
       return agent.subscribe(channelId, sessionStorage.proxy(callbacks, agent));
     },

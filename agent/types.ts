@@ -2,11 +2,14 @@ import type { Model, Api } from '@mariozechner/pi-ai';
 import type { HeartbeatOptions } from '../gateway/heartbeat/types';
 export type { Config as BaseConfig } from '../config';
 import type { BackgroundUpdate as SubAgentBackgroundUpdate } from './tools/spawn/spawn';
+import type { BackgroundUpdate as ExecBackgroundUpdate } from './tools/exec';
 import type { AllowList } from './tools/utilities/policy/allowlist';
 
 export interface ToolContext {
   config: AgentConfig;
-  onBackgroundUpdate: (update: SubAgentBackgroundUpdate) => void;
+  onBackgroundUpdate: (
+    update: SubAgentBackgroundUpdate | ExecBackgroundUpdate
+  ) => void;
 }
 
 type OptionalToolId =
@@ -101,12 +104,11 @@ export interface AgentConfig {
        * `true` by default.
        */
       enabled: boolean;
+      /**
+       * Ask for permission to run a tool when it's not allowed.
+       */
+      ask?: boolean;
       exec?: {
-        /**
-         * Ask for permission to run a command when it's not allowed.
-         * `false` by default. Allowed commands are saved to `[workspace]/exec_allowlist.json`.
-         */
-        askPermission?: boolean;
         /**
          * Map of command patterns to allow/deny. Keys support exact commands,
          * base commands (e.g. "ls"), and glob patterns (*, ?, []).

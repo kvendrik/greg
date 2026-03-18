@@ -11,12 +11,12 @@ import {
 import { readFileSync } from 'node:fs';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { customAlphabet } from 'nanoid';
-import { getAllowlist } from '../utilities/policy/allowlist';
 import type { AgentConfig } from '../../index';
 import type { ToolContext } from '../../types';
 import * as sessions from '../../../gateway/sessions';
 import { Storage } from '../../../gateway/sessions/storage/storage';
-import { getWorkspacePath } from '../workspace';
+import { getWorkspacePath } from '../../utilities/impl';
+import { getAllowlist } from '../utilities/policy/allowlist';
 
 export type BackgroundUpdate = {
   tool: 'prompt_agent';
@@ -31,7 +31,7 @@ interface SubagentConfig {
   emoji: string;
   systemPrompt: string;
   model: { provider: string; id: string };
-  tools: ('web_search' | 'web_fetch' | 'exec')[];
+  tools: ('web_search' | 'web_fetch' | 'exec' | 'files')[];
   execAllowedCommands?: string[];
 }
 
@@ -69,6 +69,7 @@ function subagentConfigSchema(parentConfig: AgentConfig) {
         web_search: 'web_search',
         web_fetch: 'web_fetch',
         exec: 'exec',
+        files: 'files',
       }),
       {
         description:
@@ -129,7 +130,7 @@ export async function createSpawnTools({
     name: 'spawn_agent',
     label: 'spawn agent',
     description:
-      'Create and start a sub-agent that runs in the background. Use when a task is long-running, parallel, or better handled by a dedicated agent. After spawning, use the prompt_agent tool to send prompts to this agent. The sub-agent has its own workspace and only web_search and web_fetch tools.',
+      'Create and start a sub-agent that runs in the background. Use when a task is long-running, parallel, or better handled by a dedicated agent. After spawning, use the prompt_agent tool to send prompts to this agent. The sub-agent has its own workspace and can be given web_search, web_fetch, exec, and files tools.',
     parameters: configSchema.schema,
     execute: async (_id: string, params) => {
       const { emoji, name, systemPrompt, model, tools, execAllowedCommands } =
@@ -691,8 +692,8 @@ export async function createSpawnTools({
           : undefined,
         guard: {
           enabled: parentConfig.tools?.guard?.enabled ?? false,
+          ask: false,
           exec: {
-            askPermission: false,
             allowlist: execAllowedCommands?.reduce(
               (acc, command) => ({
                 ...acc,

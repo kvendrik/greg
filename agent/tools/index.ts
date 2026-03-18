@@ -1,16 +1,18 @@
-import type { AgentTool } from '@mariozechner/pi-agent-core';
+import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { TextContent } from '@mariozechner/pi-ai';
 import type { ToolContext } from '../types';
 import { getBrowserInstructions, getBrowserTools } from './browser';
-import { getExecTools } from './exec';
+import { getExecTools, getExecInstructions } from './exec';
 import { load as loadMemory } from './memory';
 import {
   getInstructions as getSkillsInstructions,
   getTools as getSkillTools,
 } from './skills';
-import { getFilesTools } from './files';
+import { getFilesTools, getFilesToolsInstructions } from './files';
 import { createWebFetchTool } from './web-fetch';
 import { createWebSearchTool } from './web-search';
 import { createSpawnTools } from './spawn';
+import { evaluatePolicy } from './utilities/policy';
 
 export async function get(
   conversationStartIso: string,
@@ -40,6 +42,7 @@ export async function get(
 
   if (!deniedTools?.includes('files') && allowedTools.includes('files')) {
     tools.push(...getFilesTools(context));
+    instructions += getFilesToolsInstructions();
   }
 
   if (!deniedTools?.includes('memory') && allowedTools.includes('memory')) {
@@ -50,6 +53,7 @@ export async function get(
 
   if (!deniedTools?.includes('exec') && allowedTools.includes('exec')) {
     tools.push(...getExecTools(context));
+    instructions += getExecInstructions();
   }
 
   if (
@@ -81,6 +85,52 @@ export async function get(
     const spawnTools = await createSpawnTools(context);
     tools.push(...spawnTools);
   }
+
+  tools = tools.map((tool) => ({
+    ...tool,
+    execute: async (_id, params: unknown, signal) => {
+      const policy = await evaluatePolicy(
+        {
+          name: tool.name,
+          label: tool.label,
+          params,
+        },
+        context
+      );
+
+      let resultPrefix = '';
+
+      if (!policy.allowed) {
+        return constructGuardResponse(policy.reason ?? 'Tool call not allowed');
+      } else if (policy.reason) {
+        resultPrefix += `[Guard Result]${policy.reason}[/Guard Result]\n\n`;
+      }
+
+      const result = await tool.execute(_id, params, signal);
+      const firstTextContent = result.content.findIndex(
+        (content) => content.type === 'text'
+      );
+
+      (result.content[firstTextContent] as TextContent).text =
+        resultPrefix + (result.content[firstTextContent] as TextContent).text;
+
+      return result;
+
+      function constructGuardResponse(
+        message: string
+      ): AgentToolResult<object> {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: message,
+            },
+          ],
+          details: {},
+        };
+      }
+    },
+  }));
 
   return {
     tools,

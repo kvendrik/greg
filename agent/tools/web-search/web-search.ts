@@ -4,6 +4,7 @@ import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { searchWithGemini } from './searchProviders/gemini';
 import { searchWithBrave } from './searchProviders/brave';
 export type { WebFetchResult, WebSearchSuccessDetails } from './types';
+import type { WebSearchSuccessDetails } from './types';
 
 const WEB_SEARCH_COUNT_MIN = 1;
 const WEB_SEARCH_COUNT_MAX = 10;

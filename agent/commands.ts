@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
-import type { Config } from '../../config';
+import type { Config } from '../config';
 
 type ConfigModel = Config['models'][number]['model'];
 

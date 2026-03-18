@@ -13,9 +13,8 @@ function createMockConfig(workspace: string): AgentConfig {
   return {
     id: 'test',
     workspace,
-    port: '0',
     models: [],
-    tools: {},
+    tools: { guard: { enabled: true } },
   } as AgentConfig;
 }
 

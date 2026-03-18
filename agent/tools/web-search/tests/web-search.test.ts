@@ -6,9 +6,9 @@ function createConfig(overrides?: Partial<AgentConfig['tools']>): AgentConfig {
   return {
     id: 'test',
     workspace: '/tmp/test',
-    port: '0',
     models: [],
     tools: {
+      guard: { enabled: true },
       webSearch: {
         provider: 'brave',
         key: 'test-key',
@@ -21,7 +21,10 @@ function createConfig(overrides?: Partial<AgentConfig['tools']>): AgentConfig {
 describe('web-search', () => {
   describe('createWebSearchTool()', () => {
     it('returns tool with name web_search and required query param', () => {
-      const tool = createWebSearchTool({ config: createConfig() });
+      const tool = createWebSearchTool({
+        config: createConfig(),
+        onBackgroundUpdate: () => {},
+      });
       expect(tool.name).toBe('web_search');
       expect(tool.parameters).toBeDefined();
       const schema = tool.parameters as { properties?: { query?: unknown } };
@@ -31,6 +34,7 @@ describe('web-search', () => {
     it('returns "Query is required." when query is empty', async () => {
       const tool = createWebSearchTool({
         config: createConfig({ webSearch: undefined }),
+        onBackgroundUpdate: () => {},
       });
       const result = await tool.execute!('id', { query: '' }, undefined);
       expect(result.content[0].type).toBe('text');
@@ -43,6 +47,7 @@ describe('web-search', () => {
     it('returns "Query is required." when query is only whitespace', async () => {
       const tool = createWebSearchTool({
         config: createConfig({ webSearch: undefined }),
+        onBackgroundUpdate: () => {},
       });
       const result = await tool.execute!('id', { query: '   ' }, undefined);
       expect((result.content[0] as { text: string }).text).toBe(
@@ -51,7 +56,10 @@ describe('web-search', () => {
     });
 
     it('throws AbortError when signal is already aborted', async () => {
-      const tool = createWebSearchTool({ config: createConfig() });
+      const tool = createWebSearchTool({
+        config: createConfig(),
+        onBackgroundUpdate: () => {},
+      });
       const controller = new AbortController();
       controller.abort();
       await expect(
@@ -62,6 +70,7 @@ describe('web-search', () => {
     it('returns unavailable message when no webSearch config', async () => {
       const tool = createWebSearchTool({
         config: createConfig({ webSearch: undefined }),
+        onBackgroundUpdate: () => {},
       });
       const result = await tool.execute!('id', { query: 'weather' }, undefined);
       expect((result.content[0] as { text: string }).text).toContain(
@@ -95,7 +104,10 @@ describe('web-search', () => {
         return originalFetch.call(globalThis, input);
       }) as typeof globalThis.fetch;
       try {
-        const tool = createWebSearchTool({ config: createConfig() });
+        const tool = createWebSearchTool({
+          config: createConfig(),
+          onBackgroundUpdate: () => {},
+        });
         const result = await tool.execute!(
           'id',
           { query: 'test', count: 99 },
@@ -125,7 +137,10 @@ describe('web-search', () => {
         return originalFetch.call(globalThis, input);
       }) as typeof globalThis.fetch;
       try {
-        const tool = createWebSearchTool({ config: createConfig() });
+        const tool = createWebSearchTool({
+          config: createConfig(),
+          onBackgroundUpdate: () => {},
+        });
         const result = await tool.execute!('id', { query: 'test' }, undefined);
         expect((result.content[0] as { text: string }).text).toContain(
           'Web search is unavailable'

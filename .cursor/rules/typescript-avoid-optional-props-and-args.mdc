@@ -1,0 +1,29 @@
+---
+description: Avoid optional props/args by default; model absence explicitly in types
+alwaysApply: true
+---
+
+# TypeScript: avoid optional properties & arguments
+
+- **No optional properties by default**: Prefer required fields. If something can be missing, model it explicitly via unions.
+
+```ts
+// ❌ BAD
+type Config = { apiKey?: string };
+
+// ✅ GOOD (field always present, but value may be undefined)
+type Config = { apiKey: string | undefined };
+
+// ✅ GOOD (mutually exclusive shapes / discriminated union)
+type Config = { apiKey: string } | { apiKey: undefined; reason: 'missing' };
+```
+
+- **No optional arguments by default**: Prefer an options object with required keys, overloads, or separate functions.
+
+```ts
+// ❌ BAD
+function connect(url?: string) {}
+
+// ✅ GOOD
+function connect(options: { url: string }) {}
+```

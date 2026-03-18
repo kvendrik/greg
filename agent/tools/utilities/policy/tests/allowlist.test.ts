@@ -6,15 +6,16 @@ import { getAllowlistForCommand } from '../allowlist';
 const mockConfig = (allowlist: AllowList): AgentConfig =>
   ({
     id: 'test',
-    workspace: '',
-    port: 3000,
+    workspace: '/tmp',
     models: [],
     tools: {
       guard: {
         enabled: true,
+        exec: {
+          allowlist,
+        },
       },
     },
-    allowlist,
   }) as AgentConfig;
 
 type TestCase = {

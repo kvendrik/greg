@@ -6,9 +6,9 @@ function createConfig(overrides?: Partial<AgentConfig['tools']>): AgentConfig {
   return {
     id: 'test',
     workspace: '/tmp/test',
-    port: '0',
     models: [],
     tools: {
+      guard: { enabled: true },
       ...overrides,
     },
   } as AgentConfig;
@@ -17,21 +17,30 @@ function createConfig(overrides?: Partial<AgentConfig['tools']>): AgentConfig {
 describe('web-fetch', () => {
   describe('createWebFetchTool()', () => {
     it('returns tool with name web_fetch and url param', () => {
-      const tool = createWebFetchTool({ config: createConfig() });
+      const tool = createWebFetchTool({
+        config: createConfig(),
+        onBackgroundUpdate: () => {},
+      });
       expect(tool.name).toBe('web_fetch');
       const schema = tool.parameters as { properties?: { url?: unknown } };
       expect(schema.properties?.url).toBeDefined();
     });
 
     it('throws on invalid URL', async () => {
-      const tool = createWebFetchTool({ config: createConfig() });
+      const tool = createWebFetchTool({
+        config: createConfig(),
+        onBackgroundUpdate: () => {},
+      });
       await expect(
         tool.execute!('id', { url: 'not-a-url' }, undefined)
       ).rejects.toThrow(/Invalid URL/);
     });
 
     it('throws AbortError when signal is already aborted', async () => {
-      const tool = createWebFetchTool({ config: createConfig() });
+      const tool = createWebFetchTool({
+        config: createConfig(),
+        onBackgroundUpdate: () => {},
+      });
       const controller = new AbortController();
       controller.abort();
       await expect(
@@ -40,7 +49,10 @@ describe('web-fetch', () => {
     });
 
     it('returns blocked message for localhost (SSRF)', async () => {
-      const tool = createWebFetchTool({ config: createConfig() });
+      const tool = createWebFetchTool({
+        config: createConfig(),
+        onBackgroundUpdate: () => {},
+      });
       const result = await tool.execute!(
         'id',
         { url: 'http://localhost:8080/page' },
@@ -53,7 +65,10 @@ describe('web-fetch', () => {
     });
 
     it('returns blocked message for 127.0.0.1 (SSRF)', async () => {
-      const tool = createWebFetchTool({ config: createConfig() });
+      const tool = createWebFetchTool({
+        config: createConfig(),
+        onBackgroundUpdate: () => {},
+      });
       const result = await tool.execute!(
         'id',
         { url: 'http://127.0.0.1/page' },
@@ -88,6 +103,7 @@ describe('web-fetch', () => {
       try {
         const tool = createWebFetchTool({
           config: createConfig(), // no guard
+          onBackgroundUpdate: () => {},
         });
         const result = await tool.execute!(
           'id',
@@ -122,7 +138,10 @@ describe('web-fetch', () => {
         return originalFetch.call(globalThis, input);
       }) as typeof globalThis.fetch;
       try {
-        const tool = createWebFetchTool({ config: createConfig() });
+        const tool = createWebFetchTool({
+          config: createConfig(),
+          onBackgroundUpdate: () => {},
+        });
         const result = await tool.execute!(
           'id',
           { url: 'https://example.com/page' },

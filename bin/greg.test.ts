@@ -104,7 +104,10 @@ describe('greg', () => {
   describe('config', () => {
     it('validate runs when config exists', () => {
       const { status } = runGreg(['config', 'validate']);
-      expect([0, 1]).toContain(status);
+      expect(status).not.toBeNull();
+      if (status !== null) {
+        expect([0, 1]).toContain(status);
+      }
     });
   });
 });
