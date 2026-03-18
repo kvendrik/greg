@@ -16,7 +16,6 @@ import type { ToolContext } from '../../types';
 import * as sessions from '../../../gateway/sessions';
 import { Storage } from '../../../gateway/sessions/storage/storage';
 import { getWorkspacePath } from '../../utilities/impl';
-import { getAllowlist } from '../utilities/policy/allowlist';
 
 export type BackgroundUpdate = {
   tool: 'prompt_agent';
@@ -101,15 +100,15 @@ function subagentConfigSchema(parentConfig: AgentConfig) {
       }
 
       if (subagentConfig.execAllowedCommands) {
-        const allowlist = getAllowlist(parentConfig);
-        for (const command of subagentConfig.execAllowedCommands) {
-          if (!allowlist[command]) {
-            return {
-              valid: false,
-              message: `Command "${command}" is not allowed. Allowed commands: ${Object.keys(allowlist).join(', ')}`,
-            };
-          }
-        }
+        // const allowlist = getAllowlist(parentConfig);
+        // for (const command of subagentConfig.execAllowedCommands) {
+        //   if (!allowlist[command]) {
+        //     return {
+        //       valid: false,
+        //       message: `Command "${command}" is not allowed. Allowed commands: ${Object.keys(allowlist).join(', ')}`,
+        //     };
+        //   }
+        // }
       }
 
       return { valid: true, message: null };
@@ -693,15 +692,15 @@ export async function createSpawnTools({
         guard: {
           enabled: parentConfig.tools?.guard?.enabled ?? false,
           ask: false,
-          exec: {
-            allowlist: execAllowedCommands?.reduce(
-              (acc, command) => ({
-                ...acc,
-                [command]: { allow: true },
-              }),
-              {}
-            ),
-          },
+          // exec: {
+          //   allowlist: execAllowedCommands?.reduce(
+          //     (acc, command) => ({
+          //       ...acc,
+          //       [command]: { allow: true },
+          //     }),
+          //     {}
+          //   ),
+          // },
         },
       },
     };

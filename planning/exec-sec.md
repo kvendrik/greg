@@ -70,6 +70,7 @@
 - [x] Confirm macOS-only rollout; document out-of-scope platforms for now
 - [ ] Decide whether a raw shell escape hatch exists; if yes, make it approval-gated and default-deny metasyntax
 
+- [ ] Define rule precedence for FS policy (e.g. “most specific match wins”) and test it with protected-subtree cases
 - [ ] Implement/solidify filesystem policy defaults: workspace `rw`, `/tmp/greg/** rw`, deny everything else
 - [ ] Add protected-subtree denies (e.g. allow repo writes but deny `repo/tools/**`)
 
@@ -79,10 +80,22 @@
 - [ ] Ensure exec runs only `{ bin, args[] }` with `shell:false` semantics (no command strings)
 - [ ] Resolve `bin` and enforce allowlist before spawn
 - [ ] Make stdout/stderr handling explicit (capture/merge/ignore) and enforce output limits
+- [ ] Define the supported IO matrix for exec:
+  - [ ] capture stdout only
+  - [ ] capture stderr only
+  - [ ] capture both separately
+  - [ ] merge stderr→stdout (equivalent to shell `2>&1`)
+  - [ ] ignore stderr (equivalent to shell `2>/dev/null`)
 
 - [ ] Implement pipeline tool with `segments: Array<{ bin, args[] }>` and explicit wiring (no shell)
 - [ ] Enforce allowlist per pipeline segment (resolved binary)
-- [ ] Support “merge stderr then filter” workflows without `2>&1` syntax
+- [ ] Support “merge stderr then filter” workflows without `2>&1` syntax (pipeline-level `stderrMode: 'merge'`)
+- [ ] Define pipeline DoD (parity targets):
+  - [ ] `cmd | head -n N`
+  - [ ] `cmd | tail -n N`
+  - [ ] `cmd | grep ...`
+  - [ ] `cmd` with merged stderr piped into a filter (the `2>&1 | head` class)
+  - [ ] output-size caps apply to intermediate and final outputs
 
 - [ ] Route all file writes through file tools (remove reliance on shell redirects)
 - [ ] Standardize scratch/temp under `/tmp/greg/**` (create/read/write)
@@ -91,5 +104,13 @@
 - [ ] Implement SBPL generation from FS policy (prefer exact and `/prefix/**` patterns)
 - [ ] Wrap every exec/pipeline subprocess tree with `sandbox-exec -p <profile> …`
 - [ ] Validate baseline allowances for common tools (git/grep/etc.) without widening FS access
+- [ ] Define sandbox DoD (when it’s safe to flip default on):
+  - [ ] end-to-end tests pass under sandbox (no “it works unsandboxed only” gaps)
+  - [ ] `sandbox-exec` failures are surfaced as structured, user-facing errors (not stack traces)
+  - [ ] policy patterns used for SBPL stay “strong” (exact + `/prefix/**`), no broad globs
+  - [ ] protected-subtree denies are enforced by both tool-layer checks and SBPL (where representable)
 
 - [ ] Add tests: bare filenames, non-argv effects, pipeline semantics, protected subtree enforcement
+- [ ] Add “flip gates”:
+  - [ ] Gate A: pipeline DoD met → migrate common shell patterns to pipeline tool by default
+  - [ ] Gate B: sandbox DoD met → enable `sandbox-exec` by default for exec + pipeline
