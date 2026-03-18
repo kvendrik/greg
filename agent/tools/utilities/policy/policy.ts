@@ -6,9 +6,10 @@ import {
   type PolicyEvaluation,
 } from '../../exec/index';
 import { evaluateFilePolicy, filePolicyToolNames } from '../../files/index';
+import { prettify } from './prettify';
 
 export async function evaluatePolicy(
-  call: { name: string; label: string; params: unknown },
+  call: { name: string; label: string; params: Record<string, unknown> },
   context: ToolContext
 ): Promise<PolicyEvaluation> {
   const { config } = context;
@@ -45,9 +46,10 @@ export async function evaluatePolicy(
       };
     }
 
-    const callString = `${call.name}(${JSON.stringify(call.params, null, 2)})`;
+    const callString = prettify(call.name, call.params);
+
     const message = `💂 ${config.id} is asking to run a \`${call.label}\`:
-\`\`\`\n${callString})\n\`\`\`\
+\`\`\`\n${callString}\n\`\`\`\
 \n
 /deny <reason> - deny to run this command, optionally provide a reason
 /once - allow to run this command this time`;
@@ -55,7 +57,7 @@ export async function evaluatePolicy(
     const reply = await gatewayState.getReply(message);
 
     if (!reply.trim().toLowerCase().startsWith('/once')) {
-      const reason = `Command not allowed: ${callString}). Permission was denied by the user. User replied: "${reply}".`;
+      const reason = `Command not allowed: ${callString}. Permission was denied by the user. User replied: "${reply}".`;
       return {
         allowed: false,
         reason,
