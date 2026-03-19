@@ -192,8 +192,13 @@ session.subscribe('tui', {
 });
 
 setGetReply(async (question) => {
-  const answer = await text({ message: question });
-  if (isCancel(answer)) return '';
+  const answer = await text({
+    message: question,
+    placeholder: '/deny <reason> or /once',
+  });
+  if (isCancel(answer)) {
+    process.exit(0);
+  }
   return answer;
 });
 
