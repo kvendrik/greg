@@ -24,9 +24,9 @@ export async function start(): Promise<{
   const config = await getConfig();
 
   logger.info('Validating config...');
-  const failures = await validateConfig(config);
+  const valid = await validateConfig(config);
 
-  if (failures.length > 0) {
+  if (!valid) {
     logger.error('Config validation failed. Exiting...');
     process.exit(1);
   }
@@ -37,6 +37,13 @@ export async function start(): Promise<{
     logger.info('Starting heartbeat...');
     heartbeat = new Heartbeat(config.heartbeat);
     heartbeat.start();
+  }
+
+  logger.info('Loading main session...');
+
+  if (!sessions.exists('main')) {
+    logger.info('Main session not found. Creating...');
+    await sessions.create('main');
   }
 
   logger.info('Loading main session...');

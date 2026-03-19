@@ -6,5 +6,8 @@ memory/.data/
 .pytest_cache/
 .env
 
+# PM2 logs
+.logs/
+
 # Telegram service await-reply socket (MCP-style)
 /**/*.sock

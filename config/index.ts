@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 export type { Config } from './types';
 export { validate } from './validate';
-export * as allowlistSets from './allowlist-sets';
+export * as execDefaults from './exec-defaults';
 
 export const path = join(import.meta.dirname, '..', '.greg.ts');
 

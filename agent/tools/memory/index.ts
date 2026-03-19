@@ -30,19 +30,23 @@ function getIdentityPath(config: AgentConfig): string {
 }
 
 function createNotesQmd(config: AgentConfig): QMD {
-  return new QMD(
-    `${config.id}-notes`,
-    'Daily conversation notes (notes/YYYY-MM-DD.md). Use for recent context and summarization.',
-    getWorkspacePath(config)
-  );
+  return new QMD({
+    collectionName: `${config.id}-notes`,
+    collectionDescription:
+      'Daily conversation notes (notes/YYYY-MM-DD.md). Use for recent context and summarization.',
+    mask: '**/*.md',
+    workspacePath: getWorkspacePath(config),
+  });
 }
 
 function createSessionsQmd(config: AgentConfig): QMD {
-  return new QMD(
-    `${config.id}-sessions`,
-    'Session transcripts (sessions/*.jsonl). Past conversation turns and decisions.',
-    getWorkspacePath(config)
-  );
+  return new QMD({
+    collectionName: `${config.id}-sessions`,
+    collectionDescription:
+      'Session transcripts (sessions/*.jsonl). Past conversation turns and decisions.',
+    mask: '**/*.jsonl',
+    workspacePath: getWorkspacePath(config),
+  });
 }
 
 function createMemoryRecentTool(config: AgentConfig): AgentTool {
@@ -886,23 +890,13 @@ export async function load(
     fs.mkdirSync(sessionsPath, { recursive: true });
   }
 
-  // logger.info('Checking QMD health...');
-  // if (!(await QMD.healthy())) {
-  //   logger.error(
-  //     'QMD is not healthy. Please run `bun run qmd status` manually.'
-  //   );
-  //   process.exit(1);
-  // }
+  logger.info('Loading session notes collection...');
+  const notesQmd = createNotesQmd(config);
+  await notesQmd.ready();
 
-  // logger.info('Loading session notes collection...');
-  // const notesQmd = createNotesQmd(config);
-  // await notesQmd.ensureCollection(notesPath);
-  // await notesQmd.updateAndEmbed({ background: true });
-
-  // logger.info('Loading session logs collection...');
-  // const sessionsQmd = createSessionsQmd(config);
-  // await sessionsQmd.ensureCollection(sessionsPath, { mask: '**/*.jsonl' });
-  // await sessionsQmd.updateAndEmbed({ background: true });
+  logger.info('Loading session logs collection...');
+  const sessionsQmd = createSessionsQmd(config);
+  await sessionsQmd.ready();
 
   return {
     tools: buildTools(config),

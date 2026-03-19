@@ -3,6 +3,7 @@ import type { HeartbeatOptions } from '../gateway/heartbeat/types';
 export type { Config as BaseConfig } from '../config';
 import type { BackgroundUpdate as SubAgentBackgroundUpdate } from './tools/spawn/spawn';
 import type { BackgroundUpdate as ExecBackgroundUpdate } from './tools/exec';
+import type { AllowedBins, AllowedProfiles } from './tools/exec/policy';
 
 export interface ToolContext {
   config: AgentConfig;
@@ -72,7 +73,7 @@ export interface AgentConfig {
         key: string;
       }
   )[];
-  tools?: {
+  tools: {
     /**
      * Deny tools.
      */
@@ -107,16 +108,10 @@ export interface AgentConfig {
        * Ask for permission to run a tool when it's not allowed.
        */
       ask?: boolean;
-      // exec?: {
-      //   /**
-      //    * Map of command patterns to allow/deny. Keys support exact commands,
-      //    * base commands (e.g. "ls"), and glob patterns (*, ?, []).
-      //    *
-      //    * @example
-      //    * { "ls": { allow: true }, "git status *": { allow: true }, "npm run *": { allow: true }, "rm -rf *": { allow: false } }
-      //    */
-      //   allowlist?: AllowList;
-      // };
+      exec?: {
+        allowBins: AllowedBins;
+        profiles: AllowedProfiles;
+      };
     };
   };
 }

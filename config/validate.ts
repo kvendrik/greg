@@ -4,8 +4,37 @@ import { GoogleGenAI } from '@google/genai';
 import { Bot, GrammyError } from 'grammy';
 import pc from 'picocolors';
 import type { Config } from './types';
+import {
+  validateAllowBins,
+  validateProfiles,
+} from '../agent/tools/exec/validate';
+import { createLogger } from '../utilities/logger';
 
-function assertModelsStructure(config: Config): void {
+const logger = createLogger();
+
+type Messages = {
+  successes: string[];
+  info: string[];
+  warnings: string[];
+  errors: string[];
+};
+
+function log(messages: Messages): void {
+  for (const msg of messages.successes) {
+    logger.log(pc.green(`${msg} ✓`));
+  }
+  for (const msg of messages.info) {
+    logger.log(pc.blue(`Optional: ${msg}`));
+  }
+  for (const msg of messages.warnings) {
+    logger.warn(pc.yellow(`Warning: ${msg}`));
+  }
+  for (const msg of messages.errors) {
+    logger.error(pc.red(msg));
+  }
+}
+
+function assertModelsStructure(config: Config, messages: Messages): void {
   const primaryCount = config.models.filter((m) => m.role === 'primary').length;
   const fallbackCount = config.models.filter(
     (m) => m.role === 'fallback'
@@ -16,11 +45,21 @@ function assertModelsStructure(config: Config): void {
       `Config models must have exactly one primary entry, got ${primaryCount}`
     );
   }
+
   if (fallbackCount !== 1) {
-    throw new Error(
-      `Config models must have exactly one fallback entry, got ${fallbackCount}`
+    messages.info.push(
+      'No fallback model configured for when primary model is overloaded'
     );
   }
+}
+
+function assertExecGuardStructure(config: Config): void {
+  const execConfig = config.tools?.guard.exec;
+  if (!execConfig) {
+    return;
+  }
+  validateProfiles(execConfig.profiles);
+  validateAllowBins(execConfig.allowBins, execConfig.profiles);
 }
 
 async function validateOpenAiKey(key: string): Promise<void> {
@@ -110,10 +149,23 @@ async function validateBraveKey(apiKey: string): Promise<void> {
   }
 }
 
-export async function validate(config: Config): Promise<string[]> {
-  assertModelsStructure(config);
+export async function validate(config: Config): Promise<boolean> {
+  const messages: Messages = {
+    successes: [],
+    info: [],
+    warnings: [],
+    errors: [],
+  };
 
-  console.info(pc.green('Config structure is valid ✓'));
+  try {
+    assertModelsStructure(config, messages);
+    assertExecGuardStructure(config);
+    messages.successes.push('Config structure is valid');
+  } catch (err) {
+    messages.errors.push(err instanceof Error ? err.message : String(err));
+    log(messages);
+    return false;
+  }
 
   const providersToKeys = new Map<string, string>();
   for (const entry of config.models) {
@@ -131,7 +183,14 @@ export async function validate(config: Config): Promise<string[]> {
     } else if (provider === 'anthropic') {
       checks.push({ name: 'Anthropic', run: () => validateAnthropicKey(key) });
     } else if (provider === 'google') {
-      checks.push({ name: 'Google Gemini', run: () => validateGoogleKey(key) });
+      checks.push({
+        name: 'Google Gemini',
+        run: () => validateGoogleKey(key),
+      });
+    } else {
+      messages.warnings.push(
+        `No validator configured for "${provider}". Could not validate key.`
+      );
     }
   }
 
@@ -140,6 +199,12 @@ export async function validate(config: Config): Promise<string[]> {
       name: 'Browser Use',
       run: () => validateBrowserUseKey(config.tools?.browser?.key!),
     });
+  } else {
+    messages.info.push('Browser automation not configured (tools.browser)');
+  }
+
+  if (!config.tools?.webSearch) {
+    messages.info.push('Web search not configured (tools.webSearch)');
   }
 
   if (config.tools?.webSearch?.provider === 'gemini') {
@@ -158,23 +223,26 @@ export async function validate(config: Config): Promise<string[]> {
 
   if (config.clients?.telegram?.botToken) {
     checks.push({
-      name: 'Telegram Bot Token',
+      name: 'Telegram',
       run: () => validateTelegramBotToken(config.clients!.telegram!.botToken),
     });
+  } else {
+    messages.warnings.push(
+      'Telegram client not configured (clients.telegram). Either configure it or use a custom client.'
+    );
   }
 
-  const results = await Promise.allSettled(checks.map((c) => c.run()));
-  const failures: string[] = [];
+  const settled = await Promise.allSettled(checks.map((c) => c.run()));
 
-  results.forEach((result, index) => {
-    if (result.status === 'fulfilled') {
-      console.info(pc.green(`${checks[index].name}: ${pc.green('✓')}`));
+  settled.forEach((s, index) => {
+    if (s.status === 'fulfilled') {
+      messages.successes.push(checks[index].name);
     }
-    if (result.status === 'rejected') {
-      console.error(pc.red(`${checks[index].name}: ${result.reason}`));
-      failures.push(checks[index].name);
+    if (s.status === 'rejected') {
+      messages.errors.push(`${checks[index].name}: ${s.reason}`);
     }
   });
 
-  return failures;
+  log(messages);
+  return messages.errors.length === 0;
 }

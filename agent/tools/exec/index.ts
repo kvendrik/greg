@@ -2,6 +2,6 @@ export * from './tools';
 export {
   execPolicyToolNames,
   evaluate as evaluateExecPolicy,
-  type PolicyEvaluation,
+  type AllowedBins,
+  type AllowedProfiles,
 } from './policy';
-

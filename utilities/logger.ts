@@ -8,7 +8,14 @@ export interface Logger {
   write: (...logs: Log) => void;
 }
 
-export function createLogger(serviceId: string): Logger {
+export function createLogger(
+  serviceId?: string,
+  options?: { addTimestamp?: boolean }
+): Logger {
+  const { addTimestamp = true } = options ?? {
+    addTimestamp: Boolean(serviceId),
+  };
+
   const timeFormat = new Intl.DateTimeFormat('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
@@ -16,13 +23,17 @@ export function createLogger(serviceId: string): Logger {
   });
 
   return {
-    log: (...logs: Log) => console.log(prefix(), transform(logs)),
-    info: (...logs: Log) => console.log(prefix(), transform(logs)),
-    warn: (...logs: Log) => console.warn(prefix(), transform(logs)),
-    error: (...logs: Log) => console.error(prefix(), transform(logs)),
-    write: (...logs: Log) =>
-      process.stdout.write(`${prefix()} ${transform(logs)}\n`),
+    log: (...logs: Log) => !isMuted() && console.log(join(logs)),
+    info: (...logs: Log) => !isMuted() && console.log(join(logs)),
+    warn: (...logs: Log) => !isMuted() && console.warn(join(logs)),
+    error: (...logs: Log) => console.error(join(logs)),
+    write: (...logs: Log) => !isMuted() && process.stdout.write(join(logs)),
   };
+
+  function join(logs: Log) {
+    const p = prefix();
+    return p.length > 0 ? `${p} ${transform(logs)}` : transform(logs);
+  }
 
   function transform(logs: Log) {
     return logs
@@ -36,6 +47,10 @@ export function createLogger(serviceId: string): Logger {
   }
 
   function prefix() {
-    return `[${timeFormat.format(new Date())}][${serviceId}]`;
+    return `${addTimestamp ? `[${timeFormat.format(new Date())}]` : ''}${serviceId ? `[${serviceId}]` : ''}`;
+  }
+
+  function isMuted() {
+    return process.env.GREG_LOG === 'silent';
   }
 }

@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process';
-import { pipeline } from '@xenova/transformers';
 import WebSocket from 'ws';
 
 export type AvFoundationDevice = { index: number; name: string };

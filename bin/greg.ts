@@ -290,8 +290,8 @@ program
       .action(async () => {
         const config = await loadConfig();
         const { validate } = await import('../config');
-        const failures = await validate(config);
-        process.exit(failures.length > 0 ? 1 : 0);
+        const success = await validate(config);
+        process.exit(success ? 0 : 1);
       })
   )
   .addCommand(
@@ -305,82 +305,27 @@ program
 program
   .command('doctor')
   .description(
-    'Validate config and check skill dependencies (CLIs and env vars from skill requires)'
+    'Validate config, check QMD health, voice setup, and skill dependencies'
   )
   .action(async () => {
     const config = await loadConfig();
-    const { validate } = await import('../config');
-    const { discoverSkills } = await import('../agent/tools/skills');
-
-    const configFailures = await validate(config);
-    const skills = discoverSkills(config);
-
-    if (!config.clients?.telegram) {
-      console.warn(
-        pc.yellow(
-          'Warning: Telegram client is not configured. Either configure it or use a custom client.'
-        )
-      );
-    }
-
-    for (const skill of skills) {
-      const relativePath = path.relative(projectRoot, skill.location);
-
-      if (!skill.requires?.length) continue;
-      for (const req of skill.requires) {
-        const isEnv = req.startsWith('env:');
-        const key = isEnv ? req.slice(4) : req;
-        if (isEnv) {
-          const value = process.env[key];
-          if (value === undefined || value === '') {
-            console.warn(
-              pc.yellow(
-                `[${skill.name}] Warning: "${skill.name}" cannot be used — env ${key} is not set (${relativePath})`
-              )
-            );
-          } else {
-            console.log(
-              pc.green(
-                `[${skill.name}] env ${key} ${pc.green('✓')} (${relativePath})`
-              )
-            );
-          }
-        } else {
-          const result = spawnSync('which', [key], {
-            encoding: 'utf8',
-            stdio: 'pipe',
-          });
-          if (result.status !== 0) {
-            console.warn(
-              pc.yellow(
-                `[${skill.name}] Warning: "${skill.name}" cannot be used — CLI "${key}" not found (${relativePath})`
-              )
-            );
-          } else {
-            console.log(
-              pc.green(
-                `[${skill.name}] ${key} ${pc.green('✓')} (${relativePath})`
-              )
-            );
-          }
-        }
-      }
-    }
-
-    if (configFailures.length > 0) {
-      console.error(pc.red('Config validation failed.'));
-    }
-
-    process.exit(configFailures.length > 0 ? 1 : 0);
+    const { doctor } = await import('../scripts/doctor');
+    const { success } = await doctor(config);
+    process.exit(success ? 0 : 1);
   });
 
 program
   .command('tui')
   .description('Start an interactive TUI chat client')
-  .action(() => {
+  .option('-v, --voice', 'Start in voice mode')
+  .action(({ voice }: { voice?: boolean }) => {
     spawn('bun', ['run', path.join(projectRoot, 'clients/tui.ts')], {
       stdio: 'inherit',
       cwd: projectRoot,
+      env: {
+        ...process.env,
+        VOICE_MODE: voice ? '1' : undefined,
+      },
     }).on('exit', (code) => process.exit(code ?? 0));
   });
 

@@ -23,7 +23,7 @@ export const filePolicyToolNames = [
   'list_files',
 ] as const;
 
-const getAllowedRoots = (config: AgentConfig): string[] => [
+export const getAllowedRoots = (config: AgentConfig): string[] => [
   path.resolve(getWorkspacePath(config)),
   path.resolve(tmpdir()),
 ];
@@ -105,7 +105,10 @@ function extractPatchFilePath(patch: string): string | null {
   return null;
 }
 
-function isUnderRoot(resolvedCandidate: string, resolvedRoot: string): boolean {
+export function isUnderRoot(
+  resolvedCandidate: string,
+  resolvedRoot: string
+): boolean {
   const rootWithSep = resolvedRoot.endsWith(path.sep)
     ? resolvedRoot
     : resolvedRoot + path.sep;

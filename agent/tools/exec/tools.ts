@@ -1,10 +1,14 @@
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
 import { spawn, type ChildProcess } from 'child_process';
+import path from 'node:path';
 import { nanoid } from 'nanoid';
 import type { ToolContext } from '../../types';
+import { getWorkspacePath } from '../../utilities';
 import { resolveBin } from '../utilities/resolve-bin';
+import { sandbox } from './sandbox';
 import pc from 'picocolors';
+import { tmpdir } from 'node:os';
 
 export type BackgroundUpdate = {
   tool: 'execve';
@@ -19,6 +23,8 @@ interface BackgroundProcess {
 }
 
 const MAX_CAPTURED_OUTPUT_BYTES = 200_000;
+const SAFE_PATH =
+  '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin';
 const backgroundProcesses = new Map<string, BackgroundProcess>();
 let shutdownHooksRegistered = false;
 
@@ -28,7 +34,7 @@ export type ExecveToolParams = {
   command: string;
   args: string[];
   background: boolean;
-  cwd?: string;
+  cwd: string;
   env?: ExecveEnv;
   input?: string;
   pty?: boolean;
@@ -65,7 +71,10 @@ function captureBytes(
     : combined;
 }
 
-function wrapWithPty(command: string, args: string[]): {
+function wrapWithPty(
+  command: string,
+  args: string[]
+): {
   spawnCommand: string;
   spawnArgs: string[];
   effectiveCommandLine: string;
@@ -106,7 +115,7 @@ export type ExecveStopToolParams = {
 export type ExecvePipelineToolParams = {
   commands: { command: string; args: string[] }[];
   background: boolean;
-  cwd?: string;
+  cwd: string;
   env?: ExecveEnv;
   input?: string;
   mergeStderrMode?: 'next' | 'collect-only' | 'last-merge';
@@ -127,11 +136,19 @@ export async function runExec(
     input?: string;
     pty?: boolean;
     capture?: 'head' | 'tail';
+    writableRoots: string[];
   }
 ): Promise<{ text: string; details: ExecResultDetails }> {
   const { signal, background, onFinished, onError, noOutputTimeoutMs } =
     context;
-  const { cwd, env, input, pty = false, capture = 'head' } = context;
+  const {
+    cwd,
+    env,
+    input,
+    pty = false,
+    capture = 'head',
+    writableRoots,
+  } = context;
   const { command, args } = params;
   const commandLine = [command, ...args].join(' ').trim();
 
@@ -229,132 +246,168 @@ export async function runExec(
     pty: boolean;
     capture: 'head' | 'tail';
   }) {
-    return new Promise<{ text: string; details: ExecResultDetails }>((resolve, reject) => {
-      let stdoutCaptured: Buffer = Buffer.alloc(0) as Buffer;
-      let stderrCaptured: Buffer = Buffer.alloc(0) as Buffer;
-      let stdoutTotalBytes = 0;
-      let stderrTotalBytes = 0;
-      let outputTruncated = false;
-      let errorTruncated = false;
-      let noOutputTimedOut = false;
-      let noOutputTimer: ReturnType<typeof setTimeout> | null = null;
-      const { spawnCommand, spawnArgs, effectiveCommandLine } = pty
-        ? wrapWithPty(command, args)
-        : {
-            spawnCommand: resolveBin(command),
-            spawnArgs: args,
-            effectiveCommandLine: commandLine,
-          };
+    return new Promise<{ text: string; details: ExecResultDetails }>(
+      (resolve, reject) => {
+        let stdoutCaptured: Buffer = Buffer.alloc(0) as Buffer;
+        let stderrCaptured: Buffer = Buffer.alloc(0) as Buffer;
+        let stdoutTotalBytes = 0;
+        let stderrTotalBytes = 0;
+        let outputTruncated = false;
+        let errorTruncated = false;
+        let noOutputTimedOut = false;
+        let noOutputTimer: ReturnType<typeof setTimeout> | null = null;
+        const { spawnCommand, spawnArgs, effectiveCommandLine } = pty
+          ? wrapWithPty(command, args)
+          : {
+              spawnCommand: resolveBin(command),
+              spawnArgs: args,
+              effectiveCommandLine: commandLine,
+            };
 
-      const shouldTrackNoOutputTimeout =
-        typeof noOutputTimeoutMs === 'number' &&
-        Number.isFinite(noOutputTimeoutMs) &&
-        noOutputTimeoutMs > 0;
+        const shouldTrackNoOutputTimeout =
+          typeof noOutputTimeoutMs === 'number' &&
+          Number.isFinite(noOutputTimeoutMs) &&
+          noOutputTimeoutMs > 0;
 
-      const child = spawn(spawnCommand, spawnArgs, {
-        stdio: [stdin, 'pipe', 'pipe'],
-        shell: false,
-        detached,
-        cwd,
-        env: env ? resolveEnv(env) : undefined,
-      });
+        const sandboxed = sandbox({
+          command: spawnCommand,
+          args: spawnArgs,
+          writableRoots,
+        });
+        const child = spawn(sandboxed.command, sandboxed.args, {
+          stdio: [stdin, 'pipe', 'pipe'],
+          shell: false,
+          detached,
+          cwd,
+          env: resolveEnv(env ?? {}),
+        });
 
-      onSpawn?.(child);
+        onSpawn?.(child);
 
-      if (stdin === 'pipe' && typeof input === 'string' && child.stdin) {
-        child.stdin.write(input);
-        child.stdin.end();
-      }
-
-      const clearNoOutputTimer = () => {
-        if (!noOutputTimer) return;
-        clearTimeout(noOutputTimer);
-        noOutputTimer = null;
-      };
-
-      const armNoOutputTimer = () => {
-        if (!shouldTrackNoOutputTimeout || settled) return;
-        clearNoOutputTimer();
-        noOutputTimer = setTimeout(() => {
-          if (settled) return;
-          noOutputTimedOut = true;
-          killProcessSignal(child, 'SIGKILL');
-        }, Math.floor(noOutputTimeoutMs));
-        noOutputTimer.unref?.();
-      };
-
-      const finish = (result: { text: string; details: ExecResultDetails }) => {
-        cleanup();
-        resolve(result);
-      };
-
-      const abort = () => {
-        terminateProcessWithEscalation(child, 2000);
-        cleanup();
-        reject(new DOMException('Command aborted by user', 'AbortError'));
-      };
-
-      let settled = false;
-      const cleanup = () => {
-        if (settled) return;
-        settled = true;
-        signal?.removeEventListener('abort', abort);
-        clearNoOutputTimer();
-      };
-
-      if (signal) {
-        if (signal.aborted) {
-          abort();
-          return;
+        if (stdin === 'pipe' && typeof input === 'string' && child.stdin) {
+          child.stdin.write(input);
+          child.stdin.end();
         }
-        signal.addEventListener('abort', abort, { once: true });
-      }
 
-      armNoOutputTimer();
+        const clearNoOutputTimer = () => {
+          if (!noOutputTimer) return;
+          clearTimeout(noOutputTimer);
+          noOutputTimer = null;
+        };
 
-      child.stdout?.on('data', (data: Buffer) => {
-        const text = data.toString();
+        const armNoOutputTimer = () => {
+          if (!shouldTrackNoOutputTimeout || settled) return;
+          clearNoOutputTimer();
+          noOutputTimer = setTimeout(() => {
+            if (settled) return;
+            noOutputTimedOut = true;
+            killProcessSignal(child, 'SIGKILL');
+          }, Math.floor(noOutputTimeoutMs));
+          noOutputTimer.unref?.();
+        };
+
+        const finish = (result: {
+          text: string;
+          details: ExecResultDetails;
+        }) => {
+          cleanup();
+          resolve(result);
+        };
+
+        const abort = () => {
+          terminateProcessWithEscalation(child, 2000);
+          cleanup();
+          reject(new DOMException('Command aborted by user', 'AbortError'));
+        };
+
+        let settled = false;
+        const cleanup = () => {
+          if (settled) return;
+          settled = true;
+          signal?.removeEventListener('abort', abort);
+          clearNoOutputTimer();
+        };
+
+        if (signal) {
+          if (signal.aborted) {
+            abort();
+            return;
+          }
+          signal.addEventListener('abort', abort, { once: true });
+        }
+
         armNoOutputTimer();
-        stdoutTotalBytes += data.length;
-        stdoutCaptured = captureBytes(
-          stdoutCaptured,
-          data,
-          capture,
-          MAX_CAPTURED_OUTPUT_BYTES
-        );
-        outputTruncated = stdoutTotalBytes > MAX_CAPTURED_OUTPUT_BYTES;
-      });
 
-      child.stderr?.on('data', (data: Buffer) => {
-        const text = data.toString();
-        process.stderr.write(pc.red(text));
-        armNoOutputTimer();
-        stderrTotalBytes += data.length;
-        stderrCaptured = captureBytes(
-          stderrCaptured,
-          data,
-          capture,
-          MAX_CAPTURED_OUTPUT_BYTES
-        );
-        errorTruncated = stderrTotalBytes > MAX_CAPTURED_OUTPUT_BYTES;
-      });
+        child.stdout?.on('data', (data: Buffer) => {
+          const text = data.toString();
+          armNoOutputTimer();
+          stdoutTotalBytes += data.length;
+          stdoutCaptured = captureBytes(
+            stdoutCaptured,
+            data,
+            capture,
+            MAX_CAPTURED_OUTPUT_BYTES
+          );
+          outputTruncated = stdoutTotalBytes > MAX_CAPTURED_OUTPUT_BYTES;
+        });
 
-      child.on('close', async (code, signal) => {
-        if (settled) return;
-        settled = true;
-        const fullOutput = stdoutCaptured.toString('utf8');
-        const fullError = stderrCaptured.toString('utf8');
-        const combined =
-          fullOutput + (fullError ? `\n[stderr]\n${fullError}` : '');
+        child.stderr?.on('data', (data: Buffer) => {
+          const text = data.toString();
+          process.stderr.write(pc.red(text));
+          armNoOutputTimer();
+          stderrTotalBytes += data.length;
+          stderrCaptured = captureBytes(
+            stderrCaptured,
+            data,
+            capture,
+            MAX_CAPTURED_OUTPUT_BYTES
+          );
+          errorTruncated = stderrTotalBytes > MAX_CAPTURED_OUTPUT_BYTES;
+        });
 
-        if (noOutputTimedOut) {
+        child.on('close', async (code, signal) => {
+          if (settled) return;
+          settled = true;
+          const fullOutput = stdoutCaptured.toString('utf8');
+          const fullError = stderrCaptured.toString('utf8');
+          const combined =
+            fullOutput + (fullError ? `\n[stderr]\n${fullError}` : '');
+
+          if (noOutputTimedOut) {
+            const details: ExecResultDetails = {
+              background: false,
+              commandLine: effectiveCommandLine,
+              cwd,
+              code,
+              signal,
+              termination: 'no-output-timeout',
+              stdout: fullOutput,
+              stderr: fullError,
+              truncatedStdout: outputTruncated,
+              truncatedStderr: errorTruncated,
+              bytesStdoutTotal: stdoutTotalBytes,
+              bytesStderrTotal: stderrTotalBytes,
+            };
+            const text =
+              `Command killed due to no-output timeout (${Math.floor(
+                noOutputTimeoutMs ?? 0
+              )}ms)\n${combined}` +
+              (outputTruncated || errorTruncated
+                ? `\n\n[output truncated]\nCaptured up to ${MAX_CAPTURED_OUTPUT_BYTES} bytes of stdout and stderr each.`
+                : '');
+            resolve({ text, details });
+            return;
+          }
+
+          const termination: ExecTermination =
+            signal != null ? 'signal' : 'exit';
           const details: ExecResultDetails = {
             background: false,
             commandLine: effectiveCommandLine,
             cwd,
             code,
             signal,
-            termination: 'no-output-timeout',
+            termination,
             stdout: fullOutput,
             stderr: fullError,
             truncatedStdout: outputTruncated,
@@ -363,69 +416,46 @@ export async function runExec(
             bytesStderrTotal: stderrTotalBytes,
           };
           const text =
-            `Command killed due to no-output timeout (${Math.floor(
-              noOutputTimeoutMs ?? 0
-            )}ms)\n${combined}` +
+            (code !== 0 ? `Command exited with code ${code}\n` : '') +
+            (combined.trim() === ''
+              ? '(no output. exit code: ' + (code ?? 0) + ')'
+              : combined) +
             (outputTruncated || errorTruncated
               ? `\n\n[output truncated]\nCaptured up to ${MAX_CAPTURED_OUTPUT_BYTES} bytes of stdout and stderr each.`
               : '');
           resolve({ text, details });
-          return;
-        }
-
-        const termination: ExecTermination =
-          signal != null ? 'signal' : 'exit';
-        const details: ExecResultDetails = {
-          background: false,
-          commandLine: effectiveCommandLine,
-          cwd,
-          code,
-          signal,
-          termination,
-          stdout: fullOutput,
-          stderr: fullError,
-          truncatedStdout: outputTruncated,
-          truncatedStderr: errorTruncated,
-          bytesStdoutTotal: stdoutTotalBytes,
-          bytesStderrTotal: stderrTotalBytes,
-        };
-        const text =
-          (code !== 0 ? `Command exited with code ${code}\n` : '') +
-          (combined.trim() === ''
-            ? '(no output. exit code: ' + (code ?? 0) + ')'
-            : combined) +
-          (outputTruncated || errorTruncated
-            ? `\n\n[output truncated]\nCaptured up to ${MAX_CAPTURED_OUTPUT_BYTES} bytes of stdout and stderr each.`
-            : '');
-        resolve({ text, details });
-      });
-
-      child.on('error', (error) => {
-        const errorMsg = `Failed to start command: ${error.message}`;
-        console.error(pc.red(errorMsg));
-        finish({
-          text: errorMsg,
-          details: {
-            background: false,
-            commandLine: effectiveCommandLine,
-            cwd,
-            code: null,
-            signal: null,
-            termination: 'start-error',
-            stdout: '',
-            stderr: error.message,
-            truncatedStdout: false,
-            truncatedStderr: false,
-            bytesStdoutTotal: 0,
-            bytesStderrTotal: 0,
-          },
         });
-      });
-    });
+
+        child.on('error', (error) => {
+          const errorMsg = `Failed to start command: ${error.message}`;
+          console.error(pc.red(errorMsg));
+          finish({
+            text: errorMsg,
+            details: {
+              background: false,
+              commandLine: effectiveCommandLine,
+              cwd,
+              code: null,
+              signal: null,
+              termination: 'start-error',
+              stdout: '',
+              stderr: error.message,
+              truncatedStdout: false,
+              truncatedStderr: false,
+              bytesStdoutTotal: 0,
+              bytesStderrTotal: 0,
+            },
+          });
+        });
+      }
+    );
   }
 }
 
 export function getExecTools(context: ToolContext): AgentTool[] {
+  const defaultCwd = path.resolve(getWorkspacePath(context.config));
+  const writableRoots = [defaultCwd, path.resolve(tmpdir())];
+
   return [
     {
       name: 'execve',
@@ -486,8 +516,17 @@ export function getExecTools(context: ToolContext): AgentTool[] {
         ),
       }),
       execute: async (_id, params, signal, _onUpdate) => {
-        const { command, args, background, noOutputTimeoutMs, cwd, env, input, pty, capture } =
-          params as ExecveToolParams;
+        const {
+          command,
+          args,
+          background,
+          noOutputTimeoutMs,
+          cwd,
+          env,
+          input,
+          pty,
+          capture,
+        } = params as ExecveToolParams;
 
         const { text, details } = await runExec(
           { command, args },
@@ -495,11 +534,12 @@ export function getExecTools(context: ToolContext): AgentTool[] {
             signal,
             background,
             noOutputTimeoutMs,
-            cwd,
+            cwd: cwd ?? defaultCwd,
             env,
             input,
             pty,
             capture,
+            writableRoots,
             onFinished: (result) => {
               context.onBackgroundUpdate({
                 tool: 'execve',
@@ -634,12 +674,13 @@ export function getExecTools(context: ToolContext): AgentTool[] {
         const { text, details } = await runPipeline(commands, {
           signal,
           background,
-          cwd,
+          cwd: cwd ?? defaultCwd,
           env,
           input,
           mergeStderrMode,
           capture,
           noOutputTimeoutMs,
+          writableRoots,
           onFinished: (result) => {
             context.onBackgroundUpdate({ tool: 'execve', message: result });
           },
@@ -736,6 +777,7 @@ async function runPipeline(
     input?: string;
     mergeStderrMode?: 'next' | 'collect-only' | 'last-merge';
     capture?: 'head' | 'tail';
+    writableRoots: string[];
   }
 ): Promise<{ text: string; details: ExecResultDetails }> {
   const {
@@ -749,6 +791,7 @@ async function runPipeline(
     input,
     mergeStderrMode = 'collect-only',
     capture = 'head',
+    writableRoots,
   } = context;
 
   if (commands.length === 0) {
@@ -825,205 +868,238 @@ async function runPipeline(
     detached: boolean;
     runId: string | null;
   }) {
-    return new Promise<{ text: string; details: ExecResultDetails }>((resolve, reject) => {
-      const resolvedEnv = env ? resolveEnv(env) : undefined;
-      const children: ChildProcess[] = [];
-      let settled = false;
+    return new Promise<{ text: string; details: ExecResultDetails }>(
+      (resolve, reject) => {
+        const resolvedEnv = resolveEnv(env ?? {});
+        const children: ChildProcess[] = [];
+        let settled = false;
 
-      let stdoutCaptured: Buffer = Buffer.alloc(0) as Buffer;
-      let stderrCaptured: Buffer = Buffer.alloc(0) as Buffer;
-      let stdoutTotalBytes = 0;
-      let stderrTotalBytes = 0;
-      let outputTruncated = false;
-      let errorTruncated = false;
+        let stdoutCaptured: Buffer = Buffer.alloc(0) as Buffer;
+        let stderrCaptured: Buffer = Buffer.alloc(0) as Buffer;
+        let stdoutTotalBytes = 0;
+        let stderrTotalBytes = 0;
+        let outputTruncated = false;
+        let errorTruncated = false;
 
-      let noOutputTimedOut = false;
-      let noOutputTimer: ReturnType<typeof setTimeout> | null = null;
-      const shouldTrackNoOutputTimeout =
-        typeof noOutputTimeoutMs === 'number' &&
-        Number.isFinite(noOutputTimeoutMs) &&
-        noOutputTimeoutMs > 0;
+        let noOutputTimedOut = false;
+        let noOutputTimer: ReturnType<typeof setTimeout> | null = null;
+        const shouldTrackNoOutputTimeout =
+          typeof noOutputTimeoutMs === 'number' &&
+          Number.isFinite(noOutputTimeoutMs) &&
+          noOutputTimeoutMs > 0;
 
-      const clearNoOutputTimer = () => {
-        if (!noOutputTimer) return;
-        clearTimeout(noOutputTimer);
-        noOutputTimer = null;
-      };
+        const clearNoOutputTimer = () => {
+          if (!noOutputTimer) return;
+          clearTimeout(noOutputTimer);
+          noOutputTimer = null;
+        };
 
-      const armNoOutputTimer = () => {
-        if (!shouldTrackNoOutputTimeout || settled) return;
-        clearNoOutputTimer();
-        noOutputTimer = setTimeout(() => {
-          if (settled) return;
-          noOutputTimedOut = true;
+        const armNoOutputTimer = () => {
+          if (!shouldTrackNoOutputTimeout || settled) return;
+          clearNoOutputTimer();
+          noOutputTimer = setTimeout(() => {
+            if (settled) return;
+            noOutputTimedOut = true;
+            for (const child of children) {
+              killProcessSignal(child, 'SIGKILL');
+            }
+          }, Math.floor(noOutputTimeoutMs));
+          noOutputTimer.unref?.();
+        };
+
+        const abort = () => {
           for (const child of children) {
-            killProcessSignal(child, 'SIGKILL');
+            terminateProcessWithEscalation(child, 2000);
           }
-        }, Math.floor(noOutputTimeoutMs));
-        noOutputTimer.unref?.();
-      };
+          cleanup();
+          reject(new DOMException('Command aborted by user', 'AbortError'));
+        };
 
-      const abort = () => {
-        for (const child of children) {
-          terminateProcessWithEscalation(child, 2000);
+        const cleanup = () => {
+          if (settled) return;
+          settled = true;
+          signal?.removeEventListener('abort', abort);
+          clearNoOutputTimer();
+        };
+
+        if (signal) {
+          if (signal.aborted) {
+            abort();
+            return;
+          }
+          signal.addEventListener('abort', abort, { once: true });
         }
-        cleanup();
-        reject(new DOMException('Command aborted by user', 'AbortError'));
-      };
 
-      const cleanup = () => {
-        if (settled) return;
-        settled = true;
-        signal?.removeEventListener('abort', abort);
-        clearNoOutputTimer();
-      };
-
-      if (signal) {
-        if (signal.aborted) {
-          abort();
+        try {
+          for (let index = 0; index < commands.length; index += 1) {
+            const step = commands[index]!;
+            const binPath = resolveBin(step.command);
+            const sandboxed = sandbox({
+              command: binPath,
+              args: step.args,
+              writableRoots,
+            });
+            const child = spawn(sandboxed.command, sandboxed.args, {
+              stdio: ['pipe', 'pipe', 'pipe'],
+              shell: false,
+              detached,
+              cwd,
+              env: resolvedEnv,
+            });
+            children.push(child);
+          }
+        } catch (error) {
+          cleanup();
+          reject(error);
           return;
         }
-        signal.addEventListener('abort', abort, { once: true });
-      }
 
-      try {
-        for (let index = 0; index < commands.length; index += 1) {
-          const step = commands[index]!;
-          const binPath = resolveBin(step.command);
-          const child = spawn(binPath, step.args, {
-            stdio: ['pipe', 'pipe', 'pipe'],
-            shell: false,
-            detached,
-            cwd,
-            env: resolvedEnv,
+        if (typeof runId === 'string') {
+          backgroundProcesses.set(runId, {
+            runId,
+            children,
+            startedAtIso: new Date().toISOString(),
+            commandLine,
           });
-          children.push(child);
-        }
-      } catch (error) {
-        cleanup();
-        reject(error);
-        return;
-      }
-
-      if (typeof runId === 'string') {
-        backgroundProcesses.set(runId, {
-          runId,
-          children,
-          startedAtIso: new Date().toISOString(),
-          commandLine,
-        });
-        let remaining = children.length;
-        for (const child of children) {
-          child.once('close', () => {
-            remaining -= 1;
-            if (remaining <= 0) {
-              backgroundProcesses.delete(runId);
-            }
-          });
-        }
-      }
-
-      for (let index = 0; index < children.length - 1; index += 1) {
-        const fromChild = children[index]!;
-        const toChild = children[index + 1]!;
-        if (fromChild.stdout && toChild.stdin) {
-          // Avoid premature close when multiple sources feed stdin.
-          fromChild.stdout.pipe(toChild.stdin, { end: false });
-          let endedCount = 0;
-          const maybeEnd = () => {
-            endedCount += 1;
-            if (endedCount >= (mergeStderrMode === 'next' ? 2 : 1)) {
-              try {
-                toChild.stdin?.end();
-              } catch {
-                // ignore
+          let remaining = children.length;
+          for (const child of children) {
+            child.once('close', () => {
+              remaining -= 1;
+              if (remaining <= 0) {
+                backgroundProcesses.delete(runId);
               }
-            }
-          };
-          fromChild.stdout.once('end', maybeEnd);
-
-          if (mergeStderrMode === 'next' && fromChild.stderr) {
-            fromChild.stderr.pipe(toChild.stdin, { end: false });
-            fromChild.stderr.once('end', maybeEnd);
+            });
           }
         }
-      }
 
-      const firstChild = children[0]!;
-      if (typeof input === 'string' && firstChild.stdin) {
-        firstChild.stdin.write(input);
-        firstChild.stdin.end();
-      } else if (firstChild.stdin) {
-        firstChild.stdin.end();
-      }
+        for (let index = 0; index < children.length - 1; index += 1) {
+          const fromChild = children[index]!;
+          const toChild = children[index + 1]!;
+          if (fromChild.stdout && toChild.stdin) {
+            // Avoid premature close when multiple sources feed stdin.
+            fromChild.stdout.pipe(toChild.stdin, { end: false });
+            let endedCount = 0;
+            const maybeEnd = () => {
+              endedCount += 1;
+              if (endedCount >= (mergeStderrMode === 'next' ? 2 : 1)) {
+                try {
+                  toChild.stdin?.end();
+                } catch {
+                  // ignore
+                }
+              }
+            };
+            fromChild.stdout.once('end', maybeEnd);
 
-      const lastChild = children[children.length - 1]!;
+            if (mergeStderrMode === 'next' && fromChild.stderr) {
+              fromChild.stderr.pipe(toChild.stdin, { end: false });
+              fromChild.stderr.once('end', maybeEnd);
+            }
+          }
+        }
 
-      armNoOutputTimer();
+        const firstChild = children[0]!;
+        if (typeof input === 'string' && firstChild.stdin) {
+          firstChild.stdin.write(input);
+          firstChild.stdin.end();
+        } else if (firstChild.stdin) {
+          firstChild.stdin.end();
+        }
 
-      for (const child of children) {
-        child.stderr?.on('data', (data: Buffer) => {
-          const text = data.toString();
-          process.stderr.write(pc.red(text));
-          armNoOutputTimer();
-          stderrTotalBytes += data.length;
-          stderrCaptured = captureBytes(
-            stderrCaptured,
-            data,
-            capture,
-            MAX_CAPTURED_OUTPUT_BYTES
-          );
-          errorTruncated = stderrTotalBytes > MAX_CAPTURED_OUTPUT_BYTES;
+        const lastChild = children[children.length - 1]!;
 
-          if (mergeStderrMode === 'last-merge') {
-            stdoutTotalBytes += data.length;
-            stdoutCaptured = captureBytes(
-              stdoutCaptured,
+        armNoOutputTimer();
+
+        for (const child of children) {
+          child.stderr?.on('data', (data: Buffer) => {
+            const text = data.toString();
+            process.stderr.write(pc.red(text));
+            armNoOutputTimer();
+            stderrTotalBytes += data.length;
+            stderrCaptured = captureBytes(
+              stderrCaptured,
               data,
               capture,
               MAX_CAPTURED_OUTPUT_BYTES
             );
-            outputTruncated = stdoutTotalBytes > MAX_CAPTURED_OUTPUT_BYTES;
+            errorTruncated = stderrTotalBytes > MAX_CAPTURED_OUTPUT_BYTES;
+
+            if (mergeStderrMode === 'last-merge') {
+              stdoutTotalBytes += data.length;
+              stdoutCaptured = captureBytes(
+                stdoutCaptured,
+                data,
+                capture,
+                MAX_CAPTURED_OUTPUT_BYTES
+              );
+              outputTruncated = stdoutTotalBytes > MAX_CAPTURED_OUTPUT_BYTES;
+            }
+          });
+
+          child.on('error', (error) => {
+            cleanup();
+            reject(new Error(`Failed to start command: ${error.message}`));
+          });
+        }
+
+        lastChild.stdout?.on('data', (data: Buffer) => {
+          const text = data.toString();
+          armNoOutputTimer();
+          stdoutTotalBytes += data.length;
+          stdoutCaptured = captureBytes(
+            stdoutCaptured,
+            data,
+            capture,
+            MAX_CAPTURED_OUTPUT_BYTES
+          );
+          outputTruncated = stdoutTotalBytes > MAX_CAPTURED_OUTPUT_BYTES;
+        });
+
+        lastChild.on('close', (code, signal) => {
+          if (settled) return;
+          settled = true;
+          clearNoOutputTimer();
+
+          const fullOutput = stdoutCaptured.toString('utf8');
+          const fullError = stderrCaptured.toString('utf8');
+          const combined =
+            fullOutput + (fullError ? `\n[stderr]\n${fullError}` : '');
+
+          if (noOutputTimedOut) {
+            const details: ExecResultDetails = {
+              background: false,
+              commandLine,
+              cwd,
+              code,
+              signal,
+              termination: 'no-output-timeout',
+              stdout: fullOutput,
+              stderr: fullError,
+              truncatedStdout: outputTruncated,
+              truncatedStderr: errorTruncated,
+              bytesStdoutTotal: stdoutTotalBytes,
+              bytesStderrTotal: stderrTotalBytes,
+            };
+            const text =
+              `Pipeline killed due to no-output timeout (${Math.floor(
+                noOutputTimeoutMs ?? 0
+              )}ms)\n${combined}` +
+              (outputTruncated || errorTruncated
+                ? `\n\n[output truncated]\nCaptured up to ${MAX_CAPTURED_OUTPUT_BYTES} bytes of stdout and stderr each.`
+                : '');
+            resolve({ text, details });
+            return;
           }
-        });
 
-        child.on('error', (error) => {
-          cleanup();
-          reject(new Error(`Failed to start command: ${error.message}`));
-        });
-      }
-
-      lastChild.stdout?.on('data', (data: Buffer) => {
-        const text = data.toString();
-        armNoOutputTimer();
-        stdoutTotalBytes += data.length;
-        stdoutCaptured = captureBytes(
-          stdoutCaptured,
-          data,
-          capture,
-          MAX_CAPTURED_OUTPUT_BYTES
-        );
-        outputTruncated = stdoutTotalBytes > MAX_CAPTURED_OUTPUT_BYTES;
-      });
-
-      lastChild.on('close', (code, signal) => {
-        if (settled) return;
-        settled = true;
-        clearNoOutputTimer();
-
-        const fullOutput = stdoutCaptured.toString('utf8');
-        const fullError = stderrCaptured.toString('utf8');
-        const combined =
-          fullOutput + (fullError ? `\n[stderr]\n${fullError}` : '');
-
-        if (noOutputTimedOut) {
+          const termination: ExecTermination =
+            signal != null ? 'signal' : 'exit';
           const details: ExecResultDetails = {
             background: false,
             commandLine,
             cwd,
             code,
             signal,
-            termination: 'no-output-timeout',
+            termination,
             stdout: fullOutput,
             stderr: fullError,
             truncatedStdout: outputTruncated,
@@ -1032,48 +1108,42 @@ async function runPipeline(
             bytesStderrTotal: stderrTotalBytes,
           };
           const text =
-            `Pipeline killed due to no-output timeout (${Math.floor(
-              noOutputTimeoutMs ?? 0
-            )}ms)\n${combined}` +
+            (code !== 0 ? `Pipeline exited with code ${code}\n` : '') +
+            (combined.trim() === '' ? '(no output. exit code: 0)' : combined) +
             (outputTruncated || errorTruncated
               ? `\n\n[output truncated]\nCaptured up to ${MAX_CAPTURED_OUTPUT_BYTES} bytes of stdout and stderr each.`
               : '');
           resolve({ text, details });
-          return;
-        }
-
-        const termination: ExecTermination = signal != null ? 'signal' : 'exit';
-        const details: ExecResultDetails = {
-          background: false,
-          commandLine,
-          cwd,
-          code,
-          signal,
-          termination,
-          stdout: fullOutput,
-          stderr: fullError,
-          truncatedStdout: outputTruncated,
-          truncatedStderr: errorTruncated,
-          bytesStdoutTotal: stdoutTotalBytes,
-          bytesStderrTotal: stderrTotalBytes,
-        };
-        const text =
-          (code !== 0 ? `Pipeline exited with code ${code}\n` : '') +
-          (combined.trim() === '' ? '(no output. exit code: 0)' : combined) +
-          (outputTruncated || errorTruncated
-            ? `\n\n[output truncated]\nCaptured up to ${MAX_CAPTURED_OUTPUT_BYTES} bytes of stdout and stderr each.`
-            : '');
-        resolve({ text, details });
-      });
-    });
+        });
+      }
+    );
   }
 }
 
 function resolveEnv(extraEnv: ExecveEnv): NodeJS.ProcessEnv {
-  const mergedEnv: NodeJS.ProcessEnv = { ...process.env };
+  const mergedEnv: NodeJS.ProcessEnv = {};
+
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key.startsWith('DYLD_')) {
+      continue;
+    }
+    if (key === 'PATH') {
+      continue;
+    }
+    mergedEnv[key] = value;
+  }
+
   for (const [key, value] of Object.entries(extraEnv)) {
+    if (key.startsWith('DYLD_')) {
+      continue;
+    }
+    if (key === 'PATH') {
+      continue;
+    }
     mergedEnv[key] = String(value);
   }
+
+  mergedEnv.PATH = SAFE_PATH;
   return mergedEnv;
 }
 
@@ -1124,7 +1194,10 @@ function killProcessSignal(
   }
 }
 
-function terminateProcessWithEscalation(child: ChildProcess, termGraceMs = 2000) {
+function terminateProcessWithEscalation(
+  child: ChildProcess,
+  termGraceMs = 2000
+) {
   if (!child.pid) return;
 
   let killTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1146,4 +1219,3 @@ function terminateProcessWithEscalation(child: ChildProcess, termGraceMs = 2000)
 
   killTimer.unref?.();
 }
-

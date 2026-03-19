@@ -1,30 +1,11 @@
 import { spawn } from 'child_process';
+import { resolve, join } from 'path';
 import {
   createStore,
-  enableProductionMode,
-  getRealPath,
-  vectorSearchQuery,
-  hybridQuery,
-  searchFTS,
+  getDefaultDbPath,
   DEFAULT_MULTI_GET_MAX_BYTES,
-} from '@tobilu/qmd/dist/store.js';
-
-// Allow default DB path (~/.cache/qmd/index.sqlite) when INDEX_PATH is not set.
-// Tests that need an isolated DB set INDEX_PATH in beforeAll (e.g. memory.tests.ts).
-enableProductionMode();
-
-import type { SearchResult } from '@tobilu/qmd/dist/store.js';
-import {
-  getCollection,
-  addCollection,
-  addContext,
-} from '@tobilu/qmd/dist/collections.js';
-import {
-  documentsToJson,
-  searchResultsToJson,
-  searchResultsToFiles,
-} from '@tobilu/qmd/dist/formatter.js';
-import { withLLMSession } from '@tobilu/qmd/dist/llm.js';
+} from '@tobilu/qmd';
+import type { QMDStore, SearchResult } from '@tobilu/qmd';
 import { createLogger } from '../../../utilities/logger';
 
 const logger = createLogger('QMD');
@@ -32,50 +13,325 @@ const logger = createLogger('QMD');
 export type SearchOutputFormat = 'json' | 'files';
 
 export type VsearchOptions = {
-  limit?: number;
-  minScore?: number;
-  format?: SearchOutputFormat;
+  limit: number | undefined;
+  minScore: number | undefined;
+  format: SearchOutputFormat | undefined;
 };
 
 export type HybridSearchOptions = {
-  limit?: number;
-  minScore?: number;
-  format?: SearchOutputFormat;
+  limit: number | undefined;
+  minScore: number | undefined;
+  format: SearchOutputFormat | undefined;
 };
 
-export type GetOptions = { startLine?: number; maxLines?: number };
+export type GetOptions = {
+  startLine: number | undefined;
+  maxLines: number | undefined;
+};
 
 type RunResult = { stdout: string; stderr: string; code: number };
 
-const RUN_QMD_TIMEOUT_MS = 600_000; // 10 min for update/embed (embed can be slow)
+const RUN_QMD_TIMEOUT_MS = 600_000;
 
 /**
- * Run the qmd CLI via bun (no shell). Used only for update and embed; read
- * operations use the QMD library for in-process performance. Times out after
- * 10 minutes so a hung process does not block indefinitely.
+ * QMD client bound to a specific collection name and description.
+ * Uses the QMD SDK for search/get/multiGet (in-process); background
+ * update/embed still use the CLI for fire-and-forget support.
+ */
+export class QMD {
+  private readonly collectionName: string;
+  private readonly collectionDescription: string;
+  private readonly mask: string;
+  private readonly workspacePath: string;
+
+  constructor({
+    collectionName,
+    collectionDescription,
+    mask,
+    workspacePath,
+  }: {
+    collectionName: string;
+    collectionDescription: string;
+    mask?: string;
+    workspacePath: string;
+  }) {
+    this.collectionName = collectionName;
+    this.collectionDescription = collectionDescription;
+    this.mask = mask ?? '**/*.md';
+    this.workspacePath = workspacePath;
+  }
+
+  static async healthy(): Promise<boolean> {
+    const result = await runQmd(['status']);
+    if (result.code !== 0) {
+      logger.error(
+        `QMD health check failed:\n${result.stderr || result.stdout}`
+      );
+      return false;
+    }
+    return true;
+  }
+
+  async ready() {
+    const healthy = await QMD.healthy();
+    if (!healthy) {
+      throw new Error('QMD is not healthy');
+    }
+    await this.ensureCollection(this.collectionName, { mask: this.mask });
+    await this.updateAndEmbed({ background: true });
+  }
+
+  /**
+   * Ensure the QMD collection exists; if not, add it and register context.
+   */
+  async ensureCollection(
+    collectionPath: string,
+    options: { mask: string } = { mask: this.mask }
+  ): Promise<void> {
+    const store = await this.getStore();
+    const collections = await store.listCollections();
+    if (collections.some((c) => c.name === this.collectionName)) return;
+
+    await store.addCollection(this.collectionName, {
+      path: resolve(collectionPath),
+      pattern: options.mask,
+    });
+    await store.addContext(
+      this.collectionName,
+      '/',
+      this.collectionDescription
+    );
+  }
+
+  /**
+   * Fetch multiple documents by path list (comma-separated names).
+   * Files larger than maxBytes are skipped.
+   */
+  async multiGet(
+    paths: string[],
+    options: { maxBytes: number | undefined } = { maxBytes: undefined }
+  ): Promise<string> {
+    const store = await this.getStore();
+    const pattern = paths
+      .map((p) => `qmd://${this.collectionName}/${p}`)
+      .join(', ');
+    const { docs, errors } = await store.multiGet(pattern, {
+      includeBody: true,
+      maxBytes: options.maxBytes ?? DEFAULT_MULTI_GET_MAX_BYTES,
+    });
+    const files = docs.map((r) => {
+      if (r.skipped) {
+        return {
+          filepath: r.doc.filepath,
+          displayPath: r.doc.displayPath,
+          title: '',
+          body: '',
+          skipped: true as const,
+          skipReason: r.skipReason,
+        };
+      }
+      return {
+        filepath: r.doc.filepath,
+        displayPath: r.doc.displayPath,
+        title: r.doc.title ?? '',
+        body: r.doc.body ?? '',
+        context: r.doc.context ?? undefined,
+        skipped: false as const,
+      };
+    });
+    const out = JSON.stringify(files);
+    if (errors.length > 0) {
+      return JSON.stringify({ documents: files, errors });
+    }
+    return out;
+  }
+
+  /**
+   * Vector search over the collection. Returns JSON (or files-style list)
+   * formatted for agents. Empty results can mean index not embedded yet.
+   */
+  async vsearch(
+    searchQuery: string,
+    options: VsearchOptions = {
+      limit: undefined,
+      minScore: undefined,
+      format: undefined,
+    }
+  ): Promise<string> {
+    const store = await this.getStore();
+    const minScore = options.minScore ?? 0.3;
+
+    const results = await store.searchVector(searchQuery, {
+      collection: this.collectionName,
+      limit: options.limit ?? 10,
+    });
+    const filtered = results.filter((r) => r.score >= minScore);
+
+    if ((options.format ?? 'json') === 'files') {
+      return formatAsFileList(filtered);
+    }
+    return formatSearchResults(filtered.map(toFormattable), searchQuery);
+  }
+
+  /**
+   * Hybrid search (BM25 + vector + query expansion + reranking) over the
+   * collection. Best quality; use for "find a specific fact."
+   */
+  async hybridSearch(
+    searchQuery: string,
+    options: HybridSearchOptions = {
+      limit: undefined,
+      minScore: undefined,
+      format: undefined,
+    }
+  ): Promise<string> {
+    const store = await this.getStore();
+
+    const results = await store.search({
+      query: searchQuery,
+      collection: this.collectionName,
+      limit: options.limit ?? 10,
+      minScore: options.minScore ?? 0,
+    });
+
+    if ((options.format ?? 'json') === 'files') {
+      return formatAsFileList(results);
+    }
+    return formatSearchResults(
+      results.map((r) => ({
+        displayPath: r.displayPath,
+        title: r.title,
+        score: r.score,
+        docid: r.docid,
+        context: r.context,
+        bestChunk: r.bestChunk,
+      })),
+      searchQuery
+    );
+  }
+
+  /**
+   * BM25 keyword search only (fast, no embeddings). Use for exact names/IDs.
+   */
+  async search(
+    searchQuery: string,
+    options: { limit: number | undefined } = { limit: undefined }
+  ): Promise<string> {
+    const store = await this.getStore();
+    const results = await store.searchLex(searchQuery, {
+      collection: this.collectionName,
+      limit: options.limit ?? 20,
+    });
+    return formatSearchResults(results.map(toFormattable), searchQuery);
+  }
+
+  /**
+   * Get a single document by docid (e.g. #79462a), with optional line range.
+   */
+  async get(
+    docid: string,
+    options: GetOptions = { startLine: undefined, maxLines: undefined }
+  ): Promise<string> {
+    const store = await this.getStore();
+    const normalized = docid.startsWith('#') ? docid : `#${docid}`;
+    const body = await store.getDocumentBody(normalized, {
+      fromLine: options.startLine,
+      maxLines: options.maxLines,
+    });
+    if (body === null) throw new Error(`Document not found: ${docid}`);
+    return body;
+  }
+
+  async getStore(): Promise<QMDStore> {
+    if (!storePromise) {
+      process.env.INDEX_PATH = join(this.workspacePath, 'qmd.sqlite');
+      storePromise = createStore({ dbPath: getDefaultDbPath() }).catch(
+        (err) => {
+          storePromise = null;
+          throw err;
+        }
+      );
+    }
+    return storePromise;
+  }
+
+  /**
+   * Refresh the index after file changes. When called with
+   * `{ background: true }`, starts update + embed in the background
+   * without blocking the caller (uses CLI for fire-and-forget).
+   */
+  async updateAndEmbed(
+    options: { background: boolean | undefined } = { background: undefined }
+  ): Promise<void> {
+    const collectionName = this.collectionName;
+    logger.info(`[${collectionName}] Updating and embedding...`);
+
+    if (options.background) {
+      void runQmd(['update', '--collection', collectionName], {
+        cwd: undefined,
+        background: true,
+      });
+      void runQmd(['embed', '--collection', collectionName], {
+        cwd: undefined,
+        background: true,
+      });
+      return;
+    }
+
+    const updateResult = await runQmd([
+      'update',
+      '--collection',
+      collectionName,
+    ]);
+    if (updateResult.code !== 0) {
+      throw new Error(
+        `qmd update failed: ${updateResult.stderr || updateResult.stdout}`
+      );
+    }
+    const embedResult = await runQmd(['embed', '--collection', collectionName]);
+    if (embedResult.code !== 0) {
+      throw new Error(
+        `qmd embed failed: ${embedResult.stderr || embedResult.stdout}`
+      );
+    }
+  }
+}
+
+function toFormattable(r: SearchResult): FormattableResult {
+  return {
+    displayPath: r.displayPath,
+    title: r.title,
+    score: r.score,
+    docid: r.docid,
+    context: r.context,
+    bestChunk: undefined,
+  };
+}
+
+/**
+ * Run the qmd CLI via bun (no shell). Used only for health checks, update,
+ * and embed. Times out after 10 minutes so a hung process does not block
+ * indefinitely.
  *
  * When `background` is true, the child process is started and the promise
  * resolves immediately without waiting for completion (fire-and-forget).
  */
 function runQmd(
   args: string[],
-  options?: { cwd?: string; background?: boolean }
+  options: { cwd: string | undefined; background: boolean | undefined } = {
+    cwd: undefined,
+    background: undefined,
+  }
 ): Promise<RunResult> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const child = spawn('bun', ['run', 'qmd', ...args], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      cwd: options?.cwd ?? process.cwd(),
+      cwd: options.cwd ?? process.cwd(),
       shell: false,
     });
 
-    if (options?.background) {
-      // Fire-and-forget: allow the process to continue independently and
-      // resolve immediately without waiting for output or exit. Still log
-      // spawn errors so failures are visible in logs.
+    if (options.background) {
       child.unref();
-      // child.stdout?.on('data', (chunk) => {
-      //   console.error('[qmd]', chunk.toString());
-      // });
       child.on('error', (err) => {
         console.error('[qmd] background run failed to start:', err);
       });
@@ -95,11 +351,11 @@ function runQmd(
       });
     }, RUN_QMD_TIMEOUT_MS);
 
-    child.stdout?.on('data', (chunk) => {
+    child.stdout?.on('data', (chunk: Buffer) => {
       stdout += chunk.toString();
     });
 
-    child.stderr?.on('data', (chunk) => {
+    child.stderr?.on('data', (chunk: Buffer) => {
       stderr += chunk.toString();
     });
 
@@ -123,241 +379,35 @@ function runQmd(
   });
 }
 
-/** Lazy-created QMD store (same DB as CLI default index). */
-let store: ReturnType<typeof createStore> | null = null;
+let storePromise: Promise<QMDStore> | null = null;
 
-function getStore(): ReturnType<typeof createStore> {
-  if (!store) store = createStore();
-  return store;
+type FormattableResult = {
+  displayPath: string;
+  title: string;
+  score: number;
+  docid: string;
+  context: string | null;
+  bestChunk: string | undefined;
+};
+
+function formatSearchResults(
+  results: FormattableResult[],
+  query: string
+): string {
+  const mapped = results.map((r) => {
+    const entry: Record<string, unknown> = {
+      displayPath: r.displayPath,
+      title: r.title,
+      score: r.score,
+      docid: r.docid,
+    };
+    if (r.context) entry.context = r.context;
+    if (r.bestChunk) entry.snippet = r.bestChunk;
+    return entry;
+  });
+  return JSON.stringify({ query, results: mapped });
 }
 
-/**
- * QMD client bound to a specific collection name and description.
- * Uses the QMD library for search/get/multiGet (in-process); only update and
- * embed run via the CLI. Optional workspaceRoot is stored for future use.
- */
-export class QMD {
-  constructor(
-    private readonly collectionName: string,
-    private readonly collectionDescription: string,
-    private readonly workspaceRoot?: string
-  ) {}
-
-  static async healthy(): Promise<boolean> {
-    const result = await runQmd(['status']);
-    if (result.code !== 0) {
-      logger.error(
-        `QMD health check failed:\n${result.stderr || result.stdout}`
-      );
-      return false;
-    }
-    return true;
-  }
-
-  /**
-   * Ensure the QMD collection exists; if not, add it and register context.
-   * Uses the library's collections API (no CLI).
-   */
-  async ensureCollection(
-    collectionPath: string,
-    options?: { mask?: string }
-  ): Promise<void> {
-    const collectionName = this.collectionName;
-    const mask = options?.mask ?? '**/*.md';
-
-    if (getCollection(collectionName)) {
-      return;
-    }
-
-    const absolutePath = getRealPath(collectionPath);
-
-    addCollection(collectionName, absolutePath, mask);
-    addContext(collectionName, '/', this.collectionDescription);
-  }
-
-  /**
-   * Fetch multiple documents by path list (comma-separated names). Uses the
-   * library; returns JSON string. Files larger than maxBytes are skipped.
-   */
-  async multiGet(
-    paths: string[],
-    options?: { maxBytes?: number }
-  ): Promise<string> {
-    const collectionName = this.collectionName;
-    const qmdStore = getStore();
-    const pattern = paths.map((p) => `qmd://${collectionName}/${p}`).join(', ');
-    const maxBytes = options?.maxBytes ?? DEFAULT_MULTI_GET_MAX_BYTES;
-    const { docs, errors } = qmdStore.findDocuments(pattern, {
-      includeBody: true,
-      maxBytes,
-    });
-    const files = docs.map((r) => {
-      if (r.skipped) {
-        return {
-          filepath: r.doc.filepath,
-          displayPath: r.doc.displayPath,
-          title: '',
-          body: '',
-          skipped: true as const,
-          skipReason: r.skipReason,
-        };
-      }
-      return {
-        filepath: r.doc.filepath,
-        displayPath: r.doc.displayPath,
-        title: r.doc.title ?? '',
-        body: r.doc.body ?? '',
-        context: r.doc.context ?? undefined,
-        skipped: false as const,
-      };
-    });
-    const out = documentsToJson(files);
-    if (errors.length > 0) {
-      return JSON.stringify({
-        documents: JSON.parse(out),
-        errors,
-      });
-    }
-    return out;
-  }
-
-  /**
-   * Vector search over the collection. Uses the library with withLLMSession
-   * (in-process, no CLI spawn). Returns JSON (or files-style list) formatted
-   * for agents per QMD docs. Empty results can mean index not embedded yet.
-   */
-  async vsearch(
-    searchQuery: string,
-    options?: VsearchOptions
-  ): Promise<string> {
-    const collectionName = this.collectionName;
-    const qmdStore = getStore();
-    const limit = options?.limit ?? 10;
-    const minScore = options?.minScore ?? 0.3;
-    const format = options?.format ?? 'json';
-
-    const results = await withLLMSession(async () => {
-      return vectorSearchQuery(qmdStore, searchQuery, {
-        collection: collectionName,
-        limit,
-        minScore,
-      });
-    });
-
-    if (format === 'files') {
-      return searchResultsToFiles(results as unknown as SearchResult[]);
-    }
-    return searchResultsToJson(results as unknown as SearchResult[], {
-      query: searchQuery,
-    });
-  }
-
-  /**
-   * Hybrid search (BM25 + vector + query expansion + reranking) over the
-   * collection. Best quality per QMD docs; use for "find a specific fact."
-   */
-  async hybridSearch(
-    searchQuery: string,
-    options?: HybridSearchOptions
-  ): Promise<string> {
-    const collectionName = this.collectionName;
-    const qmdStore = getStore();
-    const limit = options?.limit ?? 10;
-    const minScore = options?.minScore ?? 0;
-    const format = options?.format ?? 'json';
-
-    const results = await withLLMSession(async () => {
-      return hybridQuery(qmdStore, searchQuery, {
-        collection: collectionName,
-        limit,
-        minScore,
-      });
-    });
-
-    if (format === 'files') {
-      return searchResultsToFiles(results as unknown as SearchResult[]);
-    }
-    const withChunkPos = results.map((r) => ({
-      ...r,
-      chunkPos: r.bestChunkPos,
-    }));
-    return searchResultsToJson(withChunkPos as unknown as SearchResult[], {
-      query: searchQuery,
-    });
-  }
-
-  /**
-   * BM25 keyword search only (fast, no embeddings). Use for exact names/IDs.
-   */
-  search(searchQuery: string, options?: { limit?: number }): string {
-    const qmdStore = getStore();
-    const limit = options?.limit ?? 20;
-    const results = qmdStore.searchFTS(searchQuery, limit, this.collectionName);
-    return searchResultsToJson(results, { query: searchQuery });
-  }
-
-  /**
-   * Get a single document by docid (e.g. #79462a), with optional line range.
-   * Uses the library (no CLI).
-   */
-  async get(docid: string, options: GetOptions = {}): Promise<string> {
-    const qmdStore = getStore();
-    const normalized = docid.startsWith('#') ? docid : `#${docid}`;
-    const doc = qmdStore.findDocumentByDocid(normalized);
-    if (!doc) {
-      throw new Error(`Document not found: ${docid}`);
-    }
-    const body = qmdStore.getDocumentBody(
-      { filepath: doc.filepath },
-      options.startLine,
-      options.maxLines
-    );
-    return body ?? '';
-  }
-
-  /**
-   * Refresh the index after file changes: update reads files from disk and
-   * updates the document store + FTS5 index; embed then generates vector
-   * embeddings for semantic search. Both are required. Still uses the CLI
-   * (update/embed are not exposed as a library API). Run from the workspace
-   * directory so the CLI sees the correct files; workspaceRoot is kept for
-   * future use (e.g. explicit cwd when CLI supports it safely).
-   *
-   * When called with `{ background: true }`, starts update + embed in the
-   * background without blocking the caller.
-   */
-  async updateAndEmbed(options?: { background?: boolean }): Promise<void> {
-    const collectionName = this.collectionName;
-    const background = options?.background ?? false;
-
-    logger.info(`[${collectionName}] Updating and embedding...`);
-
-    if (background) {
-      // Fire-and-forget maintenance: do not await long-running CLI work.
-      void runQmd(['update', '--collection', collectionName], {
-        background: true,
-      });
-      void runQmd(['embed', '--collection', collectionName], {
-        background: true,
-      });
-      return;
-    }
-
-    const updateResult = await runQmd([
-      'update',
-      '--collection',
-      collectionName,
-    ]);
-    if (updateResult.code !== 0) {
-      throw new Error(
-        `qmd update failed: ${updateResult.stderr || updateResult.stdout}`
-      );
-    }
-    const embedResult = await runQmd(['embed', '--collection', collectionName]);
-    if (embedResult.code !== 0) {
-      throw new Error(
-        `qmd embed failed: ${embedResult.stderr || embedResult.stdout}`
-      );
-    }
-  }
+function formatAsFileList(results: Array<{ displayPath: string }>): string {
+  return results.map((r) => r.displayPath).join('\n');
 }

@@ -15,7 +15,7 @@ import type { AgentConfig } from '../../index';
 import type { ToolContext } from '../../types';
 import * as sessions from '../../../gateway/sessions';
 import { Storage } from '../../../gateway/sessions/storage/storage';
-import { getWorkspacePath } from '../../utilities/impl';
+import { getWorkspacePath } from '../../utilities';
 
 export type BackgroundUpdate = {
   tool: 'prompt_agent';
@@ -689,19 +689,7 @@ export async function createSpawnTools({
         webSearch: tools.includes('web_search')
           ? parentConfig.tools?.webSearch
           : undefined,
-        guard: {
-          enabled: parentConfig.tools?.guard?.enabled ?? false,
-          ask: false,
-          // exec: {
-          //   allowlist: execAllowedCommands?.reduce(
-          //     (acc, command) => ({
-          //       ...acc,
-          //       [command]: { allow: true },
-          //     }),
-          //     {}
-          //   ),
-          // },
-        },
+        guard: parentConfig.tools.guard,
       },
     };
   }

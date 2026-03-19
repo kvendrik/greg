@@ -93,7 +93,7 @@ export async function get(
         {
           name: tool.name,
           label: tool.label,
-          params,
+          params: params as Record<string, unknown>,
         },
         context
       );

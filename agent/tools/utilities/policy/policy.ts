@@ -1,12 +1,13 @@
 import type { ToolContext } from '../../../types';
 import { state as gatewayState } from '../../../../gateway/gateway';
-import {
-  evaluateExecPolicy,
-  execPolicyToolNames,
-  type PolicyEvaluation,
-} from '../../exec/index';
+import { evaluateExecPolicy, execPolicyToolNames } from '../../exec/index';
 import { evaluateFilePolicy, filePolicyToolNames } from '../../files/index';
 import { prettify } from './prettify';
+
+export type PolicyEvaluation = {
+  allowed: boolean;
+  reason: string | null;
+};
 
 export async function evaluatePolicy(
   call: { name: string; label: string; params: Record<string, unknown> },

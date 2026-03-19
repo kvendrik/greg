@@ -9,8 +9,16 @@ export interface Config extends AgentConfig {
    */
   voice?: {
     elevenlabs?: {
+      /**
+       * ElevenLabs API key is required for Text to Speech and Speech to Text
+       * Features that need this: the TUI voice input (`/v`), `greg tg send --voice`, and `greg hub voicecall`
+       */
       key: string;
-      voiceId: string;
+      /**
+       * Voice ID is required for Text to Speech
+       * Features that need this: `greg tg send --voice` and `greg hub voicecall`
+       */
+      voiceId?: string;
     };
   };
   clients?: {
