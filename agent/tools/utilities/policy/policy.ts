@@ -36,6 +36,11 @@ export async function evaluatePolicy(
       params: call.params,
       context,
     });
+  } else if (call.name === 'web_fetch') {
+    result = {
+      allowed: false,
+      reason: null,
+    };
   }
 
   if (!result?.allowed && config.tools?.guard?.ask === true) {
@@ -49,7 +54,7 @@ export async function evaluatePolicy(
 
     const callString = prettify(call.name, call.params);
 
-    const message = `💂 ${config.id} is asking to run a \`${call.label}\`:
+    const message = `💂 ${config.id} is asking to run a tool:
 \`\`\`\n${callString}\n\`\`\`\
 \n
 /deny <reason> - deny to run this command, optionally provide a reason
@@ -58,7 +63,7 @@ export async function evaluatePolicy(
     const reply = await gatewayState.getReply(message);
 
     if (!reply.trim().toLowerCase().startsWith('/once')) {
-      const reason = `Command not allowed: ${callString}. Permission was denied by the user. User replied: "${reply}".`;
+      const reason = `Tool call not allowed: ${callString}. Permission was denied by the user. User replied: "${reply}".`;
       return {
         allowed: false,
         reason,
@@ -67,7 +72,7 @@ export async function evaluatePolicy(
 
     return {
       allowed: true,
-      reason: `Command allowed. Permission was granted by the user. User replied: "${reply}".`,
+      reason: `Tool call allowed. Permission was granted by the user. User replied: "${reply}".`,
     };
   }
 

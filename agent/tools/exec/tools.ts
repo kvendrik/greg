@@ -34,7 +34,7 @@ export type ExecveToolParams = {
   command: string;
   args: string[];
   background: boolean;
-  cwd: string;
+  cwd: string | undefined;
   env?: ExecveEnv;
   input?: string;
   pty?: boolean;
@@ -115,7 +115,7 @@ export type ExecveStopToolParams = {
 export type ExecvePipelineToolParams = {
   commands: { command: string; args: string[] }[];
   background: boolean;
-  cwd: string;
+  cwd: string | undefined;
   env?: ExecveEnv;
   input?: string;
   mergeStderrMode?: 'next' | 'collect-only' | 'last-merge';

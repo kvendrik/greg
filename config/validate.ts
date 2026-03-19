@@ -221,14 +221,14 @@ export async function validate(config: Config): Promise<boolean> {
     });
   }
 
-  if (config.clients?.telegram?.botToken) {
+  if (config.telegram?.botToken) {
     checks.push({
       name: 'Telegram',
-      run: () => validateTelegramBotToken(config.clients!.telegram!.botToken),
+      run: () => validateTelegramBotToken(config.telegram!.botToken),
     });
   } else {
     messages.warnings.push(
-      'Telegram client not configured (clients.telegram). Either configure it or use a custom client.'
+      'Telegram client not configured (telegram). Either configure it or use a custom client.'
     );
   }
 

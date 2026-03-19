@@ -4,7 +4,7 @@ import { createLogger } from '../../utilities/logger';
 
 const config = await getConfig();
 
-if (!config.clients?.telegram) {
+if (!config.telegram) {
   throw new Error('Telegram client is not configured.');
 }
 

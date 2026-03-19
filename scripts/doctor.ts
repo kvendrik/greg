@@ -42,19 +42,17 @@ function checkTelegram(config: Config): CheckResult {
   console.log('');
   console.log(pc.bold('Telegram'));
 
-  if (!config.clients?.telegram) {
+  if (!config.telegram) {
     console.warn(pc.yellow('Telegram client is not configured'));
   }
 
-  if (!config.clients?.telegram?.senderId) {
+  if (!config.telegram?.senderId) {
     console.warn(
-      pc.yellow(
-        'clients.telegram.senderId not set — `greg tg send` will not work'
-      )
+      pc.yellow('telegram.senderId not set — `greg tg send` will not work')
     );
   }
 
-  if (!config.clients?.telegram?.senderId) {
+  if (!config.telegram?.senderId) {
     return { failures: [] };
   }
 

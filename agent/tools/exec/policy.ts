@@ -83,7 +83,7 @@ async function evaluatePipeline(
 
 function evaluateExecCommand(params: {
   command: string;
-  cwd: string;
+  cwd: string | undefined;
   args: string[];
   context: ToolContext;
   kindPrefix: string;
@@ -91,12 +91,12 @@ function evaluateExecCommand(params: {
   const execConfig = params.context.config.tools?.guard.exec;
 
   const allowedRoots = getAllowedRoots(params.context.config);
-  const cwd = path.resolve(params.cwd);
+  const resolvedCwd = path.resolve(params.cwd ?? allowedRoots[0]);
 
-  if (!allowedRoots.some((root) => isUnderRoot(cwd, root))) {
+  if (!allowedRoots.some((root) => isUnderRoot(resolvedCwd, root))) {
     return {
       allowed: false,
-      reason: `Command not allowed: ${params.kindPrefix}.cwd is outside allowed roots. Received "${params.cwd}", resolved "${cwd}". Allowed roots: ${allowedRoots.map((root) => `"${root}"`).join(', ')}.`,
+      reason: `Command not allowed: ${params.kindPrefix}.cwd is outside allowed roots. Received "${params.cwd}", resolved "${resolvedCwd}". Allowed roots: ${allowedRoots.map((root) => `"${root}"`).join(', ')}.`,
     };
   }
 
@@ -110,7 +110,7 @@ function evaluateExecCommand(params: {
 
   let resolvedCommandPath = '';
   try {
-    resolvedCommandPath = resolveCommandPath(params.command, cwd);
+    resolvedCommandPath = resolveCommandPath(params.command, resolvedCwd);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return {
@@ -149,7 +149,7 @@ function evaluateExecCommand(params: {
     const argvResult = evaluateArgvAgainstProfile({
       args: params.args,
       profile,
-      cwd,
+      cwd: resolvedCwd,
       kindPrefix: params.kindPrefix,
       context: params.context,
     });

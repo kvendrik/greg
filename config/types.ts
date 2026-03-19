@@ -21,16 +21,14 @@ export interface Config extends AgentConfig {
       voiceId?: string;
     };
   };
-  clients?: {
-    telegram?: {
-      /**
-       * https://core.telegram.org/bots#how-do-i-create-a-bot
-       */
-      botToken: string;
-      /**
-       * Your user ID (e.g. from [@userinfobot](https://t.me/userinfobot)).
-       */
-      senderId: string;
-    };
+  telegram?: {
+    /**
+     * https://core.telegram.org/bots#how-do-i-create-a-bot
+     */
+    botToken: string;
+    /**
+     * Your user ID (e.g. from [@userinfobot](https://t.me/userinfobot)).
+     */
+    senderId: string;
   };
 }
