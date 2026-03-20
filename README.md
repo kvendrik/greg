@@ -156,7 +156,7 @@ The Telegram integration also connects to the `main` session by default. The hea
 
 ## 🤖🤖🤖 Subagents
 
-Greg is capable of spawning as many subagents as you'd like. He manages them through his `spawn` tools. Subagents run in the background and communicate with Greg directly. Greg then communicates with you.
+Greg is capable of spawning as many subagents as you'd like. Subagents run in the background and communicate with Greg directly. Greg then communicates with you.
 
 Subagents have their own workspace with persistent session storage, their own system prompt, and can use any of the models you have configured in your config. Based on what the subagent is for Greg will decide what tools the subagent needs access to. If the subagent has access to `exec` tools and the Guard is on (see "Guard" section below) they will ask for permission in the same way Greg does.
 
