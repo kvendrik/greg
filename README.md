@@ -156,9 +156,9 @@ The Telegram integration also connects to the `main` session by default. The hea
 
 ## 🤖🤖🤖 Subagents
 
-Greg is capable of spawning as many subagents as you'd like. He manages them through his `spawn` tools. Subagents run in the background and communicate with Greg directly. Greg then communicates with you. Subagents have their own workspace with persistent session storage and have their own system prompt.
+Greg is capable of spawning as many subagents as you'd like. He manages them through his `spawn` tools. Subagents run in the background and communicate with Greg directly. Greg then communicates with you. Subagents have their own workspace with persistent session storage, their own system prompt, and can use any of the models you have configured in your config.
 
-Spawning subagents allows you to do some fun things. I've used it to spawn agents for specialized tasks like doing research, or to debate topics by spawning a [council of agents](skills/agent-council/SKILL.md).
+Spawning subagents allows you to do some fun things. I've used it to spawn agents for specialized tasks like doing research, to give me my morning update (it takes a while to fetch and compose all the data), or to debate topics by spawning a [council of agents](skills/agent-council/SKILL.md).
 
 To try it out just ask Greg to spawn a new agent to for example do research online. Greg will create a new agent for the task you've laid out and give them a human-like name. When you're done the agent data will persist and you can ask Greg at any time to talk to the agent to pick up a new task.
 
