@@ -211,20 +211,6 @@ CLI's in the Hub:
 - `greg hub strava` provides a read-only CLI for Strava for Greg to use
 - `greg hub voicecall` provides a CLI for Greg to make voicecalls through Twilio
 
-## 🛠️ Tool Controls
-
-`tools.allow` and `tools.deny` allow you to restrict tool usage to only the tools you need:
-
-```ts
-const config = {
-  ...
-  tools: {
-    deny: ['browser_use', 'subagents'],
-  };
-  ...
-};
-```
-
 ## 💂 Guard
 
 Greg comes with a guard that’s enabled by default. You can turn it off by setting `tools.guard.enabled` to `false` if you want to go YOLO-mode.
@@ -305,5 +291,21 @@ const config: Config = {
 ```
 
 The purpose of the Guard is to reduce the risk Greg does something you don't want due to misunderstanding or confusion, and exfiltration risk (attackers transfering data without your permission). Next to using the Guard it's important to use a reliable LLM provider and frontier model when using Greg. Providers like Anthropic both run classifiers on incoming data and train their frontier models on prompt injection techniques. Using the newest models helps reduce the risk of prompt injection, and being careful with what you allow Greg to do through the Guard prevents the risk of what could happen in case prompt injection does happen.
+
+## 🛠️ Tool Controls
+
+`tools.allow` and `tools.deny` allow you to restrict tool usage to only the tools you need:
+
+```ts
+const config = {
+  ...
+  tools: {
+    deny: ['browser_use', 'subagents'],
+  };
+  ...
+};
+```
+
+## Local Models
 
 If you're concerned about privacy and want to use a local model you can configure a [custom model](https://github.com/badlogic/pi-mono/tree/main/packages/ai#custom-models). Be extra careful when you do this because local models don't have the same protection the large providers and frontier models offer.
