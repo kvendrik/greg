@@ -56,7 +56,7 @@ export interface AgentConfig {
         key: string;
       }
     | {
-        role: 'fallback' | null;
+        role?: 'fallback';
         /**
          * The command to use to activate the model.
          * Primary model doesn't have a / command considering

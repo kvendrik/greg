@@ -24,8 +24,8 @@ Oh and you don't have to call him Greg. Just say "From now on your name is John"
 1. Clone this repository, install the dependencies, and `link` so you have access to the CLI
 
 ```bash
-git clone git@github.com:kvendrik/greg.git
-cd greg
+git clone git@github.com:kvendrik/greg.git ~/greg
+cd ~/greg
 
 bun install
 bun link
@@ -41,13 +41,48 @@ const config: Config = {
     {
       role: 'primary',
       model: getModel('anthropic', 'claude-sonnet-4-6'),
-      key: '..', // https://platform.claude.com
+      key: '...', // https://platform.claude.com
+    },
+    /**
+     * Optional:
+     * A model to fall back to when the primary model is unavailable
+     */
+    {
+      role: 'fallback',
+      model: getModel('openai', 'gpt-5.4'),
+      key: '...', // https://platform.openai.com/
+      /**
+       * Optional:
+       * Command to trigger usage of this model manually.
+       * e.g. "/openai Hey Greg!" will use this model instead of the primary model
+       */
+      command: 'openai',
+    },
+    /**
+     * Optional:
+     * Any number of additional models you can invoke manually and use in subagents
+     */
+    {
+      model: getModel('google', 'gemini-3-flash-preview'),
+      key: '...', // https://aistudio.google.com/
+      command: 'gemini',
     },
   ],
   tools: {
+    /**
+     * Optional:
+     * Web search using either Brave or Google Gemini (uses Search Grounding)
+     */
     webSearch: {
       provider: 'brave',
-      key: '..', // https://brave.com/search/api/
+      key: '...', // https://brave.com/search/api/
+    },
+    /**
+     * Optional:
+     * Browser automation using Browser Use v2 and their finetuned model
+     */
+    browser: {
+      key: '...', // https://browser-use.com/
     },
     /**
      * Optional:
@@ -72,10 +107,10 @@ const config: Config = {
     },
     /**
      * Optional:
-     * Don't allow the usage of certain tools (web fetching in this case).
+     * Deny the usage of certain tools (browser automation in this case).
      * You can also use `tools.allow` to specify the only tools Greg is allowed to use.
      */
-    deny: ['web_fetch'],
+    deny: ['browser_use'],
   },
   /**
    * Optional:
@@ -93,8 +128,8 @@ const config: Config = {
    */
   voice: {
     elevenlabs: {
-      key: '..', // https://elevenlabs.io/app/api/api-keys
-      voiceId: '..', // https://elevenlabs.io/app/api/voice-library
+      key: '...', // https://elevenlabs.io/app/api/api-keys
+      voiceId: '...', // https://elevenlabs.io/app/api/voice-library
     },
   },
   /**
@@ -104,14 +139,12 @@ const config: Config = {
    */
   telegram: {
     botToken: '...', // https://core.telegram.org/api
-    senderId: '..', // curl https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
+    senderId: '...', // curl https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
   },
 };
 
 export default config;
 ```
-
-See the [`Config type`](config/types.ts) for all config options.
 
 4. Make sure your config is working correctly by running the doctor:
 
