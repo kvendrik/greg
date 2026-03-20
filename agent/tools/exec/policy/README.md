@@ -5,6 +5,8 @@ export const config = {
     guard: {
       exec: {
         allowBins: {
+         // absolute path to bin. run `which <command>` to find it
+         // `greg doctor` validates all bins in the config are accurate
           '/some/absolute/path/greg': { profiles: ['greg_read'] },
         },
         profiles: {
