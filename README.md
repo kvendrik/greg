@@ -21,23 +21,22 @@ Oh and you don't have to call him Greg. Just say "From now on your name is John"
 
 ## Setup
 
-1. Clone this repository and `cd` into it
+1. Clone this repository, install the dependencies, and `link` so you have access to the CLI
 
 ```bash
 git clone git@github.com:kvendrik/greg.git
+cd greg
+
+bun install
+bun link
 ```
 
-2. Set up the config file (`.greg.ts` in the cloned folder) with access to the services Greg needs:
+2. Set up the config file in `~/.greg/config.ts`
 
 ```ts
-// .greg.ts
-
-import { getModel } from '@mariozechner/pi-ai';
-import { type Config, exec } from './config';
+import { type Config, exec, getModel } from '../greg/config';
 
 const config: Config = {
-  id: 'greg',
-  workspace: '~/.greg',
   models: [
     {
       role: 'primary',
@@ -106,96 +105,23 @@ const config: Config = {
 export default config;
 ```
 
-(See the [`Config type`](config/types.ts) for all config options.)
+See the [`Config type`](config/types.ts) for all config options.
 
-3. Then pick how you want to interact with Greg!
-
-The default way of interacting with Greg is through Telegram (see "Custom clients" below for other options). In the config set:
-
-```ts
-const config = {
-  ...
-  clients: {
-    telegram: {
-      /**
-       * https://core.telegram.org/bots#how-do-i-create-a-bot
-       */
-      botToken: '...',
-      /**
-       * Your user ID (e.g. from [@userinfobot](https://t.me/userinfobot)).
-       */
-      senderId: '...',
-    };
-  };
-  ...
-};
-```
-
-4. Then run the setup and start commands:
+4. Make sure your config is working correctly by running the doctor:
 
 ```bash
-uv sync
-
-bun install
-bun link
-
 # Checks if all dependencies are there.
 # Warns for optional dependencies that aren’t there.
 greg doctor
+```
 
-# Start the gateway
+5. If all is good start the gateway!
+
+```bash
 greg gateway start
 ```
 
-You should see logs that indicate that both the gateway and the Telegram service are ready! 🎉
-
-## Custom clients
-
-If you would like to use something else than Telegram you have to create a client yourself. To do this, create a script like the default [`scripts/start.ts`](scripts/start.ts) script.
-
-Here's an example:
-
-```ts
-// scripts/custom-start.ts
-
-import * as gateway from '../gateway';
-
-const { stop } = await gateway.start();
-
-// This gets the main session, which the gateway loads
-// by default on startup. It's also possible to load and prompt
-// a new session through: `await gateway.load('my-new-session')`.
-const session = gateway.get('main');
-
-session.subscribe('my-custom-channel', {
-  onTurnStart: () => {},
-  onThinking: (chunk) => process.stdout.write(chunk),
-  onContent: (chunk) => process.stdout.write(chunk),
-  onToolcall: async (name, args) => console.log(JSON.stringify({ name, args })),
-  onTurnDone: async () => {},
-  onTurnStop: async () => {},
-  onError: async (error: string) => {},
-});
-
-await session.prompt(
-  { content: 'Hey Greg!', images: [] },
-  {
-    // can also be set to `all` to broadcast a result
-    // to all channels subscribed to the session
-    channelId: 'my-custom-channel',
-  }
-);
-
-process.once('SIGINT', shutdown);
-process.once('SIGTERM', shutdown);
-
-function shutdown() {
-  stop();
-  process.exit(0);
-}
-```
-
-You can call `bun run scripts/custom-start.ts` directly, but I'd recommend updating the `gateway` script in the `package.json` so that you can use `greg start` to start your custom integration.
+You should see logs that indicate that both the gateway and the Telegram service are ready! 🎉 If you're not using Telegram you can try out the TUI by running `greg tui`.
 
 ## 🔨 Skills
 
@@ -206,6 +132,12 @@ Greg can be taught how to do anything by simply telling him to read an [AgentSki
 Greg also ships with a couple of CLI's that I couldn't find good versions of elsewhere. These are available through the `greg hub` command.
 
 Greg already knows how to use them as all `hub/*/AGENT.md` files are loaded as skills by default. `greg doctor` will warn you if any of the CLIs doesn't have its dependencies installed. Greg might try to use one of the CLI's, discover he can’t because he's missing dependencies, and ask you about it.
+
+CLI's in the Hub:
+
+- `greg hub notion` provides a read-only CLI for Notion for Greg to use
+- `greg hub strava` provides a read-only CLI for Strava for Greg to use
+- `greg hub voicecall` provides a CLI for Greg to make voicecalls through Twilio
 
 ## ❤️ Heartbeat
 
@@ -236,21 +168,81 @@ The Telegram integration also connects to the `main` session by default. The hea
 
 ## 💂 Guard
 
-Greg also comes with a guard (disabled by default). Whenever Greg tries to run a command line command (his `exec()` tool) the guard checks if the command is allowed by either the list of commands that are allowed by default (`agent/tools/utilities/policy/default_exec_allowlist.ts`) or your workspace’s allowlist (`[config.workspace]/exec_allowlist.json`).
+Greg comes with a guard that’s enabled by default. You can turn it off by setting `tools.guard.enabled` to `false` if you want to go YOLO-mode.
 
-If the command is not in either list the guard will send you a message to ask for permission. Greg will wait for you to confirm or decline before he can continue answering your prompt.
+When enabled, the first thing it does is run all `exec` calls inside a sandbox. The sandbox only allows file reads and networking, nothing else. This ensures the LLM always uses the dedicated file tools to modify files. Those tools ensure file writes are only allowed inside Greg's workspace and the `/tmp` folder.
 
-If you're using Telegram the Guard's messages will be delivered there. If you're using a custom client you need to configure this yourself through the `setGetReply()` callback:
+It will also block any risky tool call (exec, any file writes, and web fetch). When it does it will ask you for permission to run the tool call on Telegram or through the TUI (depending on if you started through `greg tui` or `greg gateway start`):
+
+````md
+💂 Greg is asking to run a tool:
+
+```js
+execve({
+  command: '/opt/homebrew/bin/gog',
+  args: ['gmail', 'messages', 'search', '--max', '20'],
+  background: false,
+});
+```
+
+/deny <reason> - deny to run this command, optionally provide a reason
+/once - allow to run this command this time
+/10m - allow all `execve` calls for the next 10 minutes
+````
+
+You can use `tools.guard.exec` to allow more commands:
 
 ```ts
-...
-const { setGetReply, stop } = await gateway.start();
+const config: Config = {
+  ...
+  guard: {
+      ...
+      exec: {
+        profiles: {
+          // will allow `git log --oneline -n 200`
+          git_log: {
+            allowSubcommands: [
+              ['log'],
+            ],
+            allowFlags: {
+              '--oneline': { takesValue: false },
+              '-n': {
+                takesValue: true,
+                value: { type: 'int', min: 1, max: 200 },
+              },
+            },
+          },
+        },
+        allowBins: {
+          '/usr/bin/git': { profiles: ['git_log'] },
+        },
+      },
+    },
+  },
+  ...
+};
+```
 
-setGetReply(async (question) => {
-  // send message to user and return reply
-  return getUserReplyFromSomeWhere(question);
-});
-...
+As you can see this is quite restrictive. `exec-defaults.ts` provides default bin paths and profiles to make it a bit easier:
+
+```ts
+import { exec } from '../greg/config';
+
+const config: Config = {
+  ...
+  guard: {
+      ...
+      exec: {
+        profiles: exec.profiles,
+        allowBins: exec.merge<typeof exec.profiles>(
+          exec.readOnly,
+          exec.safeWrite
+        ),
+      },
+    },
+  },
+  ...
+};
 ```
 
 ## 🗣️ Voice Messages

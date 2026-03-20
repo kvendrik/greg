@@ -8,7 +8,6 @@ export default defineConfig(
       '**/node_modules/**',
       '**/.venv/**',
       '**/*.d.ts',
-      '.greg.ts',
       '**/dist/**',
       '**/build/**',
       'classifier/**',
@@ -47,9 +46,15 @@ export default defineConfig(
       // Prefer type for object shapes; interface is stylistic
       '@typescript-eslint/consistent-type-definitions': 'off',
       // Allow intentional empty callbacks (e.g. event handlers)
-      '@typescript-eslint/no-empty-function': ['error', { allow: ['arrowFunctions', 'methods'] }],
+      '@typescript-eslint/no-empty-function': [
+        'error',
+        { allow: ['arrowFunctions', 'methods'] },
+      ],
       // Unused params: allow prefix with underscore
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       // Allow number/boolean in template literals (common and safe when coerced)
       '@typescript-eslint/restrict-template-expressions': [
         'error',

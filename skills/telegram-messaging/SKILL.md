@@ -41,7 +41,7 @@ cd "<path from system prompt: The code you're running on is at: ...>" && greg te
 ```
 
 **Voice message (ElevenLabs TTS):**  
-Add `--voice`. If `config.voice.elevenlabs` is not set in `.greg` or the voice API errors, send the message as normal text instead using `greg telegram send` without the `--voice` flag.
+Add `--voice`. If `config.voice.elevenlabs` is not set in `~/.greg/config.ts` or the voice API errors, send the message as normal text instead using `greg telegram send` without the `--voice` flag.
 
 ```bash
 cd [WORKSPACE_ROOT] && greg telegram send --voice "Your message here"
@@ -102,7 +102,7 @@ For long-running processes:
 - Run the command from the workspace root (where package.json lives).
 - Messages should be wrapped in quotes to handle spaces and special characters.
 - The connection is already set up, no additional configuration needed.
-- For voice: configure `voice.elevenlabs.key` and `voice.elevenlabs.voiceId` in `.greg` to enable voice. If not set, `--voice` still sends the message as text.
+- For voice: configure `voice.elevenlabs.key` and `voice.elevenlabs.voiceId` in `~/.greg/config.ts` to enable voice. If not set, `--voice` still sends the message as text.
 
 If the command fails (e.g. `bun` error, script not found, Telegram not configured):
 

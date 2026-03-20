@@ -14,7 +14,7 @@ Use this skill when the user wants to know what models are available, what Greg 
 Run these steps without announcing them. Collect the data, then jump straight to the summary.
 
 **1. Check current config**
-Read `[CODE_PATH]/.greg.ts` — note primary, fallback, and any other configured models.
+Read `~/.greg/config.ts` — note primary, fallback, and any other configured models.
 
 **2. Check locally installed models**
 
@@ -53,11 +53,11 @@ Go step by step, **announcing each step and asking for permission before proceed
 
 - Run: `cd [CODE_PATH] && bun install @mariozechner/pi-ai@latest`
 - Report the result and the new version installed
-- Ask: "Shall I update `.greg.ts` next?"
+- Ask: "Shall I update `~/.greg/config.ts` next?"
 
-### 5c. Update `.greg.ts`
+### 5c. Update `~/.greg/config.ts`
 
-- Update the model in `[CODE_PATH]/.greg.ts` to the new model the user wants (use `getModel('anthropic', 'new-model-id')` or the appropriate provider)
+- Update the model in `~/.greg/config.ts` to the new model the user wants (use `getModel('anthropic', 'new-model-id')` or the appropriate provider)
 - Show the user the exact change you're making
 - Ask: "Shall I validate the config?"
 

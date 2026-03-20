@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { type Config, get as getConfig } from '../config';
 import type { SkillMeta } from '../agent/tools/skills';
 import { ENV_LINKS } from '../config/link-env';
+import type { AgentConfig } from '../agent/types';
 
 type CheckResult = {
   failures: string[];
@@ -15,7 +16,7 @@ const projectRoot = path.join(import.meta.dirname, '..');
 async function checkConfig(config: Config): Promise<CheckResult> {
   const { validate } = await import('../config');
   console.log('');
-  console.log(pc.bold('Config (.greg.ts)'));
+  console.log(pc.bold('Config (~/.greg/config.ts)'));
   const success = await validate(config);
   return { failures: success ? [] : ['Config'] };
 }
@@ -206,7 +207,7 @@ export async function doctor(config: Config): Promise<{ success: boolean }> {
   const voiceResult = await checkVoice(config);
   const telegramResult = checkTelegram(config);
   const browserResult = checkBrowser(config);
-  const skillsResult = await checkSkills(discoverSkills(config));
+  const skillsResult = await checkSkills(discoverSkills(config as AgentConfig));
 
   const failures = [
     ...configResult.failures,

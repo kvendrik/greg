@@ -55,12 +55,6 @@ describe('greg', () => {
       expect(stdout).toContain('logs');
     });
 
-    it('config path prints path containing .greg', () => {
-      const { stdout, status } = runGreg(['config', 'path']);
-      expect(status).toBe(0);
-      expect(stdout).toMatch(/\.greg\.(ts|js)/);
-    });
-
     it('heartbeat --help lists status, enable, disable, last', () => {
       const { stdout, status } = runGreg(['heartbeat', '--help']);
       expect(status).toBe(0);

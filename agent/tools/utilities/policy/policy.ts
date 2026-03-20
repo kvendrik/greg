@@ -43,7 +43,7 @@ export async function evaluatePolicy(
     };
   }
 
-  if (!result?.allowed && config.tools?.guard?.ask === true) {
+  if (!result?.allowed && config.tools?.guard?.ask !== false) {
     if (!gatewayState.getReply) {
       return {
         allowed: false,

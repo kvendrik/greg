@@ -5,6 +5,7 @@ import { Command } from 'commander';
 import { name, description, version } from '../package.json';
 import pc from 'picocolors';
 import * as config from '../config';
+import type { AgentConfig } from '../agent/types';
 
 const projectRoot = path.join(import.meta.dirname, '..');
 
@@ -510,7 +511,7 @@ program
     new Command('list').description('List all skills').action(async () => {
       const { discoverSkills } = await import('../agent/tools/skills');
       const config = await loadConfig();
-      console.log(discoverSkills(config));
+      console.log(discoverSkills(config as AgentConfig));
     })
   );
 

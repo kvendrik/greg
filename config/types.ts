@@ -1,6 +1,6 @@
 import { AgentConfig } from '../agent/types';
 
-export interface Config extends AgentConfig {
+export interface Config extends Omit<AgentConfig, 'id' | 'workspace'> {
   /**
    * Configure to
    * - Use the `greg voice` command to talk to Greg by voice.

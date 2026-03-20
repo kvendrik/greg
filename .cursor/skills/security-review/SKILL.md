@@ -95,7 +95,7 @@ Paths may vary; confirm in the repo. Guard and exec policy are under `agent/tool
 | Web search                    | Same or sibling of web tools                                 | Whether search results are guarded before being fed to the model.       |
 | Cron / heartbeat              | `agent/tools/cron/`, `gateway/heartbeat/`                    | Same guard and policy semantics; no privilege escalation.               |
 | Sessions and storage          | `gateway/sessions/`, session storage                         | No sensitive data in logs or transcripts; retention.                    |
-| Config                        | `config` types, `.greg.ts`                                   | Guard enabled by default or opt-in; which tools are enabled.            |
+| Config                        | `config` types                                               | Guard enabled by default or opt-in; which tools are enabled.            |
 
 ## 8. Performance and cost summary
 
