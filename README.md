@@ -32,9 +32,8 @@ git clone git@github.com:kvendrik/greg.git
 ```ts
 // .greg.ts
 
-import { Config } from './config';
 import { getModel } from '@mariozechner/pi-ai';
-import { exec } from './config';
+import { type Config, exec } from './config';
 
 const config: Config = {
   id: 'greg',
