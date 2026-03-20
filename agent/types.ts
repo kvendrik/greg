@@ -107,7 +107,7 @@ export interface AgentConfig {
       /**
        * Ask for permission to run a tool when it's not allowed.
        */
-      ask?: boolean;
+      ask: boolean;
       exec?: {
         allowBins: AllowedBins;
         profiles: AllowedProfiles;

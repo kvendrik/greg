@@ -55,7 +55,7 @@ export async function evaluatePolicy(
     const callString = prettify(call.name, call.params);
 
     const message = `💂 ${config.id} is asking to run a tool:
-\`\`\`\n${callString}\n\`\`\`\
+\`\`\`js\n${callString}\n\`\`\`\
 \n
 /deny <reason> - deny to run this command, optionally provide a reason
 /once - allow to run this command this time`;

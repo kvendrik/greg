@@ -16,11 +16,11 @@ export type PolicyEvaluation = {
 };
 
 export const filePolicyToolNames = [
+  'move_file',
+  'delete_file',
   'patch_file',
   'write_file',
   'append_file',
-  'read_file',
-  'list_files',
 ] as const;
 
 export const getAllowedRoots = (config: AgentConfig): string[] => [

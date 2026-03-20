@@ -25,8 +25,11 @@ type Profile = {
   denyFlags: string[];
 };
 
-export type AllowedBins = Record<string, { profiles: string[] }>;
 export type AllowedProfiles = Record<string, Profile>;
+export type AllowedBins<P extends AllowedProfiles = any> = Record<
+  string,
+  { profiles: (keyof P)[] }
+>;
 
 export const execPolicyToolNames = ['execve', 'execve_pipeline'] as const;
 

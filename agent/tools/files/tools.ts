@@ -32,6 +32,17 @@ export type ReadFileToolParams = {
   maxBytes?: number;
 };
 
+export type RenameFileToolParams = {
+  fromPath: string;
+  toPath: string;
+};
+
+export type DeleteFileToolParams = {
+  path: string;
+  recursive: boolean;
+  force: boolean;
+};
+
 export type ListFilesToolParams = {
   directory?: string;
   pattern?: string;
@@ -334,6 +345,135 @@ export function getFilesTools(context: ToolContext): AgentTool[] {
           ],
           details: {},
         };
+      },
+    },
+    {
+      name: 'move_file',
+      label: 'move file',
+      description:
+        'Move or rename a file on disk (creates destination directories).',
+      parameters: Type.Object({
+        fromPath: Type.String({
+          description: 'Absolute source file path to rename from.',
+        }),
+        toPath: Type.String({
+          description: 'Absolute destination file path to rename to.',
+        }),
+      }),
+      execute: async (_id, params, signal) => {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        const { fromPath, toPath } = params as RenameFileToolParams;
+
+        if (!path.isAbsolute(fromPath) || !path.isAbsolute(toPath)) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Refusing to rename with non-absolute paths.\nFrom: ${fromPath}\nTo: ${toPath}`,
+              },
+            ],
+            details: {},
+          };
+        }
+
+        const resolvedFrom = path.resolve(fromPath);
+        const resolvedTo = path.resolve(toPath);
+
+        try {
+          await fs.mkdir(getDirname(resolvedTo), { recursive: true });
+          await fs.rename(resolvedFrom, resolvedTo);
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Renamed ${resolvedFrom} -> ${resolvedTo}.`,
+              },
+            ],
+            details: { from: resolvedFrom, to: resolvedTo },
+          };
+        } catch (err: unknown) {
+          const code = (err as NodeJS.ErrnoException).code;
+          const reason =
+            code === 'ENOENT'
+              ? 'Source path does not exist.'
+              : code
+                ? `Filesystem error (${code}).`
+                : 'Filesystem error.';
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Failed to rename file: ${reason}`,
+              },
+            ],
+            details: { error: String(err) },
+          };
+        }
+      },
+    },
+    {
+      name: 'delete_file',
+      label: 'delete file',
+      description: 'Delete a file or directory from disk.',
+      parameters: Type.Object({
+        path: Type.String({
+          description: 'Absolute file/directory path to delete.',
+        }),
+        recursive: Type.Boolean({
+          description: 'Whether to delete directories recursively.',
+        }),
+      }),
+      execute: async (_id, params, signal) => {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        const {
+          path: filePath,
+          recursive,
+          force,
+        } = params as DeleteFileToolParams;
+
+        if (!path.isAbsolute(filePath)) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Refusing to delete a non-absolute path: ${filePath}`,
+              },
+            ],
+            details: {},
+          };
+        }
+
+        const resolvedTarget = path.resolve(filePath);
+
+        try {
+          await fs.rm(resolvedTarget, { recursive, force });
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Deleted ${resolvedTarget}.`,
+              },
+            ],
+            details: { path: resolvedTarget },
+          };
+        } catch (err: unknown) {
+          const code = (err as NodeJS.ErrnoException).code;
+          const reason =
+            code === 'ENOENT'
+              ? 'Path does not exist.'
+              : code
+                ? `Filesystem error (${code}).`
+                : 'Filesystem error.';
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Failed to delete file: ${reason}`,
+              },
+            ],
+            details: { error: String(err) },
+          };
+        }
       },
     },
     {
@@ -647,6 +787,8 @@ Use these tools to read/write files directly.
 - \`read_file\`: read a text file (bounded). If the file looks binary, it returns a diagnostic + hex preview instead of mojibake.
 - \`write_file\`: write full contents to a file (creates parent dirs).
 - \`append_file\`: append text to a file (creates parent dirs/file if missing).
+- \`move_file\`: rename/move a file. Params: \`fromPath\` -> \`toPath\` (destination dirs are created).
+- \`delete_file\`: delete a file or directory. Params: \`recursive\` (directories) and \`force\` (ignore missing paths).
 - \`list_files\`: list paths under a directory with optional \`pattern\`, pruning via \`excludePatterns\`, \`maxDepth\`, \`includeHidden\`, and \`mode\`.
 - \`patch_file\`: apply a single-file Cursor-style patch (*** Begin Patch format).
 
@@ -655,6 +797,8 @@ Use these tools to read/write files directly.
 - Use \`read_file\` for inspection and feeding content into other tools.
 - Use \`write_file\` / \`append_file\` for persisting outputs from other tools.
 - Use \`list_files\` to enumerate candidate paths for subsequent reads/patches.
+- Use \`move_file\` to move generated artifacts into their final location.
+- Use \`delete_file\` to remove temporary outputs and old versions.
 
 ### Tips
 

@@ -136,19 +136,18 @@ export async function runExec(
     input?: string;
     pty?: boolean;
     capture?: 'head' | 'tail';
-    writableRoots: string[];
+    shouldSandbox?: boolean;
   }
 ): Promise<{ text: string; details: ExecResultDetails }> {
-  const { signal, background, onFinished, onError, noOutputTimeoutMs } =
-    context;
   const {
-    cwd,
-    env,
-    input,
-    pty = false,
-    capture = 'head',
-    writableRoots,
+    signal,
+    background,
+    onFinished,
+    onError,
+    noOutputTimeoutMs,
+    shouldSandbox,
   } = context;
+  const { cwd, env, input, pty = false, capture = 'head' } = context;
   const { command, args } = params;
   const commandLine = [command, ...args].join(' ').trim();
 
@@ -269,11 +268,13 @@ export async function runExec(
           Number.isFinite(noOutputTimeoutMs) &&
           noOutputTimeoutMs > 0;
 
-        const sandboxed = sandbox({
-          command: spawnCommand,
-          args: spawnArgs,
-          writableRoots,
-        });
+        const sandboxed = shouldSandbox
+          ? sandbox({
+              command: spawnCommand,
+              args: spawnArgs,
+            })
+          : { command: spawnCommand, args: spawnArgs };
+
         const child = spawn(sandboxed.command, sandboxed.args, {
           stdio: [stdin, 'pipe', 'pipe'],
           shell: false,
@@ -454,7 +455,7 @@ export async function runExec(
 
 export function getExecTools(context: ToolContext): AgentTool[] {
   const defaultCwd = path.resolve(getWorkspacePath(context.config));
-  const writableRoots = [defaultCwd, path.resolve(tmpdir())];
+  const shouldSandbox = context.config.tools?.guard.enabled !== false;
 
   return [
     {
@@ -539,7 +540,7 @@ export function getExecTools(context: ToolContext): AgentTool[] {
             input,
             pty,
             capture,
-            writableRoots,
+            shouldSandbox,
             onFinished: (result) => {
               context.onBackgroundUpdate({
                 tool: 'execve',
@@ -680,7 +681,7 @@ export function getExecTools(context: ToolContext): AgentTool[] {
           mergeStderrMode,
           capture,
           noOutputTimeoutMs,
-          writableRoots,
+          shouldSandbox,
           onFinished: (result) => {
             context.onBackgroundUpdate({ tool: 'execve', message: result });
           },
@@ -699,10 +700,11 @@ export function getExecInstructions(): string {
   return `
 ## Exec (OS commands)
 
-You have access to two tools:
+You have access to three tools:
 
 - \`execve\`: runs a command using argv (NO SHELL).
-- \`execve_stop\`: stops a background \`execve\` run by run ID.
+- \`execve_pipeline\`: runs multiple commands connected by pipes (argv-based, NO SHELL).
+- \`execve_stop\`: stops a background \`execve\` / \`execve_pipeline\` run by run ID.
 
 ### \`execve\`
 
@@ -721,10 +723,15 @@ Because of that, pair \`execve\` with the Files tools instead of shell tricks:
 - Replace \`cat file | tool\` with \`read_file\` + \`execve(input: ...)\`
 - Replace globs (\`*.ts\`) with \`list_files(pattern: ...)\` to enumerate paths
 
-If you need “shell recipe” behavior, you must either:
+### Sandbox constraints (sandbox-exec)
 
-- Run multiple \`execve\` calls and do the composition yourself, or
-- Ask for a missing tool to be added (see “Missing tools you may want” below).
+Commands run under a macOS sandbox profile with:
+
+- Default-deny: filesystem writes are blocked.
+- File reads are allowed (\`file-read*\`), so read-only operations on local files work.
+- Network access is allowed (\`network*\`).
+
+If you need to persist anything to disk (create/edit files), write it using the Files tools (e.g. \`write_file\`, \`append_file\`, \`patch_file\`) instead of relying on the command.
 
 **Parameters**
 
@@ -739,7 +746,7 @@ If you need “shell recipe” behavior, you must either:
 
 **Stopping background runs**
 
-If you started with \`background: true\`, keep the returned \`runId\`. To cancel:
+If you started with either \`execve\` or \`execve_pipeline\` using \`background: true\`, keep the returned \`runId\`. To cancel:
 
 - Call \`execve_stop\` with that \`runId\`.
 - Stop uses SIGTERM and escalates to SIGKILL after ~2s if needed (best-effort).
@@ -752,9 +759,24 @@ If you started with \`background: true\`, keep the returned \`runId\`. To cancel
 **Common failure modes**
 
 - “My glob didn’t expand”: pass explicit file paths (use file tools / list files first).
-- “My pipeline didn’t work”: run commands separately; use the tool output as input for the next step.
+- “My pipeline didn’t work”: for \`|\` workflows use \`execve_pipeline\` with \`commands\`; otherwise run commands separately and feed outputs between steps.
 - “It’s hanging”: use \`noOutputTimeoutMs\` and/or \`execve_stop\`.
 - “Command not allowed”: the guard/allowlist blocked it; use an allowed alternative or ask for allowlist changes.
+
+### \`execve_pipeline\`
+
+Use when you need \`cmd1 | cmd2\`-style pipelines without a shell.
+
+**Parameters**
+
+- \`commands\`: array of steps, each { \`command\`, \`args\`} (argv tokens).
+- \`background\`:
+  - \`false\`: wait for completion and return output.
+  - \`true\`: return immediately with a run ID; the final result/error arrives later as a background update (cancel with \`execve_stop\`).
+- \`input\` (optional): stdin text for the first command in the pipeline.
+- \`mergeStderrMode\` (optional): \`"next"\` / \`"collect-only"\` / \`"last-merge"\`.
+- \`capture\` (optional): \`"head"\` (default) or \`"tail"\` when output is large.
+- \`noOutputTimeoutMs\` (optional): kill the pipeline if it produces no stdout/stderr for this long.
 
 ### Missing tools you may want
 
@@ -777,7 +799,7 @@ async function runPipeline(
     input?: string;
     mergeStderrMode?: 'next' | 'collect-only' | 'last-merge';
     capture?: 'head' | 'tail';
-    writableRoots: string[];
+    shouldSandbox: boolean;
   }
 ): Promise<{ text: string; details: ExecResultDetails }> {
   const {
@@ -791,7 +813,7 @@ async function runPipeline(
     input,
     mergeStderrMode = 'collect-only',
     capture = 'head',
-    writableRoots,
+    shouldSandbox,
   } = context;
 
   if (commands.length === 0) {
@@ -934,11 +956,14 @@ async function runPipeline(
           for (let index = 0; index < commands.length; index += 1) {
             const step = commands[index]!;
             const binPath = resolveBin(step.command);
-            const sandboxed = sandbox({
-              command: binPath,
-              args: step.args,
-              writableRoots,
-            });
+
+            const sandboxed = shouldSandbox
+              ? sandbox({
+                  command: binPath,
+                  args: step.args,
+                })
+              : { command: binPath, args: step.args };
+
             const child = spawn(sandboxed.command, sandboxed.args, {
               stdio: ['pipe', 'pipe', 'pipe'],
               shell: false,

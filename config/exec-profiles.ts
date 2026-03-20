@@ -1,7 +1,7 @@
 import type { AllowedBins, AllowedProfiles } from '../agent/tools/exec/policy';
 
-const profiles: AllowedProfiles = {
-  coreutils_readonly: {
+export const profiles = {
+  coreutils_read: {
     allowSubcommands: 'all',
     denyFlags: [],
     allowFlags: {
@@ -19,7 +19,7 @@ const profiles: AllowedProfiles = {
       },
     },
   },
-  git_readonly: {
+  git_read: {
     allowSubcommands: [
       ['status'],
       ['diff'],
@@ -43,7 +43,7 @@ const profiles: AllowedProfiles = {
       },
     },
   },
-  head_safe: {
+  head_read: {
     allowSubcommands: 'all',
     denyFlags: [],
     allowFlags: {
@@ -57,7 +57,7 @@ const profiles: AllowedProfiles = {
       },
     },
   },
-  tail_safe: {
+  tail_read: {
     allowSubcommands: 'all',
     denyFlags: [],
     allowFlags: {
@@ -71,7 +71,7 @@ const profiles: AllowedProfiles = {
       },
     },
   },
-  rg_safe: {
+  rg_read: {
     allowSubcommands: 'all',
     denyFlags: [],
     allowFlags: {
@@ -90,12 +90,12 @@ const profiles: AllowedProfiles = {
       },
     },
   },
-  cat_safe: {
+  cat_read: {
     allowSubcommands: 'all',
     denyFlags: [],
     allowFlags: {},
   },
-  ls_safe: {
+  ls_read: {
     allowSubcommands: 'all',
     denyFlags: [],
     allowFlags: {
@@ -107,7 +107,7 @@ const profiles: AllowedProfiles = {
       '--long': { takesValue: false },
     },
   },
-  greg_safe: {
+  greg_read: {
     allowSubcommands: [
       ['logs'],
       ['gateway'],
@@ -304,7 +304,7 @@ const profiles: AllowedProfiles = {
       '--timezone': { takesValue: true },
     },
   },
-  jq_safe: {
+  jq_read: {
     allowSubcommands: 'all',
     denyFlags: [],
     allowFlags: {
@@ -320,42 +320,75 @@ const profiles: AllowedProfiles = {
       '--slurp': { takesValue: false },
     },
   },
+} satisfies AllowedProfiles;
+
+export const readOnly: AllowedBins<typeof profiles> = {
+  '/usr/bin/wc': { profiles: ['coreutils_read'] },
+  '/usr/bin/uniq': { profiles: ['coreutils_read'] },
+  '/usr/bin/grep': { profiles: ['coreutils_read'] },
+  '/usr/bin/file': { profiles: ['coreutils_read'] },
+  '/usr/bin/stat': { profiles: ['coreutils_read'] },
+  '/usr/bin/readlink': { profiles: ['coreutils_read'] },
+  '/usr/bin/whoami': { profiles: ['coreutils_read'] },
+  '/usr/bin/id': { profiles: ['coreutils_read'] },
+  '/usr/bin/env': { profiles: ['coreutils_read'] },
+  '/bin/date': { profiles: ['coreutils_read'] },
+  '/bin/hostname': { profiles: ['coreutils_read'] },
+  '/usr/bin/uname': { profiles: ['coreutils_read'] },
+  '/usr/bin/diff': { profiles: ['coreutils_read'] },
+  '/usr/bin/cut': { profiles: ['coreutils_read'] },
+  '/usr/bin/tr': { profiles: ['coreutils_read'] },
+  '/usr/bin/nl': { profiles: ['coreutils_read'] },
+  '/usr/bin/seq': { profiles: ['coreutils_read'] },
+  '/usr/bin/du': { profiles: ['coreutils_read'] },
+  '/bin/df': { profiles: ['coreutils_read'] },
+  '/usr/bin/sort': { profiles: ['coreutils_read'] },
+  '/usr/bin/sed': { profiles: ['coreutils_read'] },
+  '/usr/bin/awk': { profiles: ['coreutils_read'] },
+  '/usr/bin/xargs': { profiles: ['coreutils_read'] },
+  '/usr/bin/comm': { profiles: ['coreutils_read'] },
+  '/usr/bin/paste': { profiles: ['coreutils_read'] },
+
+  '/usr/bin/jq': { profiles: ['jq_read'] },
+  '/usr/bin/git': { profiles: ['git_read'] },
+  '/usr/bin/head': { profiles: ['head_read'] },
+  '/usr/bin/tail': { profiles: ['tail_read'] },
+  '/bin/cat': { profiles: ['cat_read'] },
+  '/bin/ls': { profiles: ['ls_read'] },
+  '/opt/homebrew/bin/gog': { profiles: ['gog_read'] },
+
+  '~/.bun/bin/greg': { profiles: ['greg_read'] },
 };
 
-const allowedBins: AllowedBins = {
-  '/usr/bin/wc': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/uniq': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/grep': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/file': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/stat': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/readlink': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/whoami': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/id': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/env': { profiles: ['coreutils_readonly'] },
-  '/bin/date': { profiles: ['coreutils_readonly'] },
-  '/bin/hostname': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/uname': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/diff': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/cut': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/tr': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/nl': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/seq': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/du': { profiles: ['coreutils_readonly'] },
-  '/bin/df': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/sort': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/sed': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/awk': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/xargs': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/comm': { profiles: ['coreutils_readonly'] },
-  '/usr/bin/paste': { profiles: ['coreutils_readonly'] },
-
-  '/usr/bin/jq': { profiles: ['jq_safe'] },
-  '/usr/bin/git': { profiles: ['git_readonly'] },
-  '/usr/bin/head': { profiles: ['head_safe'] },
-  '/usr/bin/tail': { profiles: ['tail_safe'] },
-  '/bin/cat': { profiles: ['cat_safe'] },
-  '/bin/ls': { profiles: ['ls_safe'] },
-  '~/.bun/bin/greg': { profiles: ['greg_safe'] },
+export const safeWrite: AllowedBins<typeof profiles> = {
+  '/opt/homebrew/bin/gog': { profiles: ['gog_write'] },
 };
 
-export { profiles, allowedBins };
+export function merge<P extends AllowedProfiles>(
+  ...bins: AllowedBins<P>[]
+): AllowedBins<P> {
+  const merged: AllowedBins<P> = {};
+
+  for (const binConfig of bins) {
+    for (const [binPath, binEntry] of Object.entries(binConfig)) {
+      const existing = merged[binPath];
+      if (!existing) {
+        merged[binPath] = { profiles: [...binEntry.profiles] };
+        continue;
+      }
+
+      // Union profiles, preserving existing order and de-duping.
+      const seenProfiles = new Set(existing.profiles);
+      const combinedProfiles = [...existing.profiles];
+      for (const profileName of binEntry.profiles) {
+        if (seenProfiles.has(profileName)) continue;
+        seenProfiles.add(profileName);
+        combinedProfiles.push(profileName);
+      }
+
+      merged[binPath] = { profiles: combinedProfiles };
+    }
+  }
+
+  return merged;
+}

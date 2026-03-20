@@ -3,15 +3,14 @@ import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { Command } from 'commander';
 import { name, description, version } from '../package.json';
-import type { Config } from '../config';
 import pc from 'picocolors';
 import * as config from '../config';
 
 const projectRoot = path.join(import.meta.dirname, '..');
 
-async function loadConfig(): Promise<Config> {
+async function loadConfig(): Promise<config.Config> {
   try {
-    return (await config.get()) as Config;
+    return (await config.get()) as config.Config;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(
@@ -293,6 +292,11 @@ program
         const success = await validate(config);
         process.exit(success ? 0 : 1);
       })
+  )
+  .addCommand(
+    new Command('link-env')
+      .description('Write keys from your config to a .env file')
+      .action(() => config.linkEnv())
   )
   .addCommand(
     new Command('path')

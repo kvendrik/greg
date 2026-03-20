@@ -4,10 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { Bot, GrammyError } from 'grammy';
 import pc from 'picocolors';
 import type { Config } from './types';
-import {
-  validateAllowBins,
-  validateProfiles,
-} from '../agent/tools/exec/validate';
+import { validate as validateExecGuard } from '../agent/tools/exec/validate';
 import { createLogger } from '../utilities/logger';
 
 const logger = createLogger();
@@ -19,12 +16,128 @@ type Messages = {
   errors: string[];
 };
 
+export async function validate(config: Config): Promise<boolean> {
+  const messages: Messages = {
+    successes: [],
+    info: [],
+    warnings: [],
+    errors: [],
+  };
+
+  try {
+    assertModelsStructure(config, messages);
+    if (messages.errors.length === 0) {
+      messages.successes.push('Config structure is valid');
+    } else {
+      log(messages);
+      return false;
+    }
+  } catch (err) {
+    messages.errors.push(err instanceof Error ? err.message : String(err));
+    log(messages);
+    return false;
+  }
+
+  const providersToKeys = new Map<string, string>();
+  for (const entry of config.models) {
+    const provider = entry.model.provider;
+    if (!providersToKeys.has(provider)) {
+      providersToKeys.set(provider, entry.key);
+    }
+  }
+
+  const checks: { name: string; run: () => Promise<void> }[] = [];
+
+  for (const [provider, key] of providersToKeys) {
+    if (provider === 'openai') {
+      checks.push({ name: 'OpenAI', run: () => validateOpenAiKey(key) });
+    } else if (provider === 'anthropic') {
+      checks.push({ name: 'Anthropic', run: () => validateAnthropicKey(key) });
+    } else if (provider === 'google') {
+      checks.push({
+        name: 'Google Gemini',
+        run: () => validateGoogleKey(key),
+      });
+    } else {
+      messages.warnings.push(
+        `No validator configured for "${provider}". Could not validate key.`
+      );
+    }
+  }
+
+  if (config.tools?.browser?.key) {
+    checks.push({
+      name: 'Browser Use',
+      run: () => validateBrowserUseKey(config.tools?.browser?.key!),
+    });
+  } else {
+    messages.info.push('Browser automation not configured (tools.browser)');
+  }
+
+  if (!config.tools?.webSearch) {
+    messages.info.push('Web search not configured (tools.webSearch)');
+  }
+
+  if (config.tools?.webSearch?.provider === 'gemini') {
+    checks.push({
+      name: 'Web Search (Gemini)',
+      run: () => validateGoogleKey(config.tools?.webSearch!.key!),
+    });
+  }
+
+  if (config.tools?.webSearch?.provider === 'brave') {
+    checks.push({
+      name: 'Web Search (Brave)',
+      run: () => validateBraveKey(config.tools?.webSearch!.key!),
+    });
+  }
+
+  if (config.telegram?.botToken) {
+    checks.push({
+      name: 'Telegram',
+      run: () => validateTelegramBotToken(config.telegram!.botToken),
+    });
+  } else {
+    messages.warnings.push(
+      'Telegram client not configured (telegram). Either configure it or use a custom client.'
+    );
+  }
+
+  if (config.tools?.guard?.enabled === false) {
+    messages.warnings.push('Guard is disabled (tools.guard.enabled is false)');
+  } else {
+    checks.push({
+      name: 'Guard',
+      run: async () => {
+        const guardMessages = validateExecGuard(config);
+        messages.info.push(...guardMessages.info);
+        messages.warnings.push(...guardMessages.warnings);
+        messages.errors.push(...guardMessages.errors);
+      },
+    });
+  }
+
+  const settled = await Promise.allSettled(checks.map((c) => c.run()));
+
+  settled.forEach((s, index) => {
+    if (s.status === 'fulfilled') {
+      messages.successes.push(checks[index].name);
+    }
+    if (s.status === 'rejected') {
+      messages.errors.push(`${checks[index].name}: ${s.reason}`);
+    }
+  });
+
+  log(messages);
+  return messages.errors.length === 0;
+}
+
 function log(messages: Messages): void {
   for (const msg of messages.successes) {
     logger.log(pc.green(`${msg} ✓`));
   }
   for (const msg of messages.info) {
-    logger.log(pc.blue(`Optional: ${msg}`));
+    logger.log(pc.blue(msg));
   }
   for (const msg of messages.warnings) {
     logger.warn(pc.yellow(`Warning: ${msg}`));
@@ -51,15 +164,6 @@ function assertModelsStructure(config: Config, messages: Messages): void {
       'No fallback model configured for when primary model is overloaded'
     );
   }
-}
-
-function assertExecGuardStructure(config: Config): void {
-  const execConfig = config.tools?.guard.exec;
-  if (!execConfig) {
-    return;
-  }
-  validateProfiles(execConfig.profiles);
-  validateAllowBins(execConfig.allowBins, execConfig.profiles);
 }
 
 async function validateOpenAiKey(key: string): Promise<void> {
@@ -147,102 +251,4 @@ async function validateBraveKey(apiKey: string): Promise<void> {
       `Brave Search API error (${res.status}): ${body || res.statusText}`
     );
   }
-}
-
-export async function validate(config: Config): Promise<boolean> {
-  const messages: Messages = {
-    successes: [],
-    info: [],
-    warnings: [],
-    errors: [],
-  };
-
-  try {
-    assertModelsStructure(config, messages);
-    assertExecGuardStructure(config);
-    messages.successes.push('Config structure is valid');
-  } catch (err) {
-    messages.errors.push(err instanceof Error ? err.message : String(err));
-    log(messages);
-    return false;
-  }
-
-  const providersToKeys = new Map<string, string>();
-  for (const entry of config.models) {
-    const provider = entry.model.provider;
-    if (!providersToKeys.has(provider)) {
-      providersToKeys.set(provider, entry.key);
-    }
-  }
-
-  const checks: { name: string; run: () => Promise<void> }[] = [];
-
-  for (const [provider, key] of providersToKeys) {
-    if (provider === 'openai') {
-      checks.push({ name: 'OpenAI', run: () => validateOpenAiKey(key) });
-    } else if (provider === 'anthropic') {
-      checks.push({ name: 'Anthropic', run: () => validateAnthropicKey(key) });
-    } else if (provider === 'google') {
-      checks.push({
-        name: 'Google Gemini',
-        run: () => validateGoogleKey(key),
-      });
-    } else {
-      messages.warnings.push(
-        `No validator configured for "${provider}". Could not validate key.`
-      );
-    }
-  }
-
-  if (config.tools?.browser?.key) {
-    checks.push({
-      name: 'Browser Use',
-      run: () => validateBrowserUseKey(config.tools?.browser?.key!),
-    });
-  } else {
-    messages.info.push('Browser automation not configured (tools.browser)');
-  }
-
-  if (!config.tools?.webSearch) {
-    messages.info.push('Web search not configured (tools.webSearch)');
-  }
-
-  if (config.tools?.webSearch?.provider === 'gemini') {
-    checks.push({
-      name: 'Web Search (Gemini)',
-      run: () => validateGoogleKey(config.tools?.webSearch!.key!),
-    });
-  }
-
-  if (config.tools?.webSearch?.provider === 'brave') {
-    checks.push({
-      name: 'Web Search (Brave)',
-      run: () => validateBraveKey(config.tools?.webSearch!.key!),
-    });
-  }
-
-  if (config.telegram?.botToken) {
-    checks.push({
-      name: 'Telegram',
-      run: () => validateTelegramBotToken(config.telegram!.botToken),
-    });
-  } else {
-    messages.warnings.push(
-      'Telegram client not configured (telegram). Either configure it or use a custom client.'
-    );
-  }
-
-  const settled = await Promise.allSettled(checks.map((c) => c.run()));
-
-  settled.forEach((s, index) => {
-    if (s.status === 'fulfilled') {
-      messages.successes.push(checks[index].name);
-    }
-    if (s.status === 'rejected') {
-      messages.errors.push(`${checks[index].name}: ${s.reason}`);
-    }
-  });
-
-  log(messages);
-  return messages.errors.length === 0;
 }

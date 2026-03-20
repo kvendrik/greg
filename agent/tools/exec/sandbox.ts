@@ -3,40 +3,26 @@ import { realpathSync } from 'node:fs';
 
 const SANDBOX_EXEC_PATH = '/usr/bin/sandbox-exec';
 
-export function sandbox(params: {
+export function sandbox(params: { command: string; args: string[] }): {
   command: string;
   args: string[];
-  writableRoots: string[];
-}): { command: string; args: string[] } {
-  const profile = generateSbpl(params.writableRoots);
+} {
+  const profile = createProfile();
   return {
     command: SANDBOX_EXEC_PATH,
     args: ['-p', profile, params.command, ...params.args],
   };
 }
 
-function generateSbpl(writableRoots: string[]): string {
-  const writeRules = writableRoots
-    .map((root) => {
-      const resolved = resolveForSbpl(root);
-      return `(allow file-write* (subpath "${escapeSbpl(resolved)}"))`;
-    })
-    .join('\n');
-
+function createProfile(): string {
   return [
     '(version 1)',
+    // Default-deny is the safety baseline; only explicitly allowed capabilities below can be used.
     '(deny default)',
-    '(allow process*)',
-    '(allow signal)',
-    '(allow sysctl*)',
-    '(allow mach*)',
-    '(allow ipc*)',
+    // Network access is permitted broadly; write permissions are constrained separately below.
     '(allow network*)',
-    '(allow system-socket)',
+    // Read access is broadly allowed, while write access is restricted to `writableRoots` via `writeRules`.
     '(allow file-read*)',
-    writeRules,
-    '(allow file-write* (subpath "/dev"))',
-    '(allow file-write* (regex #"^/private/var/folders/"))',
   ].join('\n');
 }
 
@@ -56,8 +42,4 @@ function resolveForSbpl(inputPath: string): string {
       return path.resolve(inputPath);
     }
   }
-}
-
-function escapeSbpl(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }

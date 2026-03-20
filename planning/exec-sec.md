@@ -79,15 +79,15 @@ Example:
       "ask": true,
       "exec": {
         "allowResolvedBins": {
-          "/usr/bin/git": { "profile": "git_safe" },
-          "/usr/bin/head": { "profile": "head_safe" }
+          "/usr/bin/git": { "profile": "git_readonly" },
+          "/usr/bin/head": { "profile": "head_readonly" }
         },
         "profiles": {
-          "git_safe": {
+          "git_readonly": {
             "allowSubcommands": [["status"], ["diff"], ["remote", "add"]],
             "allowFlags": { "--no-pager": { "takesValue": false } }
           },
-          "head_safe": {
+          "head_readonly": {
             "allowSubcommands": "all",
             "allowFlags": { "-n": { "takesValue": true, "value": { "type": "int", "min": 1, "max": 100 } } }
           }

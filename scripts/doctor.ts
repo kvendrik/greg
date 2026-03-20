@@ -1,8 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import pc from 'picocolors';
-import type { Config } from '../config';
+import { join } from 'node:path';
+import { type Config, get as getConfig } from '../config';
 import type { SkillMeta } from '../agent/tools/skills';
+import { ENV_LINKS } from '../config/link-env';
 
 type CheckResult = {
   failures: string[];
@@ -60,7 +62,72 @@ function checkTelegram(config: Config): CheckResult {
   return { failures: [] };
 }
 
-function checkSkills(skills: SkillMeta[]): CheckResult {
+function checkBrowser(config: Config): CheckResult {
+  console.log('');
+  console.log(pc.bold('Browser Automation'));
+
+  const browserConfig = config.tools?.browser;
+
+  if (!browserConfig) {
+    console.warn(
+      pc.blue('Optional: Browser automation is not configured (tools.browser)')
+    );
+    return { failures: [] };
+  }
+
+  const uvWhichResult = spawnSync('which', ['uv'], {
+    encoding: 'utf8',
+    stdio: 'pipe',
+    cwd: projectRoot,
+  });
+
+  if (uvWhichResult.status !== 0) {
+    const detail = uvWhichResult.error
+      ? String(uvWhichResult.error.message)
+      : (uvWhichResult.stderr || uvWhichResult.stdout || '').trim();
+    console.error(
+      pc.red(
+        `  ✗ uv not found on PATH${detail ? ` — ${detail}` : ''}\n` +
+          '    Impact: browser automation cannot start (uv run scripts/browser-use.py)'
+      )
+    );
+    return { failures: ['uv'] };
+  }
+
+  console.log(pc.green('  ✓ uv'));
+
+  // Smoke-test: ensure the Python environment and dependencies are present.
+  // This doesn't require Chrome; it just validates that `browser_use` can be imported.
+  const importResult = spawnSync(
+    'uv',
+    ['run', 'python', '-c', 'import browser_use; print("ok")'],
+    {
+      encoding: 'utf8',
+      stdio: 'pipe',
+      cwd: projectRoot,
+    }
+  );
+
+  if (importResult.status === 0) {
+    console.log(pc.green('  ✓ browser_use Python deps import'));
+    return { failures: [] };
+  }
+
+  const detail = (importResult.stderr || importResult.stdout || '')
+    .trim()
+    .slice(0, 1000);
+  console.error(
+    pc.red(
+      `  ✗ browser_use deps not available via "uv run"\n` +
+        (detail ? `    Detail: ${detail}\n` : '') +
+        '    Suggested fix: run `uv sync` to install Python deps'
+    )
+  );
+
+  return { failures: ['browser_use (uv deps)'] };
+}
+
+async function checkSkills(skills: SkillMeta[]): Promise<CheckResult> {
   console.log('');
   console.log(pc.bold('Skills'));
 
@@ -77,11 +144,23 @@ function checkSkills(skills: SkillMeta[]): CheckResult {
       if (isEnv) {
         const value = process.env[key];
         if (value === undefined || value === '') {
+          const linkAvailable = Boolean(
+            ENV_LINKS.find((link) => link.envKey === key)?.getValue(
+              await getConfig()
+            )
+          );
+
+          const suffix = linkAvailable
+            ? `(${key} available in your config, run \`greg config link-env\` to add it to ${join(import.meta.dirname, '..', '.env')})`
+            : '';
+
           console.warn(
             pc.yellow(
               `[${skill.name}] Warning: "${skill.name}" cannot be used — env ${key} is not set (${relativePath})`
             )
           );
+
+          if (suffix) console.log(pc.dim(suffix));
         } else {
           console.log(
             pc.green(
@@ -126,13 +205,15 @@ export async function doctor(config: Config): Promise<{ success: boolean }> {
   const memoryResult = checkMemory();
   const voiceResult = await checkVoice(config);
   const telegramResult = checkTelegram(config);
-  const skillsResult = checkSkills(discoverSkills(config));
+  const browserResult = checkBrowser(config);
+  const skillsResult = await checkSkills(discoverSkills(config));
 
   const failures = [
     ...configResult.failures,
     ...memoryResult.failures,
     ...voiceResult.failures,
     ...telegramResult.failures,
+    ...browserResult.failures,
     ...skillsResult.failures,
   ];
 
@@ -141,7 +222,7 @@ export async function doctor(config: Config): Promise<{ success: boolean }> {
   if (failures.length > 0) {
     console.error(pc.red('Doctor found failures: ' + failures.join(', ')));
   } else {
-    console.log(pc.green('No critial issues found ✓'));
+    console.log(pc.green('No critical issues found ✓'));
   }
 
   return { success: failures.length === 0 };

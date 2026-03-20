@@ -349,7 +349,8 @@ export class Agent {
               ?.model ?? null;
 
           if (!fallbackModel) {
-            callbacks.onError?.(`No fallback model found in config.models.`);
+            callbacks.onError?.(this.core.state.error);
+            this.logger.warn('No fallback model found in config.models.');
             return;
           }
 
