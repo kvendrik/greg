@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import type { AllowedBins, AllowedProfiles } from './policy';
-import type { Config } from '../../../config/types';
+import type { Config } from '../../../../config/types';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -121,7 +121,21 @@ export function validate(config: Config): GuardValidationMessages {
     for (const [profileName, profile] of Object.entries(profiles)) {
       validateDenyFlags(profileName, profile.denyFlags);
       validateSubcommands(profileName, profile.allowSubcommands);
-      validateAllowFlags(profileName, profile.allowFlags);
+
+      // Semantics:
+      // - allowFlags defined => allowlist mode (only listed flags permitted)
+      // - allowFlags undefined => denylist mode (allow all except denyFlags)
+      if (typeof profile.allowFlags === 'undefined') {
+        // In denylist mode, we require at least one deny rule, otherwise the
+        // profile effectively becomes "allow all flags" and is too risky.
+        if (!Array.isArray(profile.denyFlags) || profile.denyFlags.length === 0) {
+          messages.errors.push(
+            `tools.guard.exec.profiles.${profileName} must define allowFlags, or provide a non-empty denyFlags array (denylist mode)`
+          );
+        }
+      } else {
+        validateAllowFlags(profileName, profile.allowFlags);
+      }
     }
   }
 
@@ -174,8 +188,13 @@ export function validate(config: Config): GuardValidationMessages {
 
   function validateAllowFlags(
     profileName: string,
-    allowFlags: Record<string, { takesValue: boolean; value?: unknown }>
+    allowFlags:
+      | Record<string, { takesValue: boolean; value?: unknown }>
+      | undefined
   ): void {
+    if (typeof allowFlags === 'undefined') {
+      return;
+    }
     for (const [flagName, flagSpec] of Object.entries(allowFlags)) {
       if (!flagName.startsWith('-')) {
         messages.errors.push(

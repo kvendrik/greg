@@ -4,3 +4,5 @@ alwaysApply: true
 ---
 
 When I ask you to create a README always create one that is to the point and concise. Use a friendly tone and use code snippets to explain concepts. Make sure that the code you write is how the module actually works.
+
+If you provide a README example (e.g. `agent/tools/exec/policy/README.md`), mirror its format: usually a single concise fenced `ts` code block showing the real config/shape with inline comments (avoid extra prose unless needed).

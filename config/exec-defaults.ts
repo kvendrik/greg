@@ -116,7 +116,7 @@ export const profiles = {
       ['config'],
       ['sessions'],
       ['skills'],
-      ['telegram'],
+      ['telegram', 'send'],
       ['hub', 'notion'],
       ['hub', 'strava'],
     ],
@@ -126,6 +126,7 @@ export const profiles = {
       '-h': { takesValue: false },
       '-v': { takesValue: false },
       '--verbose': { takesValue: false },
+      '--voice': { takesValue: false },
     },
   },
   gog_read: {

@@ -1,27 +1,29 @@
 import path from 'node:path';
 import { realpathSync } from 'node:fs';
 import os from 'node:os';
-import type { ToolContext } from '../../types';
-import { resolveBin } from '../utilities/resolve-bin';
-import type { ExecvePipelineToolParams, ExecveToolParams } from './tools';
-import type { PolicyEvaluation } from '../utilities/policy/policy';
-import { getAllowedRoots, isUnderRoot } from '../files/policy';
+import type { ToolContext } from '../../../types';
+import { resolveBin } from '../../utilities/resolve-bin';
+import type { ExecvePipelineToolParams, ExecveToolParams } from '../tools';
+import type { PolicyEvaluation } from '../../utilities/policy/policy';
+import { getAllowedRoots, isUnderRoot } from '../../files/policy';
 
 type Profile = {
   allowSubcommands: 'all' | string[][];
-  allowFlags: Record<
-    string,
-    {
-      takesValue: boolean;
-      value?:
-        | {
-            type: 'int';
-            min: number | undefined;
-            max: number | undefined;
-          }
-        | { type: 'path' };
-    }
-  >;
+  allowFlags:
+    | Record<
+        string,
+        {
+          takesValue: boolean;
+          value?:
+            | {
+                type: 'int';
+                min: number | undefined;
+                max: number | undefined;
+              }
+            | { type: 'path' };
+        }
+      >
+    | undefined;
   denyFlags: string[];
 };
 
@@ -229,7 +231,7 @@ function evaluateArgvAgainstProfile(params: {
   }
 
   const matchesSubcommand = params.profile.allowSubcommands.some(
-    (allowedPath) => isTokenPathPrefix(subcommandTokens, allowedPath)
+    (allowedPath) => isTokenPathGlobMatch(subcommandTokens, allowedPath)
   );
   if (!matchesSubcommand) {
     return {
@@ -272,6 +274,31 @@ function evaluateLongFlag(params: {
       consumedNextTokenCount: 0,
     };
   }
+
+  // Denylist mode: allow all flags except those in denyFlags.
+  if (typeof params.allowFlags === 'undefined') {
+    if (hasInlineValue) {
+      return {
+        allowed: true,
+        reason: null,
+        consumedNextTokenCount: 0,
+      };
+    }
+
+    const nextToken = params.args[params.index + 1];
+    const nextTokenLooksLikeValue =
+      typeof nextToken === 'string' && !nextToken.startsWith('-');
+
+    return {
+      allowed: true,
+      reason: null,
+      // Best-effort heuristic for argv parsing: if the next token doesn't
+      // look like another flag, treat it as the value.
+      consumedNextTokenCount: nextTokenLooksLikeValue ? 1 : 0,
+    };
+  }
+
+  // Allowlist mode: only allow flags present in allowFlags.
   const flagSpec = params.allowFlags[flagName];
   if (!flagSpec) {
     return {
@@ -280,6 +307,7 @@ function evaluateLongFlag(params: {
       consumedNextTokenCount: 0,
     };
   }
+
   if (!flagSpec.takesValue && hasInlineValue) {
     return {
       allowed: false,
@@ -287,6 +315,7 @@ function evaluateLongFlag(params: {
       consumedNextTokenCount: 0,
     };
   }
+
   if (!flagSpec.takesValue) {
     return { allowed: true, reason: null, consumedNextTokenCount: 0 };
   }
@@ -355,20 +384,22 @@ function evaluateShortFlag(params: {
           consumedNextTokenCount: 0,
         };
       }
-      const bundledSpec = params.allowFlags[bundledFlag];
-      if (!bundledSpec) {
-        return {
-          allowed: false,
-          reason: `Command not allowed: unlisted bundled flag "${bundledFlag}" (${params.kindPrefix}).`,
-          consumedNextTokenCount: 0,
-        };
-      }
-      if (bundledSpec.takesValue) {
-        return {
-          allowed: false,
-          reason: `Command not allowed: bundled short flags are only valid for takesValue:false flags. Offending flag "${bundledFlag}".`,
-          consumedNextTokenCount: 0,
-        };
+      if (typeof params.allowFlags !== 'undefined') {
+        const bundledSpec = params.allowFlags[bundledFlag];
+        if (!bundledSpec) {
+          return {
+            allowed: false,
+            reason: `Command not allowed: unlisted bundled flag "${bundledFlag}" (${params.kindPrefix}).`,
+            consumedNextTokenCount: 0,
+          };
+        }
+        if (bundledSpec.takesValue) {
+          return {
+            allowed: false,
+            reason: `Command not allowed: bundled short flags are only valid for takesValue:false flags. Offending flag "${bundledFlag}".`,
+            consumedNextTokenCount: 0,
+          };
+        }
       }
     }
     return { allowed: true, reason: null, consumedNextTokenCount: 0 };
@@ -381,6 +412,22 @@ function evaluateShortFlag(params: {
       consumedNextTokenCount: 0,
     };
   }
+
+  // Denylist mode: allow all flags except those in denyFlags.
+  if (typeof params.allowFlags === 'undefined') {
+    const nextToken = params.args[params.index + 1];
+    const nextTokenLooksLikeValue =
+      typeof nextToken === 'string' && !nextToken.startsWith('-');
+
+    return {
+      allowed: true,
+      reason: null,
+      // Best-effort heuristic for argv parsing (see evaluateLongFlag()).
+      consumedNextTokenCount: nextTokenLooksLikeValue ? 1 : 0,
+    };
+  }
+
+  // Allowlist mode: only allow flags present in allowFlags.
   const flagSpec = params.allowFlags[params.token];
   if (!flagSpec) {
     return {
@@ -392,6 +439,7 @@ function evaluateShortFlag(params: {
   if (!flagSpec.takesValue) {
     return { allowed: true, reason: null, consumedNextTokenCount: 0 };
   }
+
   const flagValue = params.args[params.index + 1];
   if (typeof flagValue === 'undefined') {
     return {
@@ -418,7 +466,9 @@ function evaluateShortFlag(params: {
 function validateFlagValue(params: {
   flagName: string;
   value: string;
-  spec: Profile['allowFlags'][string] | undefined;
+  spec:
+    | NonNullable<Profile['allowFlags']>[string]
+    | undefined;
   cwd: string;
   context: ToolContext;
 }): { allowed: true; reason: null } | { allowed: false; reason: string } {
@@ -510,11 +560,51 @@ function expandTildePath(inputPath: string): string {
   return inputPath;
 }
 
-function isTokenPathPrefix(tokens: string[], prefix: string[]): boolean {
-  if (prefix.length > tokens.length) {
+function isTokenPathGlobMatch(tokens: string[], pattern: string[]): boolean {
+  // Token globbing for subcommands:
+  // - '*' matches exactly one token
+  // - '**' matches any number of tokens (including zero)
+  let tokenIndex = 0;
+  let patternIndex = 0;
+
+  let lastDoubleStarPatternIndex = -1;
+  let lastDoubleStarTokenIndex = -1;
+
+  while (tokenIndex < tokens.length) {
+    const patternToken = pattern[patternIndex];
+    const currentToken = tokens[tokenIndex];
+
+    if (
+      typeof patternToken === 'string' &&
+      (patternToken === '*' || patternToken === currentToken)
+    ) {
+      tokenIndex += 1;
+      patternIndex += 1;
+      continue;
+    }
+
+    if (patternToken === '**') {
+      lastDoubleStarPatternIndex = patternIndex;
+      lastDoubleStarTokenIndex = tokenIndex;
+      patternIndex += 1; // try to match empty first
+      continue;
+    }
+
+    if (lastDoubleStarPatternIndex !== -1) {
+      // Backtrack: let '**' consume one more token.
+      lastDoubleStarTokenIndex += 1;
+      tokenIndex = lastDoubleStarTokenIndex;
+      patternIndex = lastDoubleStarPatternIndex + 1;
+      continue;
+    }
+
     return false;
   }
-  return prefix.every(
-    (expectedToken, index) => tokens[index] === expectedToken
-  );
+
+  // Remaining pattern tokens can only match if they are all '**' (matching empty).
+  while (patternIndex < pattern.length && pattern[patternIndex] === '**') {
+    patternIndex += 1;
+  }
+
+  return patternIndex === pattern.length;
 }
