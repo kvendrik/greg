@@ -161,7 +161,7 @@ By default he prompts the `main` session and doesn't send the results anywhere. 
 ```md
 # Heartbeat check
 
-Send me a quick check-in on Telegram through `greg telegram send --message`.
+Send me a quick check-in on Telegram through `greg telegram send <message>`.
 ```
 
 The Telegram integration also connects to the `main` session by default. The heartbeat and the integration running within the same session ensures that Greg will understand what you're talking about if you respond to something he said because of a heartbeat.
@@ -174,7 +174,7 @@ Greg can send you voice messages through his Telegram integration:
 greg telegram send "Hey! How are you?" --voice
 ```
 
-For this to work you do need to set a [ElevenLabs](https://elevenlabs.io/) API key and voice ID in your config:
+For this to work you do need to set a [ElevenLabs](https://elevenlabs.io/) API key and voice ID in your config. We use ElevenLabs v3 for this. Greg has a voice messaging skill that tells him how to use [Audio Tags](https://elevenlabs.io/blog/v3-audiotags). It produces some of the best computer-generated audio I've heard.
 
 ```ts
 const config = {
