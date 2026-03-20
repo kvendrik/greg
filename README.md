@@ -73,7 +73,7 @@ const config: Config = {
   },
   /**
    * Optional:
-   * Use the heartbeat. Greg will read [workspace]/HEARTBEAT.md
+   * Use the heartbeat. Greg will read ~/.greg/workspace/HEARTBEAT.md
    * every X minutes to check for things to do.
    */
   heartbeat: {
@@ -149,7 +149,7 @@ const config = {
   heartbeat: {
     // Enable the heartbeat. `false` by default
     enabled: true,
-    // every 30 minutes Greg will read ~/.greg/HEARTBEAT.md for things to do
+    // every 30 minutes Greg will read ~/.greg/workspace/HEARTBEAT.md for things to do
     interval: 30,
   },
   ...
@@ -165,6 +165,41 @@ Send me a quick check-in on Telegram through `greg telegram send --message`.
 ```
 
 The Telegram integration also connects to the `main` session by default. The heartbeat and the integration running within the same session ensures that Greg will understand what you're talking about if you respond to something he said because of a heartbeat.
+
+## 🗣️ Voice Messages
+
+Greg can send you voice messages through his Telegram integration:
+
+```bash
+greg telegram send "Hey! How are you?" --voice
+```
+
+For this to work you do need to set a [ElevenLabs](https://elevenlabs.io/) API key and voice ID in your config:
+
+```ts
+const config = {
+  ...
+  voice: {
+    elevenlabs: {
+      key: '...',
+      voiceId: '...',
+    },
+  },
+  clients: {
+    telegram: {
+      /**
+       * https://core.telegram.org/bots#how-do-i-create-a-bot
+       */
+      botToken: '...',
+      /**
+       * Your user ID (e.g. from [@userinfobot](https://t.me/userinfobot)).
+       */
+      senderId: '...',
+    };
+  };
+  ...
+};
+```
 
 ## 💂 Guard
 
@@ -241,41 +276,6 @@ const config: Config = {
       },
     },
   },
-  ...
-};
-```
-
-## 🗣️ Voice Messages
-
-Greg can send you voice messages through his Telegram integration:
-
-```bash
-greg telegram send "Hey! How are you?" --voice
-```
-
-For this to work you do need to set a [ElevenLabs](https://elevenlabs.io/) API key and voice ID in your config:
-
-```ts
-const config = {
-  ...
-  voice: {
-    elevenlabs: {
-      key: '...',
-      voiceId: '...',
-    },
-  },
-  clients: {
-    telegram: {
-      /**
-       * https://core.telegram.org/bots#how-do-i-create-a-bot
-       */
-      botToken: '...',
-      /**
-       * Your user ID (e.g. from [@userinfobot](https://t.me/userinfobot)).
-       */
-      senderId: '...',
-    };
-  };
   ...
 };
 ```

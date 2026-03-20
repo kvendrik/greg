@@ -16,8 +16,8 @@ type InternalConfig = Config & {
   workspace: AgentConfig['workspace'];
 };
 
-export const home = join(homedir(), '.greg');
-export const workspace = join(home, 'workspace');
+const home = join(homedir(), '.greg');
+const workspace = join(home, 'workspace');
 export const path = join(home, 'config.ts');
 
 export async function get(): Promise<InternalConfig> {

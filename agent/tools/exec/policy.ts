@@ -26,9 +26,12 @@ type Profile = {
 };
 
 export type AllowedProfiles = Record<string, Profile>;
+export type AllowedBinsEntry<P extends AllowedProfiles = any> = {
+  profiles: (keyof P)[];
+};
 export type AllowedBins<P extends AllowedProfiles = any> = Record<
   string,
-  { profiles: (keyof P)[] }
+  AllowedBinsEntry<P>
 >;
 
 export const execPolicyToolNames = ['execve', 'execve_pipeline'] as const;
@@ -139,12 +142,13 @@ function evaluateExecCommand(params: {
   };
 
   for (const profileName of allowedBin.profiles) {
-    const profile = execConfig.profiles[profileName];
+    const profile =
+      execConfig.profiles[profileName as keyof typeof execConfig.profiles];
 
     if (!profile) {
       lastDenial = {
         allowed: false,
-        reason: `Command not allowed: profile "${profileName}" not found for "${resolvedCommandPath}".`,
+        reason: `Command not allowed: profile "${profileName as string}" not found for "${resolvedCommandPath}".`,
       };
       continue;
     }
@@ -473,9 +477,9 @@ function resolveCommandPath(command: string, cwd: string): string {
 }
 
 function findAllowedBinConfig(
-  allowResolvedBins: Record<string, { profiles: string[] }>,
+  allowResolvedBins: AllowedBins,
   resolvedCommandPath: string
-): { profiles: string[] } | undefined {
+): AllowedBinsEntry | undefined {
   for (const [configuredPath, configuredBin] of Object.entries(
     allowResolvedBins
   )) {
