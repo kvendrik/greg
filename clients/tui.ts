@@ -266,7 +266,7 @@ async function inputLoop() {
 
     const input = await text({
       message: 'You',
-      placeholder: 'Send a message… (/t to transcribe, /v for voice mode)',
+      placeholder: `Send a message… (/t to transcribe, /v for voice mode)`,
       validate: (value) => {
         if (!value?.trim()) return 'Message cannot be empty';
         return undefined;
