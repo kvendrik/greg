@@ -8,7 +8,7 @@ import {
   confirm,
 } from '@clack/prompts';
 import * as prettier from 'prettier';
-import { execSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { exists, mkdir, writeFile, rm } from 'node:fs/promises';
 import {
   validateOpenAiKey,
@@ -123,12 +123,17 @@ if (!validateConfig()) {
   process.exit(1);
 }
 
+log.success(`⚙️ Created config at: ${config.path}`);
+
 if (!doctor()) {
   outro(`🤖✅ Done! Run \`greg doctor\` to check for any issues.`);
   process.exit(1);
 }
 
-outro(`🤖✅ Done! Starting chat with Greg...`);
+outro(
+  `🤖✅ Done! Starting chat with Greg... ${setupTelegram ? 'Run \`greg gateway start\` to start the Telegram gateway.' : ''}`
+);
+
 spawnSync('greg', [
   'tui',
   '-p',
