@@ -32,8 +32,9 @@ git clone git@github.com:kvendrik/greg.git
 ```ts
 // .greg.ts
 
-import { Config, validate } from './config';
+import { Config } from './config';
 import { getModel } from '@mariozechner/pi-ai';
+import { exec } from './config';
 
 const config: Config = {
   id: 'greg',
@@ -42,44 +43,64 @@ const config: Config = {
     {
       role: 'primary',
       model: getModel('anthropic', 'claude-sonnet-4-6'),
-      key: '...', // https://console.anthropic.com/settings/keys
-    },
-    {
-      role: 'fallback',
-      // /command to use to ask Greg to use this model for a given prompt
-      // e.g. "/openai How’s the weather today?" will use this model over Sonnet
-      command: 'openai',
-      model: getModel('openai', 'gpt-5.2'),
-      key: '...', // https://platform.openai.com/api-keys
+      key: '..', // https://platform.claude.com
     },
   ],
   tools: {
     webSearch: {
-      // Defining this enables the web_search tool. Optional, but recommended.
-      // Uses Gemini for Google Search Grounding. Alternatively use provider: 'brave'.
-      // https://cloud.google.com/gemini-api/docs/get-started
-      provider: 'gemini',
-      key: '...',
+      provider: 'brave',
+      key: '..', // https://brave.com/search/api/
     },
-    browser: {
-      // Enables the browser automation tool using Browser Use and their blazingly
-      // fast finetuned model. Optional, but recommended.
-      // https://cloud.browser-use.com/settings?tab=api-keys&new=1
-      key: '...',
-    },
+    /**
+     * Optional:
+     * Blocks risky tool calls (all `exec` functionality, file writes, and web fetching)
+     * by default and will ask you for permission to run them (when `ask` is enabled).
+     */
     guard: {
-      // Enable the Guard so only Greg won't run commands you haven't approved.
-      // `false` by default.
-      // Keep in mind that some commands are allowed by default.
-      // Find them in `default_exec_allowlist.ts`
       enabled: true,
+      ask: true,
+      /**
+       * Optional:
+       * A list of exec calls to always allow. This example config
+       * uses pre-defined defaults from config/exec-defaults.ts
+       */
+      exec: {
+        profiles: exec.profiles,
+        allowBins: exec.merge<typeof exec.profiles>(
+          exec.readOnly,
+          exec.safeWrite
+        ),
+      },
     },
   },
+  /**
+   * Optional:
+   * Use the heartbeat. Greg will read [workspace]/HEARTBEAT.md
+   * every X minutes to check for things to do.
+   */
   heartbeat: {
-    // Enable the heartbeat. `false` by default
     enabled: true,
-    // every 30 minutes Greg will read ~/.greg/HEARTBEAT.md for things to do
     interval: 30,
+  },
+  /**
+   * Optional:
+   * Use voice functionality
+   * Features: voice messages, voice calls, and voice mode in the TUI.
+   */
+  voice: {
+    elevenlabs: {
+      key: '..', // https://elevenlabs.io/app/api/api-keys
+      voiceId: '..', // https://elevenlabs.io/app/api/voice-library
+    },
+  },
+  /**
+   * Optional:
+   * Use communication through Telegram
+   * Other options are the TUI or a custom client (see below)
+   */
+  telegram: {
+    botToken: '...', // https://core.telegram.org/api
+    senderId: '..', // curl https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
   },
 };
 
