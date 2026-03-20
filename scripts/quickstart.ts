@@ -8,12 +8,20 @@ import {
   confirm,
 } from '@clack/prompts';
 import * as prettier from 'prettier';
+import { execSync, spawnSync } from 'node:child_process';
+import { exists, mkdir, writeFile, rm } from 'node:fs/promises';
 import {
   validateOpenAiKey,
   validateAnthropicKey,
   validateTelegramBotToken,
   validateBraveKey,
 } from '../config/validate';
+import * as config from '../config';
+
+if (await exists(config.path)) {
+  log.error(`Config already exists at ${config.path}`);
+  process.exit(0);
+}
 
 const configBuilder = createConfigBuilder();
 
@@ -102,7 +110,30 @@ const formatted = await prettier.format(configBuilder.get(), {
   useTabs: false,
 });
 
-outro('🤖✅ Done! Run `greg start` to start Greg. Config saved to ~/.greg.');
+await mkdir(config.home, { recursive: true });
+await writeFile(config.path, formatted);
+
+log.info('Validating config...');
+
+if (!validateConfig()) {
+  await rm(config.path);
+  log.error(
+    'Config isn’t valid. Aborting. Open an issue at https://github.com/kvendrik/greg/issues.'
+  );
+  process.exit(1);
+}
+
+if (!doctor()) {
+  outro(`🤖✅ Done! Run \`greg doctor\` to check for any issues.`);
+  process.exit(1);
+}
+
+outro(`🤖✅ Done! Starting chat with Greg...`);
+spawnSync('greg', [
+  'tui',
+  '-p',
+  '"System: Hey Greg! This is the user’s first time interacting with you. Greet them, introduce yourself, and get to know them so you can update your user memory."',
+]);
 
 function createConfigBuilder() {
   let configContent = `import { type Config, getModel, exec } from './source/config';
@@ -303,4 +334,14 @@ async function askForBraveKey() {
   }`,
     'tool'
   );
+}
+
+function validateConfig() {
+  const result = spawnSync('greg', ['config', 'validate']);
+  return result.status === 0;
+}
+
+function doctor() {
+  const result = spawnSync('greg', ['doctor']);
+  return result.status === 0;
 }

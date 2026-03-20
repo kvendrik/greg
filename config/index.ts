@@ -16,7 +16,7 @@ type InternalConfig = Config & {
   workspace: AgentConfig['workspace'];
 };
 
-const home = join(homedir(), '.greg');
+export const home = join(homedir(), '.greg');
 const workspace = join(home, 'workspace');
 export const path = join(home, 'config.ts');
 

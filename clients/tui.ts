@@ -20,6 +20,9 @@ import { synthesizeToBuffer, play } from '../voice/speech';
 
 process.env.GREG_LOG = 'silent';
 
+const initialPrompt =
+  process.argv[2]?.trim() === '' ? null : process.argv[2]?.trim();
+
 let voiceMode = Boolean(process.env.VOICE_MODE);
 let avDeviceIndex: number | null = null;
 
@@ -203,6 +206,15 @@ setGetReply(async (question) => {
 });
 
 intro('🤖 Greg');
+
+if (initialPrompt) {
+  await session.prompt(
+    { content: `${initialPrompt}\n\n[Message was sent from TUI]`, images: [] },
+    { channelId: 'tui' }
+  );
+
+  await flushStream();
+}
 
 inputLoop().catch((error) => {
   log.error(String(error));

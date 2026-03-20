@@ -323,15 +323,24 @@ program
   .command('tui')
   .description('Start an interactive TUI chat client')
   .option('-v, --voice', 'Start in voice mode')
-  .action(({ voice }: { voice?: boolean }) => {
-    spawn('bun', ['run', path.join(projectRoot, 'clients/tui.ts')], {
-      stdio: 'inherit',
-      cwd: projectRoot,
-      env: {
-        ...process.env,
-        VOICE_MODE: voice ? '1' : undefined,
-      },
-    }).on('exit', (code) => process.exit(code ?? 0));
+  .option('-p, --prompt <prompt>', 'Prompt to run right away')
+  .action(({ voice, prompt }: { voice?: boolean; prompt?: string }) => {
+    spawn(
+      'bun',
+      [
+        'run',
+        path.join(projectRoot, 'clients/tui.ts'),
+        ...(prompt ? [prompt] : []),
+      ],
+      {
+        stdio: 'inherit',
+        cwd: projectRoot,
+        env: {
+          ...process.env,
+          VOICE_MODE: voice ? '1' : undefined,
+        },
+      }
+    ).on('exit', (code) => process.exit(code ?? 0));
   });
 
 program
