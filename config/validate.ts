@@ -4,7 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { Bot, GrammyError } from 'grammy';
 import pc from 'picocolors';
 import type { Config } from './types';
-import { validate as validateExecGuard } from '../agent/tools/exec/validate';
+import { validate as validateExecGuard } from '../agent/tools/exec/policy/validate';
 import { createLogger } from '../utilities/logger';
 
 const logger = createLogger();
@@ -166,14 +166,14 @@ function assertModelsStructure(config: Config, messages: Messages): void {
   }
 }
 
-async function validateOpenAiKey(key: string): Promise<void> {
+export async function validateOpenAiKey(key: string): Promise<void> {
   const client = new OpenAI({ apiKey: key });
   for await (const _ of client.models.list()) {
     break;
   }
 }
 
-async function validateAnthropicKey(key: string): Promise<void> {
+export async function validateAnthropicKey(key: string): Promise<void> {
   const client = new Anthropic({ apiKey: key });
   for await (const _ of client.models.list()) {
     break;
@@ -188,7 +188,7 @@ async function validateGoogleKey(key: string): Promise<void> {
   });
 }
 
-async function validateTelegramBotToken(token: string): Promise<void> {
+export async function validateTelegramBotToken(token: string): Promise<void> {
   const bot = new Bot(token);
   try {
     const me = await bot.api.getMe();
@@ -229,7 +229,7 @@ async function validateBrowserUseKey(key: string): Promise<void> {
 const BRAVE_WEB_SEARCH_ENDPOINT =
   'https://api.search.brave.com/res/v1/web/search';
 
-async function validateBraveKey(apiKey: string): Promise<void> {
+export async function validateBraveKey(apiKey: string): Promise<void> {
   const url = new URL(BRAVE_WEB_SEARCH_ENDPOINT);
   url.searchParams.set('q', 'test');
   url.searchParams.set('count', '1');

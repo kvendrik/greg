@@ -112,6 +112,10 @@ export interface AgentConfig {
         allowBins: AllowedBins;
         profiles: AllowedProfiles;
       };
+      files?: {
+        read: string[];
+        write: string[];
+      };
     };
   };
 }

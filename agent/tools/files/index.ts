@@ -1,7 +1,6 @@
 export * from './tools';
 export {
-  filePolicyToolNames,
+  toolNames,
+  type ToolName,
   evaluate as evaluateFilePolicy,
-  type PolicyEvaluation,
 } from './policy';
-

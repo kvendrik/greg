@@ -1,7 +1,11 @@
 import type { ToolContext } from '../../../types';
 import { state as gatewayState } from '../../../../gateway/gateway';
 import { evaluateExecPolicy, execPolicyToolNames } from '../../exec/index';
-import { evaluateFilePolicy, filePolicyToolNames } from '../../files/index';
+import {
+  evaluateFilePolicy,
+  toolNames as filePolicyToolNames,
+  type ToolName as FileToolName,
+} from '../../files/index';
 import { prettify } from './prettify';
 
 export type PolicyEvaluation = {
@@ -30,9 +34,13 @@ export async function evaluatePolicy(
       params: call.params,
       context,
     });
-  } else if ((filePolicyToolNames as readonly string[]).includes(call.name)) {
+  } else if (
+    Object.values(filePolicyToolNames)
+      .flat()
+      .includes(call.name as FileToolName)
+  ) {
     result = await evaluateFilePolicy({
-      toolName: call.name,
+      toolName: call.name as FileToolName,
       params: call.params,
       context,
     });

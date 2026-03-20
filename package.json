@@ -42,7 +42,6 @@
     "pm2": "^6.0.14",
     "telegram-markdown-v2": "^0.0.4",
     "twilio": "^5.13.0",
-    "which": "^6.0.1",
     "ws": "^8.18.0"
   },
   "devDependencies": {
@@ -52,7 +51,7 @@
     "@types/node": "^25.2.3",
     "@types/ws": "^8.5.12",
     "eslint": "^10.0.3",
-    "prettier": "^3.4.2",
+    "prettier": "^3.8.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1"
   }

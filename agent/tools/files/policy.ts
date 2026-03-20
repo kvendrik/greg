@@ -1,7 +1,6 @@
 import path from 'node:path';
-import { tmpdir } from 'node:os';
-import type { AgentConfig, ToolContext } from '../../types';
-import { getWorkspacePath } from '../../utilities';
+import type { ToolContext } from '../../types';
+import { isAllowed } from './filesystem';
 import type {
   AppendFileToolParams,
   ListFilesToolParams,
@@ -10,61 +9,59 @@ import type {
   WriteFileToolParams,
 } from './tools';
 
-export type PolicyEvaluation = {
+type PolicyEvaluation = {
   allowed: boolean;
   reason: string | null;
 };
 
-export const filePolicyToolNames = [
-  'move_file',
-  'delete_file',
-  'patch_file',
-  'write_file',
-  'append_file',
-] as const;
+export const toolNames = {
+  read: ['read_file', 'list_files'] as const,
+  write: [
+    'write_file',
+    'append_file',
+    'move_file',
+    'delete_file',
+    'patch_file',
+  ] as const,
+};
 
-export const getAllowedRoots = (config: AgentConfig): string[] => [
-  path.resolve(getWorkspacePath(config)),
-  path.resolve(tmpdir()),
-];
+export type ToolName =
+  | (typeof toolNames.read)[number]
+  | (typeof toolNames.write)[number];
 
-export async function evaluate(input: {
-  toolName: string;
+export async function evaluate({
+  toolName,
+  params,
+  context,
+}: {
+  toolName: ToolName;
   params: unknown;
   context: ToolContext;
 }): Promise<PolicyEvaluation> {
-  if (
-    !filePolicyToolNames.includes(
-      input.toolName as (typeof filePolicyToolNames)[number]
-    )
-  ) {
+  if (!Object.values(toolNames).flat().includes(toolName)) {
     return {
       allowed: false,
-      reason: `Called ${input.toolName} but it is not a file tool`,
+      reason: `Called ${toolName} but it is not a file tool`,
     };
   }
 
-  const rawPath = extractPathForPolicyCheck(input);
+  const rawPath = extractPath({ toolName, params, context });
 
   if (rawPath) {
-    const resolved = path.resolve(rawPath);
-    const allowedRoots = getAllowedRoots(input.context.config);
-    const allowed = allowedRoots.some((root) => isUnderRoot(resolved, root));
-
-    if (allowed) {
-      return { allowed: true, reason: null };
-    } else {
-      return {
-        allowed: false,
-        reason: `File tool not allowed: path outside workspace/tmp. Offending path: "${rawPath}" -> "${resolved}". Allowed roots: ${allowedRoots.map((root) => `"${root}"`).join(', ')}.`,
-      };
-    }
+    const mode = (toolNames.read as readonly string[]).includes(toolName)
+      ? 'read'
+      : 'write';
+    const allowed = isAllowed(mode, rawPath, context.config);
+    return {
+      allowed,
+      reason: allowed ? null : `${rawPath} is not allowed for mode: ${mode}`,
+    };
   }
 
-  return { allowed: false, reason: null };
+  return { allowed: false, reason: 'Could not extract path from tool call' };
 }
 
-function extractPathForPolicyCheck(input: {
+function extractPath(input: {
   toolName: string;
   params: unknown;
   context: ToolContext;

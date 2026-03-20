@@ -330,6 +330,25 @@ const config: Config = {
 };
 ```
 
+Next, you can control where Greg can both read and write files to. By default he's allowed to both read and write to `~/.greg/workspace` and `/tmp/greg`. You can allow more paths through `tools.guard.files`:
+
+```ts
+import { exec } from '../greg/config';
+
+const config: Config = {
+  ...
+  guard: {
+      ...
+      files: {
+        read: ['~/path/to/code'],
+        write: ['~/path/to/code', '!~/path/to/code/but/not/this/folder'],
+      },
+    },
+  },
+  ...
+};
+```
+
 The purpose of the Guard is to reduce the risk Greg does something you don't want due to misunderstanding or confusion, and exfiltration risk (attackers transfering data without your permission). Next to using the Guard it's important to use a reliable LLM provider and frontier model when using Greg. Providers like Anthropic both run classifiers on incoming data and train their frontier models on prompt injection techniques. Using the newest models helps reduce the risk of prompt injection, and being careful with what you allow Greg to do through the Guard prevents the risk of what could happen in case prompt injection does happen.
 
 If you're concerned about privacy and want to use a local model you can configure a [custom model](https://github.com/badlogic/pi-mono/tree/main/packages/ai#custom-models). Be extra careful when you do this because local models don't have the same protection the large providers and frontier models offer.

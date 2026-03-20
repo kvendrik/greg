@@ -2,10 +2,11 @@ import path from 'node:path';
 import { realpathSync } from 'node:fs';
 import os from 'node:os';
 import type { ToolContext } from '../../../types';
+import { getWorkspacePath } from '../../../utilities';
 import { resolveBin } from '../../utilities/resolve-bin';
 import type { ExecvePipelineToolParams, ExecveToolParams } from '../tools';
 import type { PolicyEvaluation } from '../../utilities/policy/policy';
-import { getAllowedRoots, isUnderRoot } from '../../files/policy';
+import { isAllowed, expandPath } from '../../files/filesystem';
 
 type Profile = {
   allowSubcommands: 'all' | string[][];
@@ -62,7 +63,6 @@ async function evaluateExecve(
   const policyResult = evaluateExecCommand({
     command: params.command,
     args: params.args,
-    cwd: params.cwd,
     context,
     kindPrefix: 'execve',
   });
@@ -78,7 +78,6 @@ async function evaluatePipeline(
     const stepPolicyResult = evaluateExecCommand({
       command: step.command,
       args: step.args,
-      cwd: params.cwd,
       context,
       kindPrefix: `execve_pipeline.step_${index}`,
     });
@@ -91,22 +90,15 @@ async function evaluatePipeline(
 
 function evaluateExecCommand(params: {
   command: string;
-  cwd: string | undefined;
   args: string[];
   context: ToolContext;
   kindPrefix: string;
 }): PolicyEvaluation {
   const execConfig = params.context.config.tools?.guard.exec;
 
-  const allowedRoots = getAllowedRoots(params.context.config);
-  const resolvedCwd = path.resolve(params.cwd ?? allowedRoots[0]);
-
-  if (!allowedRoots.some((root) => isUnderRoot(resolvedCwd, root))) {
-    return {
-      allowed: false,
-      reason: `Command not allowed: ${params.kindPrefix}.cwd is outside allowed roots. Received "${params.cwd}", resolved "${resolvedCwd}". Allowed roots: ${allowedRoots.map((root) => `"${root}"`).join(', ')}.`,
-    };
-  }
+  const resolvedCwd = path.resolve(
+    getWorkspacePath(params.context.config)
+  );
 
   if (!execConfig) {
     return {
@@ -144,13 +136,15 @@ function evaluateExecCommand(params: {
   };
 
   for (const profileName of allowedBin.profiles) {
+    const profileNameString = String(profileName);
+
     const profile =
       execConfig.profiles[profileName as keyof typeof execConfig.profiles];
 
     if (!profile) {
       lastDenial = {
         allowed: false,
-        reason: `Command not allowed: profile "${profileName as string}" not found for "${resolvedCommandPath}".`,
+        reason: `Command not allowed: profile "${profileNameString}" not found for "${resolvedCommandPath}".`,
       };
       continue;
     }
@@ -466,9 +460,7 @@ function evaluateShortFlag(params: {
 function validateFlagValue(params: {
   flagName: string;
   value: string;
-  spec:
-    | NonNullable<Profile['allowFlags']>[string]
-    | undefined;
+  spec: NonNullable<Profile['allowFlags']>[string] | undefined;
   cwd: string;
   context: ToolContext;
 }): { allowed: true; reason: null } | { allowed: false; reason: string } {
@@ -506,16 +498,6 @@ function validateFlagValue(params: {
     return { allowed: true, reason: null };
   }
 
-  const resolvedPath = path.resolve(params.cwd, params.value);
-  const allowedRoots = getAllowedRoots(params.context.config);
-
-  if (!allowedRoots.some((root) => isUnderRoot(resolvedPath, root))) {
-    return {
-      allowed: false,
-      reason: `Command not allowed: flag "${params.flagName}" path "${params.value}" resolves to "${resolvedPath}" outside allowed roots.`,
-    };
-  }
-
   return { allowed: true, reason: null };
 }
 
@@ -541,23 +523,13 @@ function findAllowedBinConfig(
 }
 
 function resolveConfiguredPath(configuredPath: string): string {
-  const expandedPath = expandTildePath(configuredPath);
+  const expandedPath = expandPath(configuredPath);
   const absolutePath = path.resolve(expandedPath);
   try {
     return realpathSync(absolutePath);
   } catch {
     return absolutePath;
   }
-}
-
-function expandTildePath(inputPath: string): string {
-  if (inputPath === '~') {
-    return os.homedir();
-  }
-  if (inputPath.startsWith('~/')) {
-    return path.join(os.homedir(), inputPath.slice(2));
-  }
-  return inputPath;
 }
 
 function isTokenPathGlobMatch(tokens: string[], pattern: string[]): boolean {
