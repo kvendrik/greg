@@ -125,19 +125,7 @@ You should see logs that indicate that both the gateway and the Telegram service
 
 ## 🔨 Skills
 
-Greg can be taught how to do anything by simply telling him to read an [AgentSkill](https://agentskills.io) and to save it for later use. Doing so will cause Greg to save a new skill to your workspace.
-
-## 📦 Hub
-
-Greg also ships with a couple of CLI's that I couldn't find good versions of elsewhere. These are available through the `greg hub` command.
-
-Greg already knows how to use them as all `hub/*/AGENT.md` files are loaded as skills by default. `greg doctor` will warn you if any of the CLIs doesn't have its dependencies installed. Greg might try to use one of the CLI's, discover he can’t because he's missing dependencies, and ask you about it.
-
-CLI's in the Hub:
-
-- `greg hub notion` provides a read-only CLI for Notion for Greg to use
-- `greg hub strava` provides a read-only CLI for Strava for Greg to use
-- `greg hub voicecall` provides a CLI for Greg to make voicecalls through Twilio
+Greg can be taught how to do anything by simply telling him to read an [AgentSkill](https://agentskills.io) and to save it for later use. Doing so will cause Greg to save a new skill to his workspace.
 
 ## ❤️ Heartbeat
 
@@ -165,6 +153,14 @@ Send me a quick check-in on Telegram through `greg telegram send <message>`.
 ```
 
 The Telegram integration also connects to the `main` session by default. The heartbeat and the integration running within the same session ensures that Greg will understand what you're talking about if you respond to something he said because of a heartbeat.
+
+## 🤖🤖🤖 Subagents
+
+Greg is capable of spawning as many subagents as you'd like. He manages them through his `spawn` tools. Subagents run in the background and communicate with Greg directly. Greg then communicates with you. Subagents have their own workspace with persistent session storage and have their own system prompt.
+
+Spawning subagents allows you to do some fun things. I've used it to spawn agents for specialized tasks like doing research, or to debate topics by spawning a [council of agents](skills/agent-council/SKILL.md).
+
+To try it out just ask Greg to spawn a new agent to for example do research online. Greg will create a new agent for the task you've laid out and give them a human-like name. When you're done the agent data will persist and you can ask Greg at any time to talk to the agent to pick up a new task.
 
 ## 🗣️ Voice Messages
 
@@ -200,6 +196,18 @@ const config = {
   ...
 };
 ```
+
+## 📦 Hub
+
+Greg ships with a couple of CLI's that I couldn't find good versions of elsewhere. These are available through the `greg hub` command.
+
+He already knows how to use them as all `hub/*/AGENT.md` files are loaded as skills by default. `greg doctor` will warn you if any of the CLIs doesn't have its dependencies installed. Greg might try to use one of the CLI's, discover he can’t because he's missing dependencies, and ask you about it.
+
+CLI's in the Hub:
+
+- `greg hub notion` provides a read-only CLI for Notion for Greg to use
+- `greg hub strava` provides a read-only CLI for Strava for Greg to use
+- `greg hub voicecall` provides a CLI for Greg to make voicecalls through Twilio
 
 ## 💂 Guard
 
