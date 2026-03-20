@@ -70,6 +70,12 @@ const config: Config = {
         ),
       },
     },
+    /**
+     * Optional:
+     * Don't allow the usage of certain tools (web fetching in this case).
+     * You can also use `tools.allow` to specify the only tools Greg is allowed to use.
+     */
+    deny: ['web_fetch'],
   },
   /**
    * Optional:
@@ -210,20 +216,6 @@ CLI's in the Hub:
 - `greg hub notion` provides a read-only CLI for Notion for Greg to use
 - `greg hub strava` provides a read-only CLI for Strava for Greg to use
 - `greg hub voicecall` provides a CLI for Greg to make voicecalls through Twilio
-
-## 🛠️ Tool Controls
-
-`tools.allow` and `tools.deny` allow you to restrict tool usage to only the tools you need:
-
-```ts
-const config = {
-  ...
-  tools: {
-    deny: ['browser_use', 'subagents'],
-  };
-  ...
-};
-```
 
 ## 💂 Guard
 
