@@ -104,6 +104,15 @@ const config: Config = {
           exec.safeWrite
         ),
       },
+      /**
+       * Optional:
+       * Define what root paths Greg can read and write to.
+       * ~/.greg and /tmp/greg are allowed by default.
+       */
+      files: {
+        read: ['~/path/to/code'],
+        write: ['~/path/to/code', '!~/path/to/code/but/not/this/folder'],
+      },
     },
     /**
      * Optional:
