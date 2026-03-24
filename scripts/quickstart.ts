@@ -146,7 +146,7 @@ spawnSync('greg', [
 ]);
 
 function createConfigBuilder() {
-  let configContent = `import { type Config, getModel, exec } from './source/config';
+  let configContent = `import { type Config, getModel, exec } from '@kvendrik/greg/config';
 
 const config: Config = {
   [...]

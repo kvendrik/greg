@@ -2,7 +2,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { Command } from 'commander';
-import { name, description, version } from '../package.json';
+import { description, version } from '../package.json';
 import pc from 'picocolors';
 import * as config from '../config';
 import type { AgentConfig } from '../agent/types';
@@ -206,7 +206,7 @@ function createServiceCommand(serviceConfig: ServiceConfig): Command {
 }
 
 program
-  .name(name)
+  .name('greg')
   .description(
     `${description}.\nSee ${path.join(projectRoot, 'README.md')} for details.`
   )
@@ -321,6 +321,22 @@ program
     const { doctor } = await import('../scripts/doctor');
     const { success } = await doctor(config);
     process.exit(success ? 0 : 1);
+  });
+
+program
+  .command('quickstart')
+  .description('Interactive first-time setup for Greg')
+  .action(() => {
+    const result = spawnSync(
+      'bun',
+      ['run', path.join(projectRoot, 'scripts/quickstart.ts')],
+      {
+        stdio: 'inherit',
+        cwd: projectRoot,
+        env: { ...process.env },
+      }
+    );
+    process.exit(result.status ?? 0);
   });
 
 program

@@ -21,6 +21,14 @@ Oh and you don't have to call him Greg. Just say "From now on your name is John"
 
 ## Setup
 
+```bash
+# Greg runs directly in TS on Bun: https://bun.sh
+bun install -g @kvendrik/greg
+greg quickstart
+```
+
+## Manual Setup
+
 1. Clone this repository, install the dependencies, and `link` so you have access to the CLI
 
 ```bash
@@ -34,7 +42,7 @@ bun link
 2. Set up the config file in `~/.greg/config.ts`
 
 ```ts
-import { type Config, exec, getModel } from '../greg/config';
+import { type Config, exec, getModel } from '@kvendrik/greg/config';
 
 const config: Config = {
   models: [
@@ -328,7 +336,7 @@ const config: Config = {
 As you can see this is quite restrictive. `exec-defaults.ts` provides default bin paths and profiles to make it a bit easier:
 
 ```ts
-import { exec } from '../greg/config';
+import { exec } from '@kvendrik/greg/config';
 
 const config: Config = {
   ...
@@ -350,7 +358,7 @@ const config: Config = {
 Next, you can control where Greg can both read and write files to. By default he's allowed to both read and write to `~/.greg/workspace` and `/tmp/greg`. You can allow more paths through `tools.guard.files`:
 
 ```ts
-import { exec } from '../greg/config';
+import { exec } from '@kvendrik/greg/config';
 
 const config: Config = {
   ...
@@ -389,11 +397,11 @@ cat ~/path/to/some/file.md | greg tui -p "Summarize this file"
 You can also create a custom client to communicate with Greg:
 
 ```ts
-// clients/your-custom-client.ts
-// run using `bun run clients/your-custom-client.ts`
+// your-custom-client.ts
+// run using `bun run your-custom-client.ts`
 
 import rl from 'node:readline/promises';
-import * as gateway from '../gateway';
+import * as gateway from '@kvendrik/greg/gateway';
 
 const { setGetReply, stop } = await gateway.start();
 const session = gateway.get('main');

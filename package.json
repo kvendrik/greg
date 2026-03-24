@@ -1,8 +1,22 @@
 {
-  "name": "greg",
+  "name": "@kvendrik/greg",
   "description": "OpenClaw-like personal assistant",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kvendrik/greg.git"
+  },
+  "homepage": "https://github.com/kvendrik/greg#readme",
+  "bugs": {
+    "url": "https://github.com/kvendrik/greg/issues"
+  },
+  "exports": {
+    "./config": "./config/index.ts",
+    "./gateway": "./gateway/index.ts",
+    "./package.json": "./package.json"
+  },
   "bin": {
     "greg": "bin/greg.ts"
   },
@@ -13,8 +27,12 @@
     "gateway:logs": "pm2 logs greg:gateway",
     "gateway:tools": "bun run scripts/tools-cli.ts",
     "test": "bun test",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "verify:release": "bun run lint && bun run typecheck && bun run test",
+    "publish:dry-run": "bun run verify:release && bun publish --dry-run",
+    "publish": "bun run verify:release && bun publish"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.76.0",
