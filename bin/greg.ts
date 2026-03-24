@@ -396,7 +396,7 @@ heartbeatCommand
     new Command('run')
       .description('Run a heartbeat immediately')
       .action(async () => {
-        const heartbeat = await import('../gateway/heartbeat');
+        const { Heartbeat } = await import('../gateway/heartbeat/runner');
         const config = await loadConfig();
 
         if (!config.heartbeat) {
@@ -404,7 +404,7 @@ heartbeatCommand
           process.exit(1);
         }
 
-        const hb = new heartbeat.Heartbeat(config.heartbeat);
+        const hb = new Heartbeat(config.heartbeat);
         await hb.run();
       })
   )
@@ -415,15 +415,16 @@ heartbeatCommand
       .option('--json', 'Machine-readable output')
       .action(async (opts: { lines?: string; json?: boolean }) => {
         const config = await loadConfig();
-        const heartbeat = await import('../gateway/heartbeat');
+        const { get: getRunLog } = await import('../gateway/heartbeat/log');
+        const { isPaused } = await import('../gateway/heartbeat/paused');
         const enabled = config.heartbeat?.enabled === false ? false : true;
-        const paused = await heartbeat.isPaused();
+        const paused = await isPaused();
         const limit = Math.max(
           1,
           Math.min(1000, parseInt(opts.lines ?? '20', 10) || 20)
         );
 
-        const runs = await heartbeat.get(limit);
+        const runs = await getRunLog(limit);
 
         if (opts.json) {
           console.log(
@@ -461,8 +462,8 @@ heartbeatCommand
       .description('Turn heartbeats on (remove pause)')
       .option('--json', 'Machine-readable output')
       .action(async (opts: { json?: boolean }) => {
-        const heartbeat = await import('../gateway/heartbeat');
-        await heartbeat.setPaused(false);
+        const { setPaused } = await import('../gateway/heartbeat/paused');
+        await setPaused(false);
         if (opts.json) {
           console.log(JSON.stringify({ paused: false }));
         } else {
@@ -475,8 +476,8 @@ heartbeatCommand
       .description('Pause heartbeats')
       .option('--json', 'Machine-readable output')
       .action(async (opts: { json?: boolean }) => {
-        const heartbeat = await import('../gateway/heartbeat');
-        await heartbeat.setPaused(true);
+        const { setPaused } = await import('../gateway/heartbeat/paused');
+        await setPaused(true);
 
         if (opts.json) {
           console.log(JSON.stringify({ paused: true }));
@@ -492,8 +493,8 @@ heartbeatCommand
       )
       .option('--json', 'Machine-readable output')
       .action(async (opts: { json?: boolean }) => {
-        const heartbeat = await import('../gateway/heartbeat');
-        const entries = await heartbeat.get();
+        const { get: getRunLog } = await import('../gateway/heartbeat/log');
+        const entries = await getRunLog();
         const entry = entries.length > 0 ? entries[entries.length - 1] : null;
 
         if (opts.json) {
