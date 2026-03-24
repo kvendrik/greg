@@ -1,3 +1,12 @@
+remote_theme: b2a3e8/jekyll-theme-console
+
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+
 title: 🤖 Greg
 description: An OpenClaw-like personal assistant with way fewer lines of code
-theme: jekyll-theme-minimal
+
+style: dark
+
+footer: '<a href="https://github.com/kvendrik/greg">GitHub</a>'
