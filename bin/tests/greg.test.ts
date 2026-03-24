@@ -1,28 +1,52 @@
 import { spawnSync } from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 
 const projectRoot = path.join(import.meta.dirname, '..', '..');
 const gregBin = path.join(projectRoot, 'bin', 'greg.ts');
 
-function runGreg(args: string[]): {
-  stdout: string;
-  stderr: string;
-  status: number | null;
-} {
-  const result = spawnSync('bun', ['run', gregBin, ...args], {
-    cwd: projectRoot,
-    encoding: 'utf-8',
-    env: { ...process.env },
-  });
-  return {
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
-    status: result.status,
-  };
-}
-
 describe('greg', () => {
+  /** CI and clean machines have no ~/.greg/config.ts; Greg resolves config from $HOME. */
+  let fakeHome: string;
+
+  beforeAll(async () => {
+    fakeHome = await mkdtemp(path.join(tmpdir(), 'greg-cli-home-'));
+    const dotGreg = path.join(fakeHome, '.greg');
+    await mkdir(path.join(dotGreg, 'workspace'), { recursive: true });
+    await writeFile(
+      path.join(dotGreg, 'config.ts'),
+      `export default {
+  models: [],
+  tools: { guard: { enabled: true, ask: false } },
+  heartbeat: { enabled: false },
+};
+`
+    );
+  });
+
+  afterAll(async () => {
+    await rm(fakeHome, { recursive: true, force: true });
+  });
+
+  function runGreg(args: string[]): {
+    stdout: string;
+    stderr: string;
+    status: number | null;
+  } {
+    const result = spawnSync('bun', ['run', gregBin, ...args], {
+      cwd: projectRoot,
+      encoding: 'utf-8',
+      env: { ...process.env, HOME: fakeHome },
+    });
+    return {
+      stdout: result.stdout ?? '',
+      stderr: result.stderr ?? '',
+      status: result.status,
+    };
+  }
+
   describe('CLI', () => {
     it('prints version with --version', () => {
       const { stdout, status } = runGreg(['--version']);
