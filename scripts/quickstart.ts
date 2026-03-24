@@ -18,6 +18,11 @@ import {
 } from '../config/validate';
 import * as config from '../config';
 
+if (await exists(config.home)) {
+  log.error(`${config.home} already exists`);
+  process.exit(0);
+}
+
 if (await exists(config.path)) {
   log.error(`Config already exists at ${config.path}`);
   process.exit(0);
