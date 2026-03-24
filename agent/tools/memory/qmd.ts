@@ -58,16 +58,19 @@ export class QMD {
   }
 
   static async healthy(): Promise<boolean> {
-    if (process.env.CI === 'true') {
+    if (process.env.GITHUB_CI) {
       return true;
     }
+
     const result = await runQmd(['status']);
+
     if (result.code !== 0) {
       logger.error(
         `QMD health check failed:\n${result.stderr || result.stdout}`
       );
       return false;
     }
+
     return true;
   }
 
