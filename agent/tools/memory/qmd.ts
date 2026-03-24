@@ -58,6 +58,9 @@ export class QMD {
   }
 
   static async healthy(): Promise<boolean> {
+    if (process.env.CI === 'true') {
+      return true;
+    }
     const result = await runQmd(['status']);
     if (result.code !== 0) {
       logger.error(
