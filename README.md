@@ -369,3 +369,65 @@ const config: Config = {
 The purpose of the Guard is to reduce the risk Greg does something you don't want due to misunderstanding or confusion, and exfiltration risk (attackers transfering data without your permission). Next to using the Guard it's important to use a reliable LLM provider and frontier model when using Greg. Providers like Anthropic both run classifiers on incoming data and train their frontier models on prompt injection techniques. Using the newest models helps reduce the risk of prompt injection, and being careful with what you allow Greg to do through the Guard prevents the risk of what could happen in case prompt injection does happen.
 
 If you're concerned about privacy and want to use a local model you can configure a [custom model](https://github.com/badlogic/pi-mono/tree/main/packages/ai#custom-models). Be extra careful when you do this because local models don't have the same protection the large providers and frontier models offer.
+
+## 📱 Clients
+
+### Telegram
+
+The recommended to use Greg is through Telegram. Greg comes with a `greg telegram` command that lets both you can Greg send both text and voice messages to the Telegram bot configured in your `~/.greg/config.ts` file.
+
+### TUI
+
+Additionally, Greg comes with a TUI that's available through `greg tui`. The TUI can be used to work with Greg through your command-line:
+
+```bash
+cat ~/path/to/some/file.md | greg tui -p "Summarize this file"
+```
+
+### Custom
+
+You can also create a custom client to communicate with Greg:
+
+```ts
+// clients/your-custom-client.ts
+// run using `bun run clients/your-custom-client.ts`
+
+import rl from 'node:readline/promises';
+import * as gateway from '../gateway';
+
+const { setGetReply, stop } = await gateway.start();
+const session = gateway.get('main');
+
+session.subscribe('your-channel-name', {
+  onTurnStart: () => {},
+  onThinking: (chunk) => {},
+  onContent: (chunk) => {},
+  onToolcall: async (name, args) => {},
+  onTurnDone: async () => {},
+  onTurnStop: () => {},
+  onError: (error) => {},
+});
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
+
+setGetReply(rl.question.bind(rl));
+
+await session.prompt(
+  {
+    content: 'Hey Greg!',
+    images: [],
+  },
+  { channelId: 'your-channel-name' }
+);
+
+process.once('SIGINT', shutdown);
+process.once('SIGTERM', shutdown);
+
+function shutdown() {
+  stop();
+  process.exit(0);
+}
+```

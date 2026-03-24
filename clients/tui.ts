@@ -1,5 +1,4 @@
 import * as gateway from '../gateway';
-import { start } from '../gateway';
 import {
   intro,
   outro,
@@ -26,7 +25,7 @@ const initialPrompt =
 let voiceMode = Boolean(process.env.VOICE_MODE);
 let avDeviceIndex: number | null = null;
 
-const { setGetReply, stop } = await start();
+const { setGetReply, stop } = await gateway.start();
 const session = gateway.get('main');
 
 let thinkingStream: ReturnType<typeof createContentStream> | null = null;
