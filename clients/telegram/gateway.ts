@@ -65,7 +65,7 @@ export class TelegramGateway {
       type: 'markdown',
     });
     return new Promise<string>((resolve) => {
-      this.messageInterceptor = (text: string) => resolve(text);
+      this.messageInterceptor = (text: string) => { resolve(text); };
     });
   }
 
@@ -244,7 +244,7 @@ function oggToRawPcm(input: string, output: string): Promise<void> {
       .toFormat('s16le')
       .audioFrequency(16000)
       .audioChannels(1)
-      .on('end', () => resolve())
+      .on('end', () => { resolve(); })
       .on('error', reject)
       .save(output);
   });

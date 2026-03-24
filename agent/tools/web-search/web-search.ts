@@ -180,7 +180,7 @@ Returns { answer: string, citations: { title: string, url: string }[] }. When yo
             : '\n\nSources:\n' +
               result.citations.map((c) => `- ${c.title} (${c.url})`).join('\n');
 
-        let parsedResult = `${result.answer}${citationsSummary}`;
+        const parsedResult = `${result.answer}${citationsSummary}`;
 
         return {
           content: [{ type: 'text' as const, text: parsedResult }],

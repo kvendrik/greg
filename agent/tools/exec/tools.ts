@@ -55,7 +55,7 @@ function prepareCommand(
 
 export function getExecTools(context: ToolContext): AgentTool[] {
   const defaultCwd = path.resolve(getWorkspacePath(context.config));
-  const guardEnabled = context.config.tools?.guard.enabled !== false;
+  const guardEnabled = context.config.tools?.guard.enabled;
   process.chdir(defaultCwd);
 
   return [

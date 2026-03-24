@@ -13,7 +13,7 @@ interface GatewayState {
   getReply: ((message: string) => Promise<string>) | null;
 }
 
-export let state: GatewayState = {
+export const state: GatewayState = {
   getReply: null,
 };
 

@@ -23,7 +23,7 @@ export type Session = {
 };
 
 // {[sessionId: string]: { [resolvedWorkspacePath: string]: Session }}
-const loadedSessions: Map<string, Map<string, Session>> = new Map();
+const loadedSessions = new Map<string, Map<string, Session>>();
 
 export function list(config: AgentConfig = globalConfig): string[] {
   const storage = new Storage(config);
@@ -51,7 +51,7 @@ export function destroy(
     loadedSessions.get(workspacePath)?.delete(sessionId);
   }
 
-  return storage.destroy(sessionId);
+  storage.destroy(sessionId);
 }
 
 export function get(
@@ -119,7 +119,7 @@ export async function load(
       return agent.working;
     },
     subscribe(channelId: string, callbacks: Callbacks) {
-      return agent.subscribe(channelId, sessionStorage.proxy(callbacks, agent));
+      agent.subscribe(channelId, sessionStorage.proxy(callbacks, agent));
     },
     unsubscribe: agent.unsubscribe.bind(agent),
     abort: agent.abort.bind(agent),

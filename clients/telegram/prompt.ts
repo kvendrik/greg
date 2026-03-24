@@ -99,7 +99,7 @@ export async function createPromper() {
     },
   };
 
-  const mainSession = await gateway.get('main');
+  const mainSession = gateway.get('main');
   mainSession.subscribe('telegram', callbacks);
 
   return async function prompt(input: gateway.PromptInput, ctx?: BotContext) {

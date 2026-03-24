@@ -26,7 +26,7 @@ export function createLogger(
     log: (...logs: Log) => !isMuted() && console.log(join(logs)),
     info: (...logs: Log) => !isMuted() && console.log(join(logs)),
     warn: (...logs: Log) => !isMuted() && console.warn(join(logs)),
-    error: (...logs: Log) => console.error(join(logs)),
+    error: (...logs: Log) => { console.error(join(logs)); },
     write: (...logs: Log) => !isMuted() && process.stdout.write(join(logs)),
   };
 

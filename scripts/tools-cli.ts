@@ -218,7 +218,7 @@ async function main() {
   const toolContext: ToolContext = {
     config,
     onBackgroundUpdate: (...args) =>
-      console.log('Background update:', JSON.stringify(args, null, 2)),
+      { console.log('Background update:', JSON.stringify(args, null, 2)); },
   };
   const tools = await getTools(new Date().toISOString(), toolContext);
 

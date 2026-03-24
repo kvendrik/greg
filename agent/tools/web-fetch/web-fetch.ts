@@ -5,7 +5,7 @@ import { Type } from '@sinclair/typebox';
 import type { ToolContext } from '../../types';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 
-export function createWebFetchTool({ config }: ToolContext): AgentTool {
+export function createWebFetchTool(_context: ToolContext): AgentTool {
   return {
     name: 'web_fetch',
     label: 'web fetch',
@@ -110,7 +110,7 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
           truncated,
         };
 
-        let finalContent =
+        const finalContent =
           (details.title ? `${details.title}\n\n` : '') + details.content;
 
         return {

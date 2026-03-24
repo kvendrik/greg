@@ -19,7 +19,7 @@ export async function evaluatePolicy(
 ): Promise<PolicyEvaluation> {
   const { config } = context;
 
-  if (config.tools?.guard.enabled === false) {
+  if (!(config.tools?.guard.enabled)) {
     return {
       allowed: true,
       reason: null,
@@ -51,7 +51,7 @@ export async function evaluatePolicy(
     };
   }
 
-  if (!result?.allowed && config.tools?.guard?.ask !== false) {
+  if (!result?.allowed && config.tools?.guard?.ask) {
     if (!gatewayState.getReply) {
       return {
         allowed: false,

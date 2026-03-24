@@ -20,8 +20,12 @@ export async function sendMessage(
   } = { type: 'text' }
 ): Promise<void> {
   if (options?.voice) {
+    const voiceId = config.voice?.elevenlabs?.voiceId;
+    if (voiceId == null || voiceId === '') {
+      throw new Error('ElevenLabs voiceId is not configured (voice.elevenlabs.voiceId)');
+    }
     const audioBuffer = await synthesizeToBuffer(text, {
-      voiceId: config.voice?.elevenlabs?.voiceId!,
+      voiceId,
       useV3: true,
     });
 

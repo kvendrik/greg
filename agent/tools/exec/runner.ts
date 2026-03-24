@@ -236,8 +236,8 @@ function spawnAndCapture(params: {
 
     if (isPipeline) {
       for (let idx = 0; idx < children.length - 1; idx += 1) {
-        const from = children[idx]!;
-        const to = children[idx + 1]!;
+        const from = children[idx];
+        const to = children[idx + 1];
         if (from.stdout && to.stdin) {
           from.stdout.pipe(to.stdin, { end: false });
           from.stdout.once('end', () => {
@@ -250,7 +250,7 @@ function spawnAndCapture(params: {
         }
       }
 
-      const firstChild = children[0]!;
+      const firstChild = children[0];
       if (typeof stdin === 'string' && firstChild.stdin) {
         firstChild.stdin.write(stdin);
         firstChild.stdin.end();
@@ -258,7 +258,7 @@ function spawnAndCapture(params: {
         firstChild.stdin.end();
       }
     } else {
-      const child = children[0]!;
+      const child = children[0];
       if (typeof stdin === 'string' && child.stdin) {
         child.stdin.write(stdin);
         child.stdin.end();
@@ -267,7 +267,7 @@ function spawnAndCapture(params: {
 
     armTimer();
 
-    const lastChild = children[children.length - 1]!;
+    const lastChild = children[children.length - 1];
 
     lastChild.stdout?.on('data', (data: Buffer) => {
       armTimer();
@@ -333,7 +333,7 @@ function spawnAndCapture(params: {
 function captureTail(current: Buffer, chunk: Buffer, maxBytes: number): Buffer {
   const combined = Buffer.concat([current, chunk]) as Buffer;
   return combined.length > maxBytes
-    ? (combined.subarray(combined.length - maxBytes) as Buffer)
+    ? (combined.subarray(combined.length - maxBytes))
     : combined;
 }
 

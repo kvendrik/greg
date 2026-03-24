@@ -11,8 +11,8 @@ export async function searchWithGemini(
   const ai = new GoogleGenAI({ apiKey });
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
-  const onAbort = () => controller.abort();
+  const timeoutId = setTimeout(() => { controller.abort(); }, SEARCH_TIMEOUT_MS);
+  const onAbort = () => { controller.abort(); };
   signal?.addEventListener('abort', onAbort, { once: true });
 
   try {

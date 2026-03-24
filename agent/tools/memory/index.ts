@@ -316,7 +316,7 @@ function createMemorySummarizeTool(config: AgentConfig): AgentTool {
       const sessionsQmd = createSessionsQmd(config);
       let text: string;
       try {
-        if (topic && topic.trim()) {
+        if (topic?.trim()) {
           const parts: string[] = [];
           try {
             const notesResult = await notesQmd.vsearch(topic.trim());

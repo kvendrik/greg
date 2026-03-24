@@ -71,7 +71,7 @@ async function runServiceStatus(
   const hasErrors = pm2Status === 'errored';
 
   console.log(pc.bold(serviceConfig.label));
-  await serviceConfig.statusExtra?.();
+  await Promise.resolve(serviceConfig.statusExtra?.());
   console.log(`Running: ${running ? pc.green('yes') : pc.red('no')}`);
   if (running) {
     if (hasErrors) {
@@ -88,7 +88,7 @@ async function runServiceStart(
   serviceConfig: ServiceConfig,
   options: { exitIfAlreadyRunning?: boolean; client?: string } = {}
 ): Promise<void> {
-  const { exitIfAlreadyRunning = true, client } = options;
+  const { exitIfAlreadyRunning = true } = options;
 
   if (serviceConfig.checkPm2BeforeStart) {
     const statusResult = spawnSync(
@@ -145,7 +145,7 @@ function createServiceCommand(serviceConfig: ServiceConfig): Command {
     new Command('start')
       .description(serviceConfig.descriptions.start)
       .option('-d, --detached', 'Do not follow logs after start')
-      .action(async (options: { detached?: boolean; client?: string }) => {
+      .action(async (_options: { detached?: boolean; client?: string }) => {
         await runServiceStart(serviceConfig);
       })
   );

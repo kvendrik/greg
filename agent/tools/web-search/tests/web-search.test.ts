@@ -36,7 +36,7 @@ describe('web-search', () => {
         config: createConfig({ webSearch: undefined }),
         onBackgroundUpdate: () => {},
       });
-      const result = await tool.execute!('id', { query: '' }, undefined);
+      const result = await tool.execute('id', { query: '' }, undefined);
       expect(result.content[0].type).toBe('text');
       expect((result.content[0] as { text: string }).text).toBe(
         'Query is required.'
@@ -49,21 +49,21 @@ describe('web-search', () => {
         config: createConfig({ webSearch: undefined }),
         onBackgroundUpdate: () => {},
       });
-      const result = await tool.execute!('id', { query: '   ' }, undefined);
+      const result = await tool.execute('id', { query: '   ' }, undefined);
       expect((result.content[0] as { text: string }).text).toBe(
         'Query is required.'
       );
     });
 
-    it('throws AbortError when signal is already aborted', async () => {
+    it('throws AbortError when signal is already aborted', () => {
       const tool = createWebSearchTool({
         config: createConfig(),
         onBackgroundUpdate: () => {},
       });
       const controller = new AbortController();
       controller.abort();
-      await expect(
-        tool.execute!('id', { query: 'test' }, controller.signal)
+      return expect(
+        tool.execute('id', { query: 'test' }, controller.signal)
       ).rejects.toMatchObject({ name: 'AbortError' });
     });
 
@@ -72,7 +72,7 @@ describe('web-search', () => {
         config: createConfig({ webSearch: undefined }),
         onBackgroundUpdate: () => {},
       });
-      const result = await tool.execute!('id', { query: 'weather' }, undefined);
+      const result = await tool.execute('id', { query: 'weather' }, undefined);
       expect((result.content[0] as { text: string }).text).toContain(
         'Web search is unavailable'
       );
@@ -108,7 +108,7 @@ describe('web-search', () => {
           config: createConfig(),
           onBackgroundUpdate: () => {},
         });
-        const result = await tool.execute!(
+        const result = await tool.execute(
           'id',
           { query: 'test', count: 99 },
           undefined
@@ -141,7 +141,7 @@ describe('web-search', () => {
           config: createConfig(),
           onBackgroundUpdate: () => {},
         });
-        const result = await tool.execute!('id', { query: 'test' }, undefined);
+        const result = await tool.execute('id', { query: 'test' }, undefined);
         expect((result.content[0] as { text: string }).text).toContain(
           'Web search is unavailable'
         );

@@ -196,7 +196,7 @@ async function applyAddPatch(
     if (!rawLine || rawLine.startsWith('@@') || rawLine === '*** End of File') {
       continue;
     }
-    if (rawLine[0] === '+') {
+    if (rawLine.startsWith('+')) {
       newLines.push(rawLine.slice(1));
     }
   }

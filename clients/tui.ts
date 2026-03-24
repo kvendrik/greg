@@ -131,7 +131,7 @@ session.subscribe('tui', {
     thinkingSpinner = spinner();
     thinkingSpinner.start('🧠 Thinking...');
   },
-  onThinking: (chunk) => {
+  onThinking: (_chunk) => {
     clearThinking();
     startThinkingStream();
     //thinkingStream!.push(pc.dim(chunk));
@@ -146,7 +146,7 @@ session.subscribe('tui', {
     contentStream!.push(chunk);
     lastAssistantOutput += chunk;
   },
-  onToolcall: async (name, args) => {
+  onToolcall: async (name, _args) => {
     clearThinking();
     await flushStream();
     //log.info(pc.dim(`🔧 [${name}](${JSON.stringify(args)})`));
@@ -250,8 +250,14 @@ async function inputLoop() {
         const speechSpinner = spinner();
         speechSpinner.start('🔉 Playing...');
 
+        const voiceId = config.voice?.elevenlabs?.voiceId;
+        if (voiceId == null || voiceId === '') {
+          throw new Error(
+            'ElevenLabs voiceId is not configured (voice.elevenlabs.voiceId)'
+          );
+        }
         const buffer = await synthesizeToBuffer(lastAssistantOutput, {
-          voiceId: config.voice?.elevenlabs?.voiceId!,
+          voiceId,
           useV3: false,
         });
 

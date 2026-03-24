@@ -42,7 +42,7 @@ export class Agent {
   private readonly logger: Logger;
   private readonly primaryModel: Model<Api>;
   private readonly config: AgentConfig;
-  private readonly callbacks: Map<string, Callbacks[]> = new Map();
+  private readonly callbacks = new Map<string, Callbacks[]>();
 
   private abortController: AbortController | null = null;
   private lastModel: Model<Api> | null = null;
@@ -77,7 +77,7 @@ export class Agent {
   }
 
   private getCallbacks(
-    channelId: 'all' | string,
+    channelId: string,
     extraCallbacks?: Partial<Callbacks>
   ): Callbacks {
     if (channelId !== 'all' && !this.callbacks.has(channelId)) {
@@ -126,7 +126,7 @@ export class Agent {
   async prompt(
     input: PromptInput,
     options: {
-      channelId: 'all' | string | null;
+      channelId: string | null;
       callbacks?: Partial<Callbacks>;
       signal?: AbortSignal;
     }

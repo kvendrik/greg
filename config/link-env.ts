@@ -54,14 +54,14 @@ export async function link(): Promise<void> {
 
   if (added.length === 0) {
     console.log(
-      pc.blue('No keys added. Run \`greg doctor\` to check other dependencies.')
+      pc.blue('No keys added. Run `greg doctor` to check other dependencies.')
     );
     return;
   }
 
   console.log(
     pc.green(
-      `Linked config -> .env. Added ${added.length} keys. Run \`greg doctor\` to check other dependencies.`
+      `Linked config -> .env. Added ${added.length} keys. Run 'greg doctor' to check other dependencies.`
     )
   );
   console.log(pc.dim(added.join(', ')));

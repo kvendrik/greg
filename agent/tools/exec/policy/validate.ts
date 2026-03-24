@@ -24,7 +24,7 @@ export function validate(config: Config): GuardValidationMessages {
 
   const guardConfig = config.tools?.guard;
 
-  if (config.tools?.guard.enabled === false) {
+  if (!(config.tools?.guard.enabled)) {
     messages.warnings.push('Guard is disabled (tools.guard.enabled is false)');
     return messages;
   }
@@ -68,13 +68,13 @@ export function validate(config: Config): GuardValidationMessages {
   }
 
   // Verify each configured bin resolves to an executable on PATH.
-  let notFoundBins = 0;
+  let _notFoundBins = 0;
   let foundBins = 0;
   for (const [binPath] of Object.entries(execConfig.allowBins)) {
     const expanded = expandTildePath(binPath);
     const resolved = which.sync(expanded, { nothrow: true });
     if (!resolved) {
-      notFoundBins++;
+      _notFoundBins++;
       messages.errors.push(
         `tools.guard.exec.allowBins key "${binPath}" does not resolve to an executable file (checked at "${expanded}")`
       );

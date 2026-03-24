@@ -26,25 +26,25 @@ describe('web-fetch', () => {
       expect(schema.properties?.url).toBeDefined();
     });
 
-    it('throws on invalid URL', async () => {
+    it('throws on invalid URL', () => {
       const tool = createWebFetchTool({
         config: createConfig(),
         onBackgroundUpdate: () => {},
       });
-      await expect(
-        tool.execute!('id', { url: 'not-a-url' }, undefined)
+      return expect(
+        tool.execute('id', { url: 'not-a-url' }, undefined)
       ).rejects.toThrow(/Invalid URL/);
     });
 
-    it('throws AbortError when signal is already aborted', async () => {
+    it('throws AbortError when signal is already aborted', () => {
       const tool = createWebFetchTool({
         config: createConfig(),
         onBackgroundUpdate: () => {},
       });
       const controller = new AbortController();
       controller.abort();
-      await expect(
-        tool.execute!('id', { url: 'https://example.com/' }, controller.signal)
+      return expect(
+        tool.execute('id', { url: 'https://example.com/' }, controller.signal)
       ).rejects.toMatchObject({ name: 'AbortError' });
     });
 
@@ -53,7 +53,7 @@ describe('web-fetch', () => {
         config: createConfig(),
         onBackgroundUpdate: () => {},
       });
-      const result = await tool.execute!(
+      const result = await tool.execute(
         'id',
         { url: 'http://localhost:8080/page' },
         undefined
@@ -69,7 +69,7 @@ describe('web-fetch', () => {
         config: createConfig(),
         onBackgroundUpdate: () => {},
       });
-      const result = await tool.execute!(
+      const result = await tool.execute(
         'id',
         { url: 'http://127.0.0.1/page' },
         undefined
@@ -105,7 +105,7 @@ describe('web-fetch', () => {
           config: createConfig(), // no guard
           onBackgroundUpdate: () => {},
         });
-        const result = await tool.execute!(
+        const result = await tool.execute(
           'id',
           { url: requestUrl },
           undefined
@@ -142,7 +142,7 @@ describe('web-fetch', () => {
           config: createConfig(),
           onBackgroundUpdate: () => {},
         });
-        const result = await tool.execute!(
+        const result = await tool.execute(
           'id',
           { url: 'https://example.com/page' },
           undefined

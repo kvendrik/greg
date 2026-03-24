@@ -1,6 +1,19 @@
 import { spawn } from 'node:child_process';
 import WebSocket from 'ws';
 
+function websocketRawDataToUtf8(data: WebSocket.RawData): string {
+  if (typeof data === 'string') {
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return Buffer.concat(data).toString('utf8');
+  }
+  if (data instanceof ArrayBuffer) {
+    return new TextDecoder().decode(data);
+  }
+  return data.toString('utf8');
+}
+
 export type AvFoundationDevice = { index: number; name: string };
 
 export async function listAvFoundationDevices(): Promise<
@@ -21,7 +34,7 @@ export async function listAvFoundationDevices(): Promise<
       stderrChunks.push(chunk);
     });
 
-    listProcess.on('error', () => resolve(null));
+    listProcess.on('error', () => { resolve(null); });
     listProcess.on('close', () => {
       const output = Buffer.concat(stderrChunks).toString('utf8');
       const lines = output.split('\n');
@@ -35,7 +48,7 @@ export async function listAvFoundationDevices(): Promise<
           continue;
         }
         if (!inAudioSection) continue;
-        const match = line.match(/\[(\d+)\]\s+(.+)$/);
+        const match = /\[(\d+)\]\s+(.+)$/.exec(line);
         if (match) {
           const idx = Number.parseInt(match[1], 10);
           if (Number.isNaN(idx)) continue;
@@ -210,7 +223,7 @@ export function realtimeTranscribeFromMic(
     ws.on('message', (data: WebSocket.RawData) => {
       let parsed: unknown;
       try {
-        parsed = JSON.parse(data.toString());
+        parsed = JSON.parse(websocketRawDataToUtf8(data));
       } catch {
         return;
       }

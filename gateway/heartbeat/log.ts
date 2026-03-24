@@ -12,7 +12,7 @@ const config = await getConfig();
 const runsPath = join(getWorkspacePath(config), RUNS_FILENAME);
 
 export async function get(
-  limit: number = 100
+  limit = 100
 ): Promise<HeartbeatRunLogEntry[]> {
   try {
     const raw = await readFile(runsPath, 'utf8');

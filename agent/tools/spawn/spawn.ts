@@ -176,9 +176,11 @@ export async function createSpawnTools({
       );
       await sessions.create('main', createAgentConfig(config));
 
-      const modelLabel = parentConfig.models.find(
+      const matchedModel = parentConfig.models.find(
         (m) => m.model.id === model.id && m.model.provider === model.provider
-      )?.model.name!;
+      );
+      const modelLabel =
+        matchedModel?.model.name ?? `${model.provider}/${model.id}`;
 
       return {
         content: [

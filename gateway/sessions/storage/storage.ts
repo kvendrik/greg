@@ -74,12 +74,12 @@ export class Storage {
     return {
       messages,
       proxy: (callbacks: Callbacks, agent: Agent): Callbacks => {
-        const boundCallbacks = Object.entries(callbacks).reduce(
+        const boundCallbacks = Object.entries(callbacks).reduce<Callbacks>(
           (acc, [key, callback]) => ({
             ...acc,
             [key]: callback?.bind(agent),
           }),
-          {} as Callbacks
+          {}
         );
 
         return {

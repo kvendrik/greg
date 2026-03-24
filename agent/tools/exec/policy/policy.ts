@@ -1,12 +1,11 @@
 import path from 'node:path';
 import { realpathSync } from 'node:fs';
-import os from 'node:os';
 import type { ToolContext } from '../../../types';
 import { getWorkspacePath } from '../../../utilities';
 import { resolveBin } from '../../utilities/resolve-bin';
 import type { ExecvePipelineToolParams, ExecveToolParams } from '../tools';
 import type { PolicyEvaluation } from '../../utilities/policy/policy';
-import { isAllowed, expandPath } from '../../files/filesystem';
+import { expandPath } from '../../files/filesystem';
 
 type Profile = {
   allowSubcommands: 'all' | string[][];
@@ -29,10 +28,10 @@ type Profile = {
 };
 
 export type AllowedProfiles = Record<string, Profile>;
-export type AllowedBinsEntry<P extends AllowedProfiles = any> = {
+export type AllowedBinsEntry<P extends AllowedProfiles = AllowedProfiles> = {
   profiles: (keyof P)[];
 };
-export type AllowedBins<P extends AllowedProfiles = any> = Record<
+export type AllowedBins<P extends AllowedProfiles = AllowedProfiles> = Record<
   string,
   AllowedBinsEntry<P>
 >;

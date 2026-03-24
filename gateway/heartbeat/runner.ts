@@ -41,13 +41,14 @@ export class Heartbeat {
   private shuttingDown = false;
 
   constructor(options: Omit<HeartbeatOptions, 'enabled'>) {
-    this.intervalMs = options.interval * 60 * 1000;
+    const intervalMinutes = options.interval ?? 30;
+    this.intervalMs = intervalMinutes * 60 * 1000;
     this.activeHours = options.activeHours ?? null;
 
     this.systemPrompt =
       options.prompt && options?.prompt.trim().length > 0
         ? options?.prompt.trim()
-        : getInstructions(options.interval);
+        : getInstructions(intervalMinutes);
   }
 
   start() {
@@ -124,20 +125,34 @@ export class Heartbeat {
     return new Promise<{
       success: boolean;
       error?: string;
-    }>(async (resolve) => {
-      await session.prompt(
-        { content: prompt, images: [] },
-        {
-          channelId: null,
-          callbacks: {
-            onError: (error) => {
-              console.error(pc.red(error));
-              resolve({ success: false, error });
+    }>((resolve) => {
+      let settled = false;
+      const finish = (result: { success: boolean; error?: string }): void => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+
+      void session
+        .prompt(
+          { content: prompt, images: [] },
+          {
+            channelId: null,
+            callbacks: {
+              onError: (error) => {
+                console.error(pc.red(error));
+                finish({ success: false, error });
+              },
             },
-          },
-        }
-      );
-      resolve({ success: true, error: undefined });
+          }
+        )
+        .then(() => {
+          finish({ success: true, error: undefined });
+        })
+        .catch((err: unknown) => {
+          console.error(pc.red(String(err)));
+          finish({ success: false, error: String(err) });
+        });
     });
   }
 

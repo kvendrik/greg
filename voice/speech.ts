@@ -50,10 +50,16 @@ export async function play(buffer: Buffer): Promise<void> {
     } finally {
       await fs.promises.unlink(audioPath).catch(() => {});
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const message =
-      error instanceof Error ? error.message : String(error ?? 'Unknown error');
-    throw new Error(`ElevenLabs TTS failed: ${message}`);
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : 'Unknown error';
+    throw new Error(`ElevenLabs TTS failed: ${message}`, {
+      cause: error,
+    });
   }
 }
 

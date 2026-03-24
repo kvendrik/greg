@@ -53,11 +53,11 @@ export function parsePath(url: string): string[] {
   return pathname.split('/').filter(Boolean);
 }
 
-export function createSender<D>(
+export function createSender(
   socket: Pick<ServerWebSocket, 'readyState' | 'send'>
 ) {
   return {
-    send(message: D) {
+    send(message: unknown) {
       // 1 === OPEN for WebSocket readyState
       if (socket.readyState !== 1) {
         return;

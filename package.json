@@ -27,7 +27,7 @@
     "gateway:logs": "pm2 logs greg:gateway",
     "gateway:tools": "bun run scripts/tools-cli.ts",
     "test": "bun test",
-    "test:all": "bun run lint && bun run typecheck && bun run test",
+    "test:lint": "bun run lint && bun run typecheck",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"

@@ -22,7 +22,7 @@ export function prettify(
   const maxArrayLength = 50;
   const maxObjectKeys = 50;
 
-  const seenObjects = new WeakSet<object>();
+  const seenObjects = new WeakSet();
 
   const isSensitiveKey = (key: string): boolean =>
     /(pass(word)?|secret|token|key|api[-_]?key|authorization|cookie|auth)/i.test(

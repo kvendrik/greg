@@ -131,12 +131,12 @@ if (!validateConfig()) {
 log.success(`⚙️ Created config at: ${config.path}`);
 
 if (!doctor()) {
-  outro(`🤖✅ Done! Run \`greg doctor\` to check for any issues.`);
+  outro(`🤖✅ Done! Run 'greg doctor' to check for any issues.`);
   process.exit(1);
 }
 
 outro(
-  `🤖✅ Done! Starting chat with Greg... ${setupTelegram ? 'Run \`greg gateway start\` to start the Telegram gateway.' : ''}`
+  `🤖✅ Done! Starting chat with Greg... ${setupTelegram ? "Run 'greg gateway start' to start the Telegram gateway." : ''}`
 );
 
 spawnSync('greg', [

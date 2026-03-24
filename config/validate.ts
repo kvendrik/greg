@@ -66,9 +66,10 @@ export async function validate(config: Config): Promise<boolean> {
   }
 
   if (config.tools?.browser?.key) {
+    const browserKey = config.tools.browser.key;
     checks.push({
       name: 'Browser Use',
-      run: () => validateBrowserUseKey(config.tools?.browser?.key!),
+      run: () => validateBrowserUseKey(browserKey),
     });
   } else {
     messages.info.push('Browser automation not configured (tools.browser)');
@@ -79,16 +80,18 @@ export async function validate(config: Config): Promise<boolean> {
   }
 
   if (config.tools?.webSearch?.provider === 'gemini') {
+    const webSearchKey = config.tools.webSearch.key;
     checks.push({
       name: 'Web Search (Gemini)',
-      run: () => validateGoogleKey(config.tools?.webSearch!.key!),
+      run: () => validateGoogleKey(webSearchKey),
     });
   }
 
   if (config.tools?.webSearch?.provider === 'brave') {
+    const webSearchKey = config.tools.webSearch.key;
     checks.push({
       name: 'Web Search (Brave)',
-      run: () => validateBraveKey(config.tools?.webSearch!.key!),
+      run: () => validateBraveKey(webSearchKey),
     });
   }
 
@@ -103,7 +106,7 @@ export async function validate(config: Config): Promise<boolean> {
     );
   }
 
-  if (config.tools?.guard?.enabled === false) {
+  if (!(config.tools?.guard?.enabled)) {
     messages.warnings.push('Guard is disabled (tools.guard.enabled is false)');
   } else {
     checks.push({
@@ -197,13 +200,16 @@ export async function validateTelegramBotToken(token: string): Promise<void> {
     }
   } catch (err) {
     if (err instanceof GrammyError && err.error_code === 401) {
-      throw new Error('Telegram Bot Token invalid (401 Unauthorized)');
+      throw new Error('Telegram Bot Token invalid (401 Unauthorized)', {
+        cause: err,
+      });
     }
     if (err instanceof Error && err.message.includes('Telegram Bot Token')) {
       throw err;
     }
     throw new Error(
-      `Telegram Bot Token invalid: ${err instanceof Error ? err.message : String(err)}`
+      `Telegram Bot Token invalid: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err }
     );
   }
 }

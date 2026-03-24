@@ -1,10 +1,6 @@
 import { spawn } from 'child_process';
 import { resolve, join } from 'path';
-import {
-  createStore,
-  getDefaultDbPath,
-  DEFAULT_MULTI_GET_MAX_BYTES,
-} from '@tobilu/qmd';
+import { createStore, DEFAULT_MULTI_GET_MAX_BYTES } from '@tobilu/qmd';
 import type { QMDStore, SearchResult } from '@tobilu/qmd';
 import { createLogger } from '../../../utilities/logger';
 
@@ -73,6 +69,9 @@ export class QMD {
   }
 
   async ready() {
+    const dbPath = resolve(join(this.workspacePath, 'qmd.sqlite'));
+    process.env.INDEX_PATH = dbPath;
+
     const healthy = await QMD.healthy();
     if (!healthy) {
       throw new Error('QMD is not healthy');
@@ -243,16 +242,18 @@ export class QMD {
   }
 
   async getStore(): Promise<QMDStore> {
-    if (!storePromise) {
-      process.env.INDEX_PATH = join(this.workspacePath, 'qmd.sqlite');
-      storePromise = createStore({ dbPath: getDefaultDbPath() }).catch(
-        (err) => {
-          storePromise = null;
-          throw err;
-        }
-      );
+    const dbPath = resolve(join(this.workspacePath, 'qmd.sqlite'));
+    process.env.INDEX_PATH = dbPath;
+
+    let promise = storePromises.get(dbPath);
+    if (!promise) {
+      promise = createStore({ dbPath }).catch((err) => {
+        storePromises.delete(dbPath);
+        throw err;
+      });
+      storePromises.set(dbPath, promise);
     }
-    return storePromise;
+    return promise;
   }
 
   /**
@@ -379,7 +380,7 @@ function runQmd(
   });
 }
 
-let storePromise: Promise<QMDStore> | null = null;
+const storePromises = new Map<string, Promise<QMDStore>>();
 
 type FormattableResult = {
   displayPath: string;
@@ -408,6 +409,6 @@ function formatSearchResults(
   return JSON.stringify({ query, results: mapped });
 }
 
-function formatAsFileList(results: Array<{ displayPath: string }>): string {
+function formatAsFileList(results: { displayPath: string }[]): string {
   return results.map((r) => r.displayPath).join('\n');
 }
