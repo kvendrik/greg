@@ -6,7 +6,7 @@ import {
   writeFile,
   readdir,
   rename,
-  unlink,
+  rm,
 } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
@@ -31,7 +31,6 @@ interface SubagentConfig {
   systemPrompt: string;
   model: { provider: string; id: string };
   tools: ('web_search' | 'web_fetch' | 'exec' | 'files')[];
-  execAllowedCommands?: string[];
 }
 
 function subagentConfigSchema(parentConfig: AgentConfig) {
@@ -72,16 +71,8 @@ function subagentConfigSchema(parentConfig: AgentConfig) {
       }),
       {
         description:
-          'Tools the sub-agent will have access to. Pick from the options.',
+          'Tools the sub-agent will have access to. Choose based on task needs: web_search for finding sources on the web, web_fetch for reading a specific URL, exec for running terminal commands, files for reading/writing local workspace files.',
       }
-    ),
-    execAllowedCommands: Type.Optional(
-      Type.Array(
-        Type.String({
-          description:
-            'Required when allowing the exec tool. Commands the sub-agent will be allowed to run. Supports exact commands, base commands (e.g. "ls"), and glob patterns (*, ?, []). Examples: "ls", "git status *", "npm run *", "rm -rf *".',
-        })
-      )
     ),
   });
 
@@ -89,26 +80,30 @@ function subagentConfigSchema(parentConfig: AgentConfig) {
     schema,
     validate(subagentConfig: SubagentConfig) {
       if (
-        subagentConfig.tools.includes('exec') &&
-        !subagentConfig.execAllowedCommands
+        !subagentConfig.name ||
+        !subagentConfig.emoji ||
+        !subagentConfig.systemPrompt ||
+        !subagentConfig.model ||
+        !subagentConfig.tools
       ) {
         return {
           valid: false,
           message:
-            'execAllowedCommands is required when allowing the exec tool.',
+            'Invalid subagent config. Expected name, emoji, systemPrompt, model, and tools.',
         };
       }
 
-      if (subagentConfig.execAllowedCommands) {
-        // const allowlist = getAllowlist(parentConfig);
-        // for (const command of subagentConfig.execAllowedCommands) {
-        //   if (!allowlist[command]) {
-        //     return {
-        //       valid: false,
-        //       message: `Command "${command}" is not allowed. Allowed commands: ${Object.keys(allowlist).join(', ')}`,
-        //     };
-        //   }
-        // }
+      if (
+        !parentConfig.models.some(
+          (m) =>
+            m.model.id === subagentConfig.model.id &&
+            m.model.provider === subagentConfig.model.provider
+        )
+      ) {
+        return {
+          valid: false,
+          message: `Model ${subagentConfig.model.id} not found in parent config.`,
+        };
       }
 
       return { valid: true, message: null };
@@ -132,7 +127,7 @@ export async function createSpawnTools({
       'Create and start a sub-agent that runs in the background. Use when a task is long-running, parallel, or better handled by a dedicated agent. After spawning, use the prompt_agent tool to send prompts to this agent. The sub-agent has its own workspace and can be given web_search, web_fetch, exec, and files tools.',
     parameters: configSchema.schema,
     execute: async (_id: string, params) => {
-      const { emoji, name, systemPrompt, model, tools, execAllowedCommands } =
+      const { name, emoji, systemPrompt, model, tools } =
         params as SubagentConfig;
 
       const { valid, message } = configSchema.validate(
@@ -173,8 +168,8 @@ export async function createSpawnTools({
         systemPrompt,
         model,
         tools,
-        execAllowedCommands,
       };
+
       await writeFile(
         join(workspace, 'config.json'),
         JSON.stringify(config, null, 2)
@@ -338,7 +333,7 @@ export async function createSpawnTools({
       'Update the system prompt and/or model of an existing spawned subagent. Use this to change the agent’s behavior without recreating it. The agent keeps its workspace and history; only SYSTEM.md is overwritten.',
     parameters: configSchema.schema,
     execute: async (_id: string, params) => {
-      const { emoji, name, systemPrompt, model, tools, execAllowedCommands } =
+      const { name, emoji, systemPrompt, model, tools } =
         params as SubagentConfig;
 
       const { valid, message } = configSchema.validate(
@@ -351,6 +346,18 @@ export async function createSpawnTools({
             {
               type: 'text' as const,
               text: message!,
+            },
+          ],
+          details: {},
+        };
+      }
+
+      if (!emoji || !name || !systemPrompt || !model || !tools) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'Invalid update_agent parameters. Expected name, emoji, systemPrompt, model ("provider/id"), and tools (comma-separated or array).',
             },
           ],
           details: {},
@@ -375,7 +382,7 @@ export async function createSpawnTools({
       await writeFile(
         join(subagentsPath, name, 'config.json'),
         JSON.stringify(
-          { ...config, emoji, systemPrompt, model, tools, execAllowedCommands },
+          { ...config, emoji, systemPrompt, model, tools },
           null,
           2
         )
@@ -623,7 +630,7 @@ export async function createSpawnTools({
         };
       }
 
-      await unlink(join(subagentsPath, name));
+      await rm(join(subagentsPath, name), { recursive: true, force: true });
 
       return {
         content: [
@@ -663,7 +670,6 @@ export async function createSpawnTools({
     name,
     model,
     tools,
-    execAllowedCommands,
   }: SubagentConfig): AgentConfig {
     const modelConfig =
       parentConfig.models.find(

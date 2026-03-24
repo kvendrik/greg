@@ -228,6 +228,19 @@ Spawning subagents allows you to do some fun things. I've used it to spawn agent
 
 To try it out just ask Greg to spawn a new agent to for example do research online. Greg will create a new agent for the task you've laid out and give them a human-like name. When you're done the agent data will persist and you can ask Greg at any time to talk to the agent to pick up a new task.
 
+You can also manage your subagents through Greg’s tools CLI, which allows you to directly call tools from the command line:
+
+```bash
+greg tools spawn_agent \
+  --name Jason \
+  --emoji "🤖" \
+  --systemPrompt "You are Greg's friendly research assistant" \
+  --model "anthropic/claude-sonnet-4-6" \
+  --tools web_search,web_fetch
+
+greg tools list_agents
+```
+
 ## 🗣️ Voice Messages
 
 Greg can send you voice messages through his Telegram integration:

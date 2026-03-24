@@ -376,8 +376,10 @@ program
   .command('tools')
   .description('Use Greg’s tools directly from the command line')
   .allowUnknownOption()
-  .action(() => {
-    const args = program.args.slice(1);
+  // Forward `--help` to tools-cli so e.g. `greg tools read_file --help` shows tool options.
+  .helpOption(false)
+  .action((_opts, toolsCmd) => {
+    const args = toolsCmd.args;
     spawn('bun', ['run', 'gateway:tools', ...args], {
       stdio: 'inherit',
       cwd: projectRoot,
