@@ -171,7 +171,7 @@ const config: Config = {
 export default config;
 ```
 
-4. Make sure your config is working correctly by running the doctor:
+3. Make sure your config is working correctly by running the doctor:
 
 ```bash
 # Checks if all dependencies are there.
@@ -179,7 +179,7 @@ export default config;
 greg doctor
 ```
 
-5. If all is good start the gateway!
+4. If all is good start the gateway!
 
 ```bash
 greg gateway start
@@ -260,17 +260,15 @@ const config = {
       voiceId: '...',
     },
   },
-  clients: {
-    telegram: {
-      /**
-       * https://core.telegram.org/bots#how-do-i-create-a-bot
-       */
-      botToken: '...',
-      /**
-       * Your user ID (e.g. from [@userinfobot](https://t.me/userinfobot)).
-       */
-      senderId: '...',
-    };
+  telegram: {
+    /**
+     * https://core.telegram.org/bots#how-do-i-create-a-bot
+     */
+    botToken: '...',
+    /**
+     * Your user ID (e.g. from [@userinfobot](https://t.me/userinfobot)).
+     */
+    senderId: '...',
   };
   ...
 };
@@ -413,7 +411,7 @@ You can also create a custom client to communicate with Greg:
 // your-custom-client.ts
 // run using `bun run your-custom-client.ts`
 
-import rl from 'node:readline/promises';
+import { createInterface } from 'node:readline/promises';
 import * as gateway from '@kvendrik/greg/gateway';
 
 const { setGetReply, stop } = await gateway.start();
@@ -429,7 +427,7 @@ session.subscribe('your-channel-name', {
   onError: (error) => {},
 });
 
-const rl = readline.createInterface({
+const rl = createInterface({
   input: process.stdin,
   output: process.stdout,
 });
