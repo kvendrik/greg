@@ -90,7 +90,15 @@ const config: Config = {
      * by default and will ask you for permission to run them (when `ask` is enabled).
      */
     guard: {
+      /**
+       * Disabling the Guard (YOLO-mode) lets Greg do whatever he wants without requiring permission.
+       */
       enabled: true,
+      /**
+       * By setting this to `true` Greg will use whatever client you’re using to ask for
+       * permission when his settings don't allow him to run a certain tool call. Setting it
+       * to `false` will deny Greg to run the tool call without asking.
+       */
       ask: true,
       /**
        * Optional:
