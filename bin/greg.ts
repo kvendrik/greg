@@ -6,22 +6,9 @@ import { name, description, version } from '../package.json';
 import pc from 'picocolors';
 import * as config from '../config';
 import type { AgentConfig } from '../agent/types';
+import { QMD } from '../agent/tools/memory/qmd';
 
 const projectRoot = path.join(import.meta.dirname, '..');
-
-async function loadConfig(): Promise<config.Config> {
-  try {
-    return (await config.get()) as config.Config;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(
-      pc.red('Config not found or invalid.'),
-      pc.gray(`(${message})`)
-    );
-    process.exit(1);
-  }
-}
-
 const program = new Command();
 
 type ServiceScripts = {
@@ -282,6 +269,23 @@ program
   );
 
 program
+  .command('memory')
+  .description('Memory management tools')
+  .addCommand(
+    new Command('health')
+      .description('Health check for memory')
+      .action(async () => {
+        const healthy = await QMD.healthy();
+        console.log(
+          healthy
+            ? pc.green('✓ Memory is healthy')
+            : pc.red('✗ Memory is not healthy')
+        );
+        process.exit(healthy ? 0 : 1);
+      })
+  );
+
+program
   .command('config')
   .description('Manage Greg’s config')
   .addCommand(
@@ -324,13 +328,22 @@ program
   .description('Start an interactive TUI chat client')
   .option('-v, --voice', 'Start in voice mode')
   .option('-p, --prompt <prompt>', 'Prompt to run right away')
-  .action(({ voice, prompt }: { voice?: boolean; prompt?: string }) => {
+  .action(async ({ voice, prompt }: { voice?: boolean; prompt?: string }) => {
+    const pipedInput = await readPipedStdin();
+
+    const initialPrompt = [prompt?.trim(), pipedInput?.trim()].filter(
+      (part): part is string => Boolean(part)
+    );
+
+    const combinedPrompt =
+      initialPrompt.length > 0 ? initialPrompt.join('\n\n') : undefined;
+
     spawn(
       'bun',
       [
         'run',
         path.join(projectRoot, 'clients/tui.ts'),
-        ...(prompt ? [prompt] : []),
+        ...(combinedPrompt ? [combinedPrompt] : []),
       ],
       {
         stdio: 'inherit',
@@ -525,3 +538,35 @@ program
   );
 
 program.parse();
+
+async function readPipedStdin(): Promise<string | undefined> {
+  if (process.stdin.isTTY) {
+    return undefined;
+  }
+
+  return await new Promise<string | undefined>((resolve, reject) => {
+    let buffer = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => {
+      buffer += chunk;
+    });
+    process.stdin.on('end', () => {
+      const trimmedBuffer = buffer.trim();
+      resolve(trimmedBuffer ? trimmedBuffer : undefined);
+    });
+    process.stdin.on('error', reject);
+  });
+}
+
+async function loadConfig(): Promise<config.Config> {
+  try {
+    return (await config.get()) as config.Config;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      pc.red('Config not found or invalid.'),
+      pc.gray(`(${message})`)
+    );
+    process.exit(1);
+  }
+}
