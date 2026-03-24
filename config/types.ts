@@ -11,12 +11,12 @@ export interface Config extends Omit<AgentConfig, 'id' | 'workspace'> {
     elevenlabs?: {
       /**
        * ElevenLabs API key is required for Text to Speech and Speech to Text
-       * Features that need this: the TUI voice input (`/v`), `greg tg send --voice`, and `greg hub voicecall`
+       * Features that need this: the TUI voice input (`/v`) and `greg tg send --voice`
        */
       key: string;
       /**
        * Voice ID is required for Text to Speech
-       * Features that need this: `greg tg send --voice` and `greg hub voicecall`
+       * Features that need this: `greg tg send --voice`
        */
       voiceId?: string;
     };

@@ -1,3 +1,2 @@
-- [ ] Tests for exec policy
 - [ ] Pre-exec policy for dangerous patterns
 - [ ] Add /10m to allowlist commands

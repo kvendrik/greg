@@ -249,6 +249,8 @@ CLI's in the Hub:
 - `greg hub notion` provides a read-only CLI for Notion for Greg to use
 - `greg hub strava` provides a read-only CLI for Strava for Greg to use
 
+Greg also works well with the [📞 `voicecall` CLI](https://github.com/kvendrik/voicecall) to make voice calls. Just point him at the [`AGENT.md` file](https://github.com/kvendrik/voicecall/blob/main/AGENT.md) to use it.
+
 ## 💂 Guard
 
 Greg comes with a guard that’s enabled by default. You can turn it off by setting `tools.guard.enabled` to `false` if you want to go YOLO-mode.
