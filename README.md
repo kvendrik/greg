@@ -1,4 +1,4 @@
-# 🤖 Greg
+# [🤖 Greg](https://github.com/kvendrik/greg)
 
 An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ fewer lines of code (`~15k` vs `~450k`) and therefore easier to understand, customize, and be used with confidence.
 
