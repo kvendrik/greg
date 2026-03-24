@@ -374,11 +374,11 @@ If you're concerned about privacy and want to use a local model you can configur
 
 ### Telegram
 
-The recommended to use Greg is through Telegram. Greg comes with a `greg telegram` command that lets both you can Greg send both text and voice messages to the Telegram bot configured in your `~/.greg/config.ts` file.
+The recommended to use Greg is through Telegram. Greg comes with a `greg telegram` command that lets both you and Greg send text and voice messages to the Telegram bot configured in your `~/.greg/config.ts` file.
 
 ### TUI
 
-Additionally, Greg comes with a TUI that's available through `greg tui`. The TUI can be used to work with Greg through your command-line:
+Additionally, Greg comes with a TUI that's available through `greg tui`. The TUI can also be used to work with Greg through your command-line:
 
 ```bash
 cat ~/path/to/some/file.md | greg tui -p "Summarize this file"
