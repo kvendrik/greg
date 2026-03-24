@@ -16,7 +16,6 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ fewer
 - 🚏 **Supports Most Popular Models**. Greg uses [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) and therefore supports most popular models. He ships with a fallback system that allows you to configure what model should be used in case your preferred model isn't available. You can also define additional models and invoke them for whatever prompt you want using `/` commands.
 - 💂 **Guarding**. If Greg tries to run tools or commands that you've not pre-approved a separate system will ask for your permission first.
 - 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of sending voice messages by transcribing his responses using [ElevenLabs](https://elevenlabs.io/). This does require a ElevenLabs API key. See "Voice Messages" below for more info.
-- 📞 **Voice Calls**. Greg ships with [tools](hub/voicecall) that allow him to place voice calls using [ElevenLabs](https://elevenlabs.io/) and [Twilio](https://www.twilio.com). Running `greg doctor` will help you understand what environment variables are needed to make this work.
 
 Oh and you don't have to call him Greg. Just say "From now on your name is John" and that's it.
 
@@ -125,7 +124,7 @@ const config: Config = {
   /**
    * Optional:
    * Use voice functionality
-   * Features: voice messages, voice calls, and voice mode in the TUI.
+   * Features: voice messages and voice mode in the TUI.
    */
   voice: {
     elevenlabs: {
@@ -249,7 +248,6 @@ CLI's in the Hub:
 
 - `greg hub notion` provides a read-only CLI for Notion for Greg to use
 - `greg hub strava` provides a read-only CLI for Strava for Greg to use
-- `greg hub voicecall` provides a CLI for Greg to make voicecalls through Twilio
 
 ## 💂 Guard
 

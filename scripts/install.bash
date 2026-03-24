@@ -7,7 +7,7 @@ if [ -d "~/.greg" ]; then
   exit 1
 fi
 
-mkdir -p ~/.greg/src
+mkdir -p ~/.greg
 git clone git@github.com:kvendrik/greg.git ~/.greg/src
 cd ~/.greg/src
 
