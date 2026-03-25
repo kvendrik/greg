@@ -17,6 +17,7 @@ import {
 } from '../../config/validate';
 import * as config from '../../config';
 import { createConfigBuilder } from './config-builder';
+import { onboard } from './onboard';
 
 if (await exists(config.home)) {
   log.error(`${config.home} already exists`);
@@ -131,11 +132,7 @@ outro(
   `🤖✅ Done! Starting chat with Greg... ${setupTelegram ? "Run 'greg gateway start' to start the Telegram gateway." : ''}`
 );
 
-spawnSync('greg', [
-  'tui',
-  '-p',
-  '"System: Hey Greg! This is the user’s first time interacting with you. Greet them, introduce yourself, and get to know them so you can update your user memory."',
-]);
+onboard();
 
 async function askForKey(): Promise<string> {
   const modelApiKey = await text({

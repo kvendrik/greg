@@ -30,10 +30,10 @@ const session = gateway.get('main');
 
 let thinkingStream: ReturnType<typeof createContentStream> | null = null;
 let thinkingStreamPromise: Promise<void> | null = null;
-let contentStream: ReturnType<typeof createContentStream> | null = null;
-let streamPromise: Promise<void> | null = null;
 let thinkingSpinner: ReturnType<typeof spinner> | null = null;
+let thinkingStartTime: DOMHighResTimeStamp | null = null;
 let lastAssistantOutput = '';
+let assistantSegmentForLog = '';
 
 let toolSpinner: ReturnType<typeof spinner> | null = null;
 let lastToolCall: string | null = null;
@@ -85,8 +85,10 @@ function createContentStream(): {
 
 function clearThinking(): void {
   if (thinkingSpinner) {
-    thinkingSpinner.clear();
+    const duration = performance.now() - (thinkingStartTime ?? 0);
+    thinkingSpinner.stop(pc.dim(`Thought for ${duration.toFixed(0)}ms`));
     thinkingSpinner = null;
+    thinkingStartTime = null;
   }
 
   if (toolSpinner) {
@@ -113,29 +115,25 @@ async function flushThinkingStream(): Promise<void> {
   }
 }
 
-function startContentStream(): void {
-  if (!contentStream) {
-    contentStream = createContentStream();
-    streamPromise = stream.step(contentStream.iterable);
+function logAssistantSegmentIfNeeded(): void {
+  const segment = assistantSegmentForLog.trim();
+  if (segment) {
+    log.step(segment);
   }
+  assistantSegmentForLog = '';
 }
 
 async function flushStream(): Promise<void> {
   await flushThinkingStream();
-  if (contentStream) {
-    contentStream.end();
-    contentStream = null;
-  }
-  if (streamPromise) {
-    await streamPromise.catch(() => {});
-    streamPromise = null;
-  }
 }
 
 session.subscribe('tui', {
   onTurnStart: () => {
+    lastAssistantOutput = '';
+    assistantSegmentForLog = '';
     thinkingSpinner = spinner();
     thinkingSpinner.start('🧠 Thinking...');
+    thinkingStartTime = performance.now();
   },
   onThinking: (_chunk) => {
     clearThinking();
@@ -148,17 +146,14 @@ session.subscribe('tui', {
       thinkingStream.end();
       thinkingStream = null;
     }
-    startContentStream();
-    const activeContentStream = contentStream;
-    if (activeContentStream) {
-      activeContentStream.push(chunk);
-    }
+    assistantSegmentForLog += chunk;
     lastAssistantOutput += chunk;
   },
   onToolcall: (name, _args) => {
     void (async () => {
       clearThinking();
-      await flushStream();
+      await flushThinkingStream();
+      logAssistantSegmentIfNeeded();
       //log.info(pc.dim(`🔧 [${name}](${JSON.stringify(args)})`));
       toolSpinner = spinner();
       lastToolCall = name;
@@ -171,10 +166,7 @@ session.subscribe('tui', {
       thinkingStream.end();
       thinkingStream = null;
     }
-    if (contentStream) {
-      contentStream.end();
-      contentStream = null;
-    }
+    logAssistantSegmentIfNeeded();
   },
   onTurnStop: (): void => {
     clearThinking();
@@ -182,10 +174,7 @@ session.subscribe('tui', {
       thinkingStream.end();
       thinkingStream = null;
     }
-    if (contentStream) {
-      contentStream.end();
-      contentStream = null;
-    }
+    logAssistantSegmentIfNeeded();
   },
   onError: (error): void => {
     clearThinking();
@@ -193,10 +182,7 @@ session.subscribe('tui', {
       thinkingStream.end();
       thinkingStream = null;
     }
-    if (contentStream) {
-      contentStream.end();
-      contentStream = null;
-    }
+    assistantSegmentForLog = '';
     if (error) {
       log.error(error);
       process.exit(1);
