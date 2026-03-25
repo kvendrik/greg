@@ -1,7 +1,7 @@
 {
   "name": "@kvendrik/greg",
   "description": "OpenClaw-like personal assistant",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "type": "module",
   "repository": {
