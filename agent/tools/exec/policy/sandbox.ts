@@ -22,31 +22,42 @@ export function sandbox(
   };
 }
 
-function createProfile(config: AgentConfig): string {
-  const readAllow = getRoots('read', config)
-    .allow.map((root) => `(subpath "${root}")`)
+function seatbeltDenySubpaths(roots: string[]): string {
+  return roots
+    .map((root) => {
+      const path = root.startsWith('!') ? root.slice(1) : root;
+      return `(subpath "${path}")`;
+    })
     .join(' ');
+}
 
-  const readDeny = getRoots('read', config)
-    .deny.map((root) => `(subpath "${root}")`)
-    .join(' ');
+function createProfile(config: AgentConfig): string {
+  const readDeny = seatbeltDenySubpaths(getRoots('read', config).deny);
 
   const writeAllow = getRoots('write', config)
     .allow.map((root) => `(subpath "${root}")`)
     .join(' ');
 
-  const writeDeny = getRoots('write', config)
-    .deny.map((root) => `(subpath "${root}")`)
-    .join(' ');
+  const writeDeny = seatbeltDenySubpaths(getRoots('write', config).deny);
 
-  return [
+  // Exec’d processes must read system binaries, dylibs, certs, etc. Keep secrecy
+  // paths blocked via tools.guard.files read deny (`!…` entries).
+  const lines = [
     '(version 1)',
     '(deny default)',
     '(allow network*)',
     '(allow file-read-metadata)',
-    `(allow file-read* ${readAllow})`,
-    `(deny file-read* ${readDeny})`,
-    `(allow file-write* ${writeAllow})`,
-    `(deny file-write* ${writeDeny})`,
-  ].join('\n');
+    '(allow process-exec)',
+    '(allow process-fork)',
+    '(allow signal (target self))',
+    '(allow file-read*)',
+  ];
+  if (readDeny.length > 0) {
+    lines.push(`(deny file-read* ${readDeny})`);
+  }
+  lines.push(`(allow file-write* ${writeAllow})`);
+  if (writeDeny.length > 0) {
+    lines.push(`(deny file-write* ${writeDeny})`);
+  }
+  return lines.join('\n');
 }
