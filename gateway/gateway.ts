@@ -10,7 +10,17 @@ interface GatewayState {
    * Method to get a reply from the user.
    * Used by the Guard to get a reply from the user.
    */
-  getReply: ((message: string) => Promise<string>) | null;
+  getReply:
+    | ((
+        message: string,
+        details: {
+          toolName: string;
+          toolParams: Record<string, unknown>;
+          prettyParams: string;
+          commandsHint: string;
+        }
+      ) => Promise<string>)
+    | null;
 }
 
 export const state: GatewayState = {
@@ -19,7 +29,7 @@ export const state: GatewayState = {
 
 export async function start(): Promise<{
   stop: () => void;
-  setGetReply: (getReply: (message: string) => Promise<string>) => void;
+  setGetReply: (getReply: GatewayState['getReply']) => void;
 }> {
   const config = await getConfig();
 
@@ -56,10 +66,13 @@ export async function start(): Promise<{
       logger.info('🛑 Shutting down...');
       heartbeat?.stop();
     },
-    setGetReply(getReply: (message: string) => Promise<string>): void {
-      state.getReply = async (message: string) => {
+    setGetReply(getReply: GatewayState['getReply']): void {
+      if (!getReply) {
+        return;
+      }
+      state.getReply = async (message: string, details) => {
         logger.info(`Getting reply for message: "${message}"`);
-        const reply = await getReply(message);
+        const reply = await getReply(message, details);
         logger.info(`User replied: "${reply}"`);
         return reply;
       };

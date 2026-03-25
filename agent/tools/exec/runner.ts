@@ -1,4 +1,6 @@
 import { spawn, type ChildProcess } from 'child_process';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { nanoid } from 'nanoid';
 import pc from 'picocolors';
 
@@ -22,8 +24,20 @@ export type BackgroundUpdate = {
 
 const MAX_CAPTURED_BYTES = 200_000;
 const NO_OUTPUT_TIMEOUT_MS = 60_000;
-const SAFE_PATH =
-  '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin';
+
+/** Minimal PATH for exec; includes ~/.bun/bin so `#!/usr/bin/env bun` entrypoints resolve. */
+function safePath(): string {
+  const bunUserBin = join(homedir(), '.bun', 'bin');
+  return [
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin',
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    bunUserBin,
+  ].join(':');
+}
 
 interface BackgroundProcess {
   runId: string;
@@ -360,7 +374,7 @@ function resolveEnv(): NodeJS.ProcessEnv {
     if (key.startsWith('DYLD_') || key === 'PATH') continue;
     env[key] = value;
   }
-  env.PATH = SAFE_PATH;
+  env.PATH = safePath();
   return env;
 }
 

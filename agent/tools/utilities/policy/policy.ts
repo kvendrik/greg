@@ -13,9 +13,6 @@ export type PolicyEvaluation = {
   reason: string | null;
 };
 
-/** Appended for Telegram / text clients; strip in TUI when using a native picker. */
-export const TOOL_GUARD_TEXT_REPLY_HINT = `\n\n/deny <reason> - deny to run this command, optionally provide a reason\n/once - allow to run this command this time`;
-
 export async function evaluatePolicy(
   call: { name: string; label: string; params: Record<string, unknown> },
   context: ToolContext
@@ -54,6 +51,13 @@ export async function evaluatePolicy(
     };
   }
 
+  if (!result.allowed && isToolTmpAllowed(call.name)) {
+    return {
+      allowed: true,
+      reason: `Tool call allowed. Permission was previously granted by the user for ${call.name} to be ran for 5 minutes.`,
+    };
+  }
+
   if (!result.allowed && config.tools.guard.ask) {
     if (!gatewayState.getReply) {
       return {
@@ -63,19 +67,36 @@ export async function evaluatePolicy(
       };
     }
 
-    const callString = prettify(call.name, call.params);
-
+    const prettyParams = prettify(call.params);
     const messageBody = `💂 ${config.id} is asking to run a tool:
 
-\`\`\`js\n${callString}\n\`\`\``;
-    const message = messageBody + TOOL_GUARD_TEXT_REPLY_HINT;
+\`\`\`js\n${call.name}(${prettyParams})\n\`\`\``;
 
-    const reply = await gatewayState.getReply(message);
+    const commandsHint = `\n\n/deny <reason> - deny to run this command, optionally provide a reason\n/once - allow to run this command this time\n/5m - allow ${call.name}() for the next 5 minutes`;
+    const message = messageBody + commandsHint;
 
-    if (!reply.trim().toLowerCase().startsWith('/once')) {
-      const reason = `Tool call not allowed: ${callString}. Permission was denied by the user. User replied: "${reply}".`;
+    const reply = await gatewayState.getReply(message, {
+      toolName: call.name,
+      toolParams: call.params,
+      prettyParams,
+      commandsHint,
+    });
+
+    const cleanReply = reply.trim().toLowerCase();
+
+    if (!cleanReply.startsWith('/once') && !cleanReply.startsWith('/5m')) {
+      const reason = `Tool call not allowed.. Permission was denied by the user. User replied: "${reply}".`;
       return {
         allowed: false,
+        reason,
+      };
+    }
+
+    if (cleanReply.startsWith('/5m')) {
+      const reason = `Tool calls to ${call.name} allowed for the next 5 minutes. Permission was granted by the user. User replied: "${reply}".`;
+      tmpAllowedTools.set(call.name, new Date(Date.now() + 5 * 60 * 1000));
+      return {
+        allowed: true,
         reason,
       };
     }
@@ -87,4 +108,16 @@ export async function evaluatePolicy(
   }
 
   return result;
+}
+
+const tmpAllowedTools = new Map<string, Date>();
+
+function isToolTmpAllowed(toolName: string): boolean {
+  const now = new Date();
+  const allowedUntil = tmpAllowedTools.get(toolName) ?? null;
+  const isAllowed = Boolean(allowedUntil && allowedUntil > now);
+  if (isAllowed) {
+    tmpAllowedTools.delete(toolName);
+  }
+  return isAllowed;
 }

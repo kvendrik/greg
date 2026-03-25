@@ -239,6 +239,9 @@ Commands run under a macOS sandbox profile with:
 - Default-deny: filesystem writes are blocked.
 - File reads are allowed (\`file-read*\`), so read-only operations on local files work.
 - Network access is allowed (\`network*\`).
+- A Chromium/Codex-style \`sysctl-read\` allowlist so JIT runtimes (e.g. Bun) can start; without it they may exit immediately with no output.
+
+\`/usr/bin/open\` is **not** wrapped in sandbox-exec: Launch Services needs IPC the profile does not grant, and wrapping it breaks opening URLs/files in the default app.
 
 If you need to persist anything to disk (create/edit files), write it using the Files tools (e.g. \`write_file\`, \`append_file\`, \`patch_file\`) instead of relying on the command.
 

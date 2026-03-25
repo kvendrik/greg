@@ -95,9 +95,7 @@ function evaluateExecCommand(params: {
 }): PolicyEvaluation {
   const execConfig = params.context.config.tools.guard.exec;
 
-  const resolvedCwd = path.resolve(
-    getWorkspacePath(params.context.config)
-  );
+  const resolvedCwd = path.resolve(getWorkspacePath(params.context.config));
 
   if (!execConfig) {
     return {
@@ -473,21 +471,13 @@ function validateFlagValue(params: {
     }
     const min = valueSpec.min;
     const max = valueSpec.max;
-    if (
-      typeof min === 'number' &&
-      Number.isInteger(min) &&
-      parsedValue < min
-    ) {
+    if (typeof min === 'number' && Number.isInteger(min) && parsedValue < min) {
       return {
         allowed: false,
         reason: `Command not allowed: flag "${params.flagName}" value ${parsedValue} is below min ${min}.`,
       };
     }
-    if (
-      typeof max === 'number' &&
-      Number.isInteger(max) &&
-      parsedValue > max
-    ) {
+    if (typeof max === 'number' && Number.isInteger(max) && parsedValue > max) {
       return {
         allowed: false,
         reason: `Command not allowed: flag "${params.flagName}" value ${parsedValue} is above max ${max}.`,

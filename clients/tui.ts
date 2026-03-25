@@ -11,7 +11,6 @@ import {
 } from '@clack/prompts';
 import pc from 'picocolors';
 import { get as getConfig } from '../config';
-import { TOOL_GUARD_TEXT_REPLY_HINT } from '../agent/tools/utilities/policy/policy';
 import {
   realtimeTranscribeFromMic,
   listAvFoundationDevices,
@@ -181,19 +180,16 @@ session.subscribe('tui', {
   },
 });
 
-setGetReply(async (question) => {
+setGetReply(async (question, { toolName, prettyParams }) => {
   clearThinking();
   await flushThinkingStream();
 
-  const message = question.endsWith(TOOL_GUARD_TEXT_REPLY_HINT)
-    ? question.slice(0, -TOOL_GUARD_TEXT_REPLY_HINT.length)
-    : question;
-
   const answer = await select({
-    message,
+    message: `${pc.yellow(toolName)}${pc.dim(`(${prettyParams})`)}\n`,
     options: [
       { label: 'deny', value: '/deny' },
       { label: 'allow once', value: '/once' },
+      { label: `allow ${toolName}() for the next 5 minutes`, value: `/5m` },
     ],
     initialValue: '/once',
   });

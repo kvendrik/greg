@@ -13,10 +13,7 @@
  * //    })
  * ```
  */
-export function prettify(
-  toolName: string,
-  params: Record<string, unknown>
-): string {
+export function prettify(params: Record<string, unknown>): string {
   const maxStringLength = 250;
   const maxDepth = 6;
   const maxArrayLength = 50;
@@ -113,9 +110,9 @@ export function prettify(
 
   try {
     const safeParams = sanitize(params, 0, null);
-    return `${toolName}(${JSON.stringify(safeParams, null, 2)})`;
+    return JSON.stringify(safeParams, null, 2);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return `${toolName}([Unserializable params: ${errorMessage}])`;
+    return `[Unserializable params: ${errorMessage}]`;
   }
 }
