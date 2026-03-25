@@ -13,6 +13,9 @@ export type PolicyEvaluation = {
   reason: string | null;
 };
 
+/** Appended for Telegram / text clients; strip in TUI when using a native picker. */
+export const TOOL_GUARD_TEXT_REPLY_HINT = `\n\n/deny <reason> - deny to run this command, optionally provide a reason\n/once - allow to run this command this time`;
+
 export async function evaluatePolicy(
   call: { name: string; label: string; params: Record<string, unknown> },
   context: ToolContext
@@ -62,11 +65,10 @@ export async function evaluatePolicy(
 
     const callString = prettify(call.name, call.params);
 
-    const message = `💂 ${config.id} is asking to run a tool:
-\`\`\`js\n${callString}\n\`\`\`\
-\n
-/deny <reason> - deny to run this command, optionally provide a reason
-/once - allow to run this command this time`;
+    const messageBody = `💂 ${config.id} is asking to run a tool:
+
+\`\`\`js\n${callString}\n\`\`\``;
+    const message = messageBody + TOOL_GUARD_TEXT_REPLY_HINT;
 
     const reply = await gatewayState.getReply(message);
 

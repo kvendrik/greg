@@ -11,6 +11,7 @@ import {
 } from '@clack/prompts';
 import pc from 'picocolors';
 import { get as getConfig } from '../config';
+import { TOOL_GUARD_TEXT_REPLY_HINT } from '../agent/tools/utilities/policy/policy';
 import {
   realtimeTranscribeFromMic,
   listAvFoundationDevices,
@@ -34,9 +35,6 @@ let thinkingSpinner: ReturnType<typeof spinner> | null = null;
 let thinkingStartTime: DOMHighResTimeStamp | null = null;
 let lastAssistantOutput = '';
 let assistantSegmentForLog = '';
-
-let toolSpinner: ReturnType<typeof spinner> | null = null;
-let lastToolCall: string | null = null;
 
 const config = await getConfig();
 
@@ -89,11 +87,6 @@ function clearThinking(): void {
     thinkingSpinner.stop(pc.dim(`Thought for ${duration.toFixed(0)}ms`));
     thinkingSpinner = null;
     thinkingStartTime = null;
-  }
-
-  if (toolSpinner) {
-    toolSpinner.stop(pc.dim(`🔧 Called ${lastToolCall}`));
-    toolSpinner = null;
   }
 }
 
@@ -149,16 +142,14 @@ session.subscribe('tui', {
     assistantSegmentForLog += chunk;
     lastAssistantOutput += chunk;
   },
-  onToolcall: (name, _args) => {
+  onToolcall: (_name, _args) => {
+    clearThinking();
     void (async () => {
-      clearThinking();
       await flushThinkingStream();
       logAssistantSegmentIfNeeded();
-      //log.info(pc.dim(`🔧 [${name}](${JSON.stringify(args)})`));
-      toolSpinner = spinner();
-      lastToolCall = name;
-      toolSpinner.start(`🔧 Calling ${name}...`);
-    })();
+    })().catch((error: unknown) => {
+      log.error(error instanceof Error ? error.message : String(error));
+    });
   },
   onTurnDone: () => {
     clearThinking();
@@ -191,9 +182,20 @@ session.subscribe('tui', {
 });
 
 setGetReply(async (question) => {
-  const answer = await text({
-    message: question,
-    placeholder: '/deny <reason> or /once',
+  clearThinking();
+  await flushThinkingStream();
+
+  const message = question.endsWith(TOOL_GUARD_TEXT_REPLY_HINT)
+    ? question.slice(0, -TOOL_GUARD_TEXT_REPLY_HINT.length)
+    : question;
+
+  const answer = await select({
+    message,
+    options: [
+      { label: 'deny', value: '/deny' },
+      { label: 'allow once', value: '/once' },
+    ],
+    initialValue: '/once',
   });
   if (isCancel(answer)) {
     process.exit(0);

@@ -11,12 +11,19 @@ export function createWebFetchTool(_context: ToolContext): AgentTool {
     label: 'web fetch',
     description: `Fetch and read the content of a specific web page URL, returning clean readable text.
 Use when you have a URL (e.g. from web_search citations) and need the full page — documentation, articles, or any result link. Does not execute JavaScript; best for server-rendered pages (articles, docs, blogs). For JS-heavy or login-only pages, content may be incomplete.
+By default uses Mozilla Readability to isolate the main article; if the result looks like the wrong fragment (e.g. only nav labels, UI chrome, or a few words), call again with use_readability false to use the full visible body text instead (noisier but complete).
 Returns { url: string, title: string, content: string, truncated: boolean }`,
 
     parameters: Type.Object({
       url: Type.String({
         description: 'Absolute HTTP or HTTPS URL of the page to fetch.',
       }),
+      use_readability: Type.Optional(
+        Type.Boolean({
+          description:
+            'When true (default), extract main content with Readability. Set false if the first result looks wrong (novelty layouts, heavy UI) to use normalized full body text instead.',
+        })
+      ),
     }),
 
     async execute(_id, params, signal) {
@@ -24,7 +31,12 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
         throw new DOMException('Aborted', 'AbortError');
       }
 
-      const { url: urlInput } = params as { url: string };
+      const { url: urlInput, use_readability: useReadabilityParam } =
+        params as {
+          url: string;
+          use_readability: boolean | undefined;
+        };
+      const useReadability = useReadabilityParam !== false;
 
       let url: string;
       try {
@@ -95,7 +107,9 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
         const html = new TextDecoder().decode(combined);
 
         const finalUrl = response.url;
-        const { title, content } = extractContent(html, finalUrl);
+        const { title, content } = extractContent(html, finalUrl, {
+          useReadability,
+        });
 
         const truncated = capped || content.length > MAX_CHARS;
         const trimmedContent =
@@ -302,10 +316,32 @@ const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5MB
 
 function extractContent(
   html: string,
-  url: string
+  url: string,
+  options: { useReadability: boolean }
 ): { title: string; content: string } {
   const dom = new JSDOM(html, { url });
-  const reader = new Readability(dom.window.document);
+  const doc = dom.window.document;
+
+  if (!options.useReadability) {
+    const titleEl = doc.querySelector('title');
+    const titleFromHead = (titleEl?.textContent ?? '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const rawBody = doc.body.textContent;
+    const content = rawBody.replace(/\s+/g, ' ').trim();
+    if (content.length > 0) {
+      return { title: titleFromHead, content };
+    }
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    return { title: titleFromHead, content: text };
+  }
+
+  const reader = new Readability(doc);
   const article = reader.parse();
 
   if (article?.content) {

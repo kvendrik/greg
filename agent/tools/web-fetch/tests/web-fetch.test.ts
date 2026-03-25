@@ -22,8 +22,11 @@ describe('web-fetch', () => {
         onBackgroundUpdate: () => {},
       });
       expect(tool.name).toBe('web_fetch');
-      const schema = tool.parameters as { properties?: { url?: unknown } };
+      const schema = tool.parameters as {
+        properties?: { url?: unknown; use_readability?: unknown };
+      };
       expect(schema.properties?.url).toBeDefined();
+      expect(schema.properties?.use_readability).toBeDefined();
     });
 
     it('throws on invalid URL', () => {
@@ -118,6 +121,58 @@ describe('web-fetch', () => {
           url: requestUrl,
           title: 'Test Page',
         });
+      } finally {
+        (globalThis as { fetch: typeof globalThis.fetch }).fetch =
+          originalFetch;
+      }
+    });
+
+    it('with use_readability false includes visible chrome outside the main article', async () => {
+      const html = `<!DOCTYPE html><html><head><title>Test Page</title></head><body><div class="dock"><span>DESKTOP_CHROME_LABEL</span></div><article><h1>Hello</h1><p>Body text here.</p></article></body></html>`;
+      const requestUrl = 'https://example.com/chrome-page';
+      const originalFetch = globalThis.fetch;
+      (globalThis as { fetch: typeof globalThis.fetch }).fetch = (async (
+        input: RequestInfo | URL
+      ) => {
+        const url = typeof input === 'string' ? input : (input as Request).url;
+        if (url.startsWith('https://example.com/')) {
+          const res = new Response(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          });
+          Object.defineProperty(res, 'url', {
+            value: requestUrl,
+            writable: false,
+          });
+          return res;
+        }
+        return originalFetch.call(globalThis, input);
+      }) as typeof globalThis.fetch;
+      try {
+        const tool = createWebFetchTool({
+          config: createConfig(),
+          onBackgroundUpdate: () => {},
+        });
+        const withoutReadability = await tool.execute(
+          'id',
+          { url: requestUrl, use_readability: false },
+          undefined
+        );
+        expect(
+          (withoutReadability.content[0] as { text: string }).text
+        ).toContain('DESKTOP_CHROME_LABEL');
+
+        const withReadability = await tool.execute(
+          'id',
+          { url: requestUrl, use_readability: true },
+          undefined
+        );
+        expect(
+          (withReadability.content[0] as { text: string }).text
+        ).toContain('Body text here');
+        expect(
+          (withReadability.content[0] as { text: string }).text
+        ).not.toContain('DESKTOP_CHROME_LABEL');
       } finally {
         (globalThis as { fetch: typeof globalThis.fetch }).fetch =
           originalFetch;
