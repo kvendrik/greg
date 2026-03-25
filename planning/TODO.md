@@ -1,2 +1,4 @@
 - [ ] Pre-exec policy for dangerous patterns
 - [ ] Add /10m to allowlist commands
+- [ ] Fix TUI `getReply` styling
+- [ ] More testing
