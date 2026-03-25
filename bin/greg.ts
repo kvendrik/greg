@@ -341,7 +341,7 @@ program
   .action(() => {
     const result = spawnSync(
       'bun',
-      ['run', path.join(projectRoot, 'scripts/quickstart.ts')],
+      ['run', path.join(projectRoot, 'scripts/quickstart/quickstart.ts')],
       {
         stdio: 'inherit',
         cwd: projectRoot,
