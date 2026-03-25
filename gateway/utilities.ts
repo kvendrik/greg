@@ -55,9 +55,9 @@ export function parsePath(url: string): string[] {
 
 export function createSender(
   socket: Pick<ServerWebSocket, 'readyState' | 'send'>
-) {
+): { send: (message: unknown) => void } {
   return {
-    send(message: unknown) {
+    send(message: unknown): void {
       // 1 === OPEN for WebSocket readyState
       if (socket.readyState !== 1) {
         return;

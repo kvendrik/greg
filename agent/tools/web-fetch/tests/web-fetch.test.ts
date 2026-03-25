@@ -31,7 +31,7 @@ describe('web-fetch', () => {
         config: createConfig(),
         onBackgroundUpdate: () => {},
       });
-      return expect(
+      expect(
         tool.execute('id', { url: 'not-a-url' }, undefined)
       ).rejects.toThrow(/Invalid URL/);
     });
@@ -43,7 +43,7 @@ describe('web-fetch', () => {
       });
       const controller = new AbortController();
       controller.abort();
-      return expect(
+      expect(
         tool.execute('id', { url: 'https://example.com/' }, controller.signal)
       ).rejects.toMatchObject({ name: 'AbortError' });
     });

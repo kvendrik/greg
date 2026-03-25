@@ -35,14 +35,13 @@ async function withNotionClient(
 }
 
 function pageTitle(page: PageObjectResponse): string {
-  if (!page.properties) return '(untitled)';
   for (const prop of Object.values(page.properties)) {
     const value = prop as {
       type?: string;
       title?: { plain_text?: string }[];
     };
     if (
-      value?.type === 'title' &&
+      value.type === 'title' &&
       Array.isArray(value.title) &&
       value.title.length > 0
     ) {
@@ -242,7 +241,7 @@ function getMediaUrlAndCaption(block: BlockWithRichText): {
   const caption = content.caption
     ? richTextToPlain(content.caption as { plain_text?: string }[])
     : (content.name ?? '');
-  return { url, caption: String(caption).trim() };
+  return { url, caption: caption.trim() };
 }
 
 function mimeFromUrl(url: string): string {
@@ -267,7 +266,11 @@ async function fetchImageAsBase64(
     const buf = await res.arrayBuffer();
     const base64 = Buffer.from(buf).toString('base64');
     const contentType = res.headers.get('content-type');
-    const mime = contentType?.split(';')[0]?.trim() || mimeFromUrl(url);
+    const headerMime = contentType?.split(';')[0]?.trim();
+    const mime =
+      headerMime !== undefined && headerMime.length > 0
+        ? headerMime
+        : mimeFromUrl(url);
     return { base64, mime };
   } catch {
     return null;
@@ -312,7 +315,7 @@ async function fetchBlockChildrenPage(
   return {
     blocks,
     nextCursor: resp.next_cursor ?? undefined,
-    hasMore: resp.has_more ?? false,
+    hasMore: resp.has_more,
   };
 }
 
@@ -462,6 +465,12 @@ type PageContentsOptions = {
   lines?: number;
 };
 
+type NotionSearchCliOpts = {
+  query: string | undefined;
+  pageOnly: boolean;
+  pageSize: number;
+};
+
 async function getPageContents(
   notion: InstanceType<typeof Client>,
   pageId: string,
@@ -556,7 +565,7 @@ program
     (v) => parseInt(v, 10),
     100
   )
-  .action(async (opts) => {
+  .action(async (opts: NotionSearchCliOpts) => {
     await withNotionClient((notion) =>
       searchPages(notion, {
         query: opts.query,
@@ -569,7 +578,7 @@ program
 program
   .command('get <page-id>')
   .description('Retrieve a single page by ID')
-  .action(async (pageId) => {
+  .action(async (pageId: string) => {
     await withNotionClient((notion) => getPage(notion, pageId));
   });
 
@@ -586,7 +595,7 @@ program
     '--lines <number>',
     'Optional: maximum number of lines to print from the rendered Markdown'
   )
-  .action(async (pageId, opts: { from?: string; lines?: string }) => {
+  .action(async (pageId: string, opts: { from?: string; lines?: string }) => {
     const fromNum =
       opts.from !== undefined && opts.from !== ''
         ? parseInt(opts.from, 10)

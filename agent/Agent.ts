@@ -49,9 +49,11 @@ export class Agent {
 
   private constructor(core: CoreAgent, config: AgentConfig) {
     this.core = core;
-    this.primaryModel = config.models.find(
-      (model) => model.role === 'primary'
-    )!.model;
+    const primaryEntry = config.models.find((model) => model.role === 'primary');
+    if (!primaryEntry) {
+      throw new Error('No primary model in config.models.');
+    }
+    this.primaryModel = primaryEntry.model;
     this.config = config;
     this.logger = createLogger(`agent/${config.id}`);
   }
@@ -65,14 +67,14 @@ export class Agent {
     this.abortController = null;
   }
 
-  subscribe(channelId: string, callbacks: Callbacks) {
+  subscribe(channelId: string, callbacks: Callbacks): void {
     this.callbacks.set(channelId, [
       ...(this.callbacks.get(channelId) ?? []),
       callbacks,
     ]);
   }
 
-  unsubscribe(channelId: string) {
+  unsubscribe(channelId: string): void {
     this.callbacks.delete(channelId);
   }
 
@@ -150,7 +152,7 @@ export class Agent {
 
     const parsed = parseCommands({
       content: input.content,
-      currentModel: this.core.state.model ?? this.primaryModel,
+      currentModel: this.core.state.model,
       primaryModel: this.primaryModel,
       config: this.config,
     });
@@ -216,7 +218,7 @@ export class Agent {
       return;
     }
 
-    const images = input.images ?? [];
+    const images = input.images;
     const imageContents: ImageContent[] = images.map((img) => ({
       type: 'image' as const,
       data: img.data,
@@ -267,7 +269,7 @@ export class Agent {
 
     this.logger.info(`\n"${messageWithMeta}"`);
 
-    const modelLabel = this.core.state.model?.name;
+    const modelLabel = this.core.state.model.name;
     this.logger.info(`Using ${modelLabel}.`);
 
     const unsubscribe = this.core.subscribe((event) => {
@@ -309,19 +311,18 @@ export class Agent {
 
     const signal = this.abortController.signal;
     const previousMessages = this.core.state.messages.slice();
-    let aborted = false;
+    const abortState: { current: boolean } = { current: false };
 
-    if (signal?.aborted) {
-      aborted = true;
+    if (signal.aborted) {
       this.core.abort();
       callbacks.onTurnStop?.();
       return;
     }
 
-    signal?.addEventListener(
+    signal.addEventListener(
       'abort',
       () => {
-        aborted = true;
+        abortState.current = true;
         this.core.abort();
         callbacks.onTurnStop?.();
       },
@@ -335,8 +336,8 @@ export class Agent {
 
       if (this.core.state.error) {
         const isPrimaryModel =
-          this.core.state.model?.id === this.primaryModel.id &&
-          this.core.state.model?.provider === this.primaryModel.provider;
+          this.core.state.model.id === this.primaryModel.id &&
+          this.core.state.model.provider === this.primaryModel.provider;
 
         if (
           isPrimaryModel &&
@@ -370,21 +371,21 @@ export class Agent {
       const message = err instanceof Error ? err.message : String(err);
       const lowerMessage = message.toLowerCase();
       const isAbortLikeError =
-        aborted ||
+        abortState.current ||
         (err instanceof Error &&
           (err.name === 'AbortError' ||
             err.name === 'TimeoutError' ||
             lowerMessage.includes('aborted') ||
             lowerMessage.includes('canceled') ||
-            (signal?.aborted && lowerMessage.includes('timed out'))));
+            lowerMessage.includes('timed out')));
 
       if (isAbortLikeError) {
-        aborted = true;
+        abortState.current = true;
       } else {
         callbacks.onError?.(message);
       }
     } finally {
-      if (aborted) {
+      if (abortState.current) {
         this.core.replaceMessages(previousMessages);
       }
       this.abortController = null;
@@ -400,23 +401,34 @@ export class Agent {
   }: AgentOptions): Promise<Agent> {
     const logger = createLogger(`agent/${config.id}`);
     const conversationStartIso = new Date().toISOString();
+    const agentHolder: { current: Agent | null } = { current: null };
     const tools = await getTools(conversationStartIso, {
       config,
       onBackgroundUpdate: (update) => {
         logger.info(`[Background update] Prompting: "${update.message}"`);
-        agent.prompt(
-          {
-            content: `[Update from background tool ${update.tool}]: "${update.message}"`,
-            images: [],
-          },
-          { channelId: 'all' }
-        );
+        const agent = agentHolder.current;
+        if (agent !== null) {
+          void agent
+            .prompt(
+              {
+                content: `[Update from background tool ${update.tool}]: "${update.message}"`,
+                images: [],
+              },
+              { channelId: 'all' }
+            )
+            .catch((err: unknown) => {
+              const msg = err instanceof Error ? err.message : String(err);
+              logger.warn(`Background update prompt failed: ${msg}`);
+            });
+        }
       },
     });
 
-    const primaryModel = config.models.find(
-      (model) => model.role === 'primary'
-    )!.model;
+    const primaryEntry = config.models.find((model) => model.role === 'primary');
+    if (!primaryEntry) {
+      throw new Error('No primary model in config.models.');
+    }
+    const primaryModel = primaryEntry.model;
 
     const systemPrompt = getSystemPrompt(tools.instructions, config);
 
@@ -456,6 +468,7 @@ export class Agent {
     });
 
     const agent = new Agent(core, config);
+    agentHolder.current = agent;
     return agent;
   }
 }

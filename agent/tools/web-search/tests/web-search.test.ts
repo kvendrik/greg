@@ -62,7 +62,7 @@ describe('web-search', () => {
       });
       const controller = new AbortController();
       controller.abort();
-      return expect(
+      expect(
         tool.execute('id', { query: 'test' }, controller.signal)
       ).rejects.toMatchObject({ name: 'AbortError' });
     });

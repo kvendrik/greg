@@ -5,9 +5,9 @@ import type { Config } from '../../../../config/types';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const which: {
+const which = require('which') as {
   sync: (cmd: string, opt?: { nothrow?: boolean }) => string | null;
-} = require('which');
+};
 
 type GuardValidationMessages = {
   info: string[];
@@ -22,9 +22,9 @@ export function validate(config: Config): GuardValidationMessages {
     errors: [],
   };
 
-  const guardConfig = config.tools?.guard;
+  const guardConfig = config.tools.guard;
 
-  if (!(config.tools?.guard.enabled)) {
+  if (!guardConfig.enabled) {
     messages.warnings.push('Guard is disabled (tools.guard.enabled is false)');
     return messages;
   }
@@ -41,14 +41,10 @@ export function validate(config: Config): GuardValidationMessages {
     );
   }
 
-  if (guardConfig.enabled && !guardConfig.ask) {
+  if (!guardConfig.ask) {
     messages.warnings.push(
       'tools.guard.ask is off (execve calls will be denied instead of prompting for permission)'
     );
-  }
-
-  if (!guardConfig.enabled) {
-    return messages;
   }
 
   const execConfig = guardConfig.exec;
@@ -107,7 +103,7 @@ export function validate(config: Config): GuardValidationMessages {
         const profileNameString =
           typeof profileName === 'string' ? profileName : String(profileName);
 
-        if (!profiles[profileNameString]) {
+        if (!Object.hasOwn(profiles, profileNameString)) {
           messages.errors.push(
             `tools.guard.exec.allowBins references missing profile "${profileNameString}" for "${binPath}"`
           );

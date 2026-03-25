@@ -7,7 +7,6 @@ import {
   isCancel,
   confirm,
 } from '@clack/prompts';
-import * as prettier from 'prettier';
 import { spawnSync } from 'node:child_process';
 import { exists, mkdir, writeFile, rm } from 'node:fs/promises';
 import {
@@ -15,8 +14,9 @@ import {
   validateAnthropicKey,
   validateTelegramBotToken,
   validateBraveKey,
-} from '../config/validate';
-import * as config from '../config';
+} from '../../config/validate';
+import * as config from '../../config';
+import { createConfigBuilder } from './config-builder';
 
 if (await exists(config.home)) {
   log.error(`${config.home} already exists`);
@@ -107,16 +107,8 @@ if (setupWebSearch) {
   await askForBraveKey();
 }
 
-const formatted = await prettier.format(configBuilder.get(), {
-  parser: 'typescript',
-  semi: true,
-  singleQuote: true,
-  tabWidth: 2,
-  useTabs: false,
-});
-
 await mkdir(config.home, { recursive: true });
-await writeFile(config.path, formatted);
+await writeFile(config.path, await configBuilder.get());
 
 log.info('Validating config...');
 
@@ -145,45 +137,7 @@ spawnSync('greg', [
   '"System: Hey Greg! This is the user’s first time interacting with you. Greet them, introduce yourself, and get to know them so you can update your user memory."',
 ]);
 
-function createConfigBuilder() {
-  let configContent = `import { type Config, getModel, exec } from '@kvendrik/greg/config';
-
-const config: Config = {
-  [...]
-  heartbeat: {
-    enabled: false,
-  },
-  tools: {
-    [T...]
-    guard: {
-      enabled: true,
-      ask: true,
-      exec: {
-        profiles: exec.profiles,
-        allowBins: exec.merge<typeof exec.profiles>(
-          exec.readOnly,
-          exec.safeWrite
-        ),
-      },
-    },
-  },
-};
-
-export default config;
-`;
-
-  return {
-    get: () => configContent.replace('[T...]', '').replace('[...]', ''),
-    add: (key: string, entry: string, position: 'tool' | 'root' = 'root') => {
-      configContent = configContent.replace(
-        position === 'tool' ? `[T...]` : `[...]`,
-        `${key}: ${entry},\n[...]`
-      );
-    },
-  };
-}
-
-async function askForKey() {
+async function askForKey(): Promise<string> {
   const modelApiKey = await text({
     message: 'Enter your API key',
     placeholder: 'sk-...',
@@ -215,7 +169,27 @@ async function askForKey() {
   return modelApiKey;
 }
 
-async function askForTelegram() {
+type TelegramGetUpdatesJson = {
+  result: {
+    message?: {
+      from?: {
+        id: number;
+        username?: string;
+      };
+    };
+  }[];
+};
+
+function asTelegramGetUpdatesJson(
+  data: unknown
+): TelegramGetUpdatesJson | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const record = data as Record<string, unknown>;
+  if (!Array.isArray(record.result)) return null;
+  return data as TelegramGetUpdatesJson;
+}
+
+async function askForTelegram(): Promise<void> {
   log.info(
     `Open Telegram, message @BotFather, send /newbot, follow the prompts.`
   );
@@ -227,12 +201,13 @@ async function askForTelegram() {
       value?.trim() !== '' ? undefined : 'Value is required',
   });
 
-  if (isCancel(telegramBotToken)) {
+  if (isCancel(telegramBotToken) || typeof telegramBotToken !== 'string') {
     process.exit(0);
   }
+  const telegramBotTokenStr = telegramBotToken;
 
   try {
-    await validateTelegramBotToken(telegramBotToken);
+    await validateTelegramBotToken(telegramBotTokenStr);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (errorMessage.includes('invalid')) {
@@ -251,12 +226,12 @@ async function askForTelegram() {
   configBuilder.add(
     'telegram',
     `{
-        botToken: '${telegramBotToken}',
+        botToken: '${telegramBotTokenStr}',
         senderId: '${senderId}',
       }`
   );
 
-  async function getSenderId() {
+  async function getSenderId(): Promise<number> {
     const done = await confirm({
       message:
         'Send a message to your bot. This will allow us to extract your sender ID. Done?',
@@ -270,29 +245,36 @@ async function askForTelegram() {
       return getSenderId();
     }
 
-    const res = await fetch(
-      `https://api.telegram.org/bot${telegramBotToken as string}/getUpdates`
-    ).then((res) => {
-      if (!res.ok) {
-        throw new Error('Failed to get updates');
-      }
-      return res.json();
-    });
+    const httpRes = await fetch(
+      `https://api.telegram.org/bot${telegramBotTokenStr}/getUpdates`
+    );
+    if (!httpRes.ok) {
+      throw new Error('Failed to get updates');
+    }
+    const json: unknown = await httpRes.json();
+    const parsed = asTelegramGetUpdatesJson(json);
+    if (parsed === null) {
+      log.error('Invalid response from Telegram');
+      return getSenderId();
+    }
 
-    if (res.result.length === 0) {
+    if (parsed.result.length === 0) {
       log.error('No updates found');
       return getSenderId();
     }
 
-    const from = res.result[0]?.message?.from;
+    const from = parsed.result[0]?.message?.from;
 
-    if (!from) {
+    if (!from || typeof from.id !== 'number') {
       log.error('Failed to get sender ID');
       return getSenderId();
     }
 
+    const username =
+      typeof from.username === 'string' ? from.username : 'unknown';
+
     const doneSenderId = await confirm({
-      message: `Got sender ID. Use "${from.id}" (@${from.username}) as your Telegram sender ID.?`,
+      message: `Got sender ID. Use "${from.id}" (@${username}) as your Telegram sender ID.?`,
     });
 
     if (isCancel(doneSenderId)) {
@@ -304,14 +286,14 @@ async function askForTelegram() {
     }
 
     log.success(
-      `Using "${from.id}" (@${from.username}) as your Telegram sender ID.`
+      `Using "${from.id}" (@${username}) as your Telegram sender ID.`
     );
 
     return from.id;
   }
 }
 
-async function askForBraveKey() {
+async function askForBraveKey(): Promise<void> {
   const braveApiKey = await text({
     message: 'Enter your Brave API key',
     placeholder: '...',
@@ -346,12 +328,12 @@ async function askForBraveKey() {
   );
 }
 
-function validateConfig() {
+function validateConfig(): boolean {
   const result = spawnSync('greg', ['config', 'validate']);
   return result.status === 0;
 }
 
-function doctor() {
+function doctor(): boolean {
   const result = spawnSync('greg', ['doctor']);
   return result.status === 0;
 }

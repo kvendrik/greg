@@ -21,8 +21,8 @@ export async function get(
   tools: AgentTool[];
   instructions: string;
 }> {
-  const deniedTools = context.config.tools?.deny ?? null;
-  const allowedTools = context.config.tools?.allow ?? [
+  const deniedTools = context.config.tools.deny ?? null;
+  const allowedTools = context.config.tools.allow ?? [
     'skills',
     'files',
     'memory',

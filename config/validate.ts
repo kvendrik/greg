@@ -65,7 +65,7 @@ export async function validate(config: Config): Promise<boolean> {
     }
   }
 
-  if (config.tools?.browser?.key) {
+  if (config.tools.browser?.key) {
     const browserKey = config.tools.browser.key;
     checks.push({
       name: 'Browser Use',
@@ -75,11 +75,11 @@ export async function validate(config: Config): Promise<boolean> {
     messages.info.push('Browser automation not configured (tools.browser)');
   }
 
-  if (!config.tools?.webSearch) {
+  if (!config.tools.webSearch) {
     messages.info.push('Web search not configured (tools.webSearch)');
   }
 
-  if (config.tools?.webSearch?.provider === 'gemini') {
+  if (config.tools.webSearch?.provider === 'gemini') {
     const webSearchKey = config.tools.webSearch.key;
     checks.push({
       name: 'Web Search (Gemini)',
@@ -87,7 +87,7 @@ export async function validate(config: Config): Promise<boolean> {
     });
   }
 
-  if (config.tools?.webSearch?.provider === 'brave') {
+  if (config.tools.webSearch?.provider === 'brave') {
     const webSearchKey = config.tools.webSearch.key;
     checks.push({
       name: 'Web Search (Brave)',
@@ -95,10 +95,11 @@ export async function validate(config: Config): Promise<boolean> {
     });
   }
 
-  if (config.telegram?.botToken) {
+  const telegramBotToken = config.telegram?.botToken;
+  if (telegramBotToken) {
     checks.push({
       name: 'Telegram',
-      run: () => validateTelegramBotToken(config.telegram!.botToken),
+      run: () => validateTelegramBotToken(telegramBotToken),
     });
   } else {
     messages.warnings.push(
@@ -106,16 +107,17 @@ export async function validate(config: Config): Promise<boolean> {
     );
   }
 
-  if (!(config.tools?.guard?.enabled)) {
+  if (!config.tools.guard.enabled) {
     messages.warnings.push('Guard is disabled (tools.guard.enabled is false)');
   } else {
     checks.push({
       name: 'Guard',
-      run: async () => {
+      run: () => {
         const guardMessages = validateExecGuard(config);
         messages.info.push(...guardMessages.info);
         messages.warnings.push(...guardMessages.warnings);
         messages.errors.push(...guardMessages.errors);
+        return Promise.resolve();
       },
     });
   }
@@ -125,14 +127,13 @@ export async function validate(config: Config): Promise<boolean> {
   settled.forEach((s, index) => {
     if (s.status === 'fulfilled') {
       messages.successes.push(checks[index].name);
-    }
-    if (s.status === 'rejected') {
+    } else {
       messages.errors.push(`${checks[index].name}: ${s.reason}`);
     }
   });
 
   log(messages);
-  return messages.errors.length === 0;
+  return Array.from(messages.errors).length === 0;
 }
 
 function log(messages: Messages): void {
@@ -195,7 +196,7 @@ export async function validateTelegramBotToken(token: string): Promise<void> {
   const bot = new Bot(token);
   try {
     const me = await bot.api.getMe();
-    if (!me?.id) {
+    if (!me.id) {
       throw new Error('Telegram Bot Token invalid');
     }
   } catch (err) {

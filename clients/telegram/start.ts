@@ -15,12 +15,12 @@ await startTelegramClient();
 process.once('SIGINT', shutdown);
 process.once('SIGTERM', shutdown);
 
-function shutdown() {
+function shutdown(): void {
   stop();
   process.exit(0);
 }
 
-async function startTelegramClient() {
+async function startTelegramClient(): Promise<void> {
   const logger = createLogger('GW');
   logger.info('✉️  Starting Telegram service...');
   const { TelegramGateway } = await import('./gateway');

@@ -13,11 +13,11 @@ function runGreg(args: string[]): {
   const result = spawnSync('bun', ['run', gregBin, ...args], {
     cwd: projectRoot,
     encoding: 'utf-8',
-    env: { ...process.env },
+    env: { ...process.env, TEST_ENV: '1' },
   });
   return {
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
+    stdout: result.stdout,
+    stderr: result.stderr,
     status: result.status,
   };
 }

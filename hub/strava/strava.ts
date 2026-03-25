@@ -34,6 +34,10 @@ type TokenResponse = {
 
 const DEFAULT_STORAGE_PATH = path.join(os.homedir(), '.strava-tokens.json');
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 function getStoragePath(): string {
   const raw = process.env.STRAVA_STORAGE_PATH?.trim();
   if (!raw) return DEFAULT_STORAGE_PATH;
@@ -104,7 +108,7 @@ function listenForCode(port: number): Promise<string> {
       const code = parsed.searchParams.get('code');
       const error = parsed.searchParams.get('error');
 
-      const respond = (status: number, body: string) => {
+      const respond = (status: number, body: string): void => {
         res.writeHead(status, { 'Content-Type': 'text/html' });
         res.end(body);
       };
@@ -220,8 +224,14 @@ async function fetchActivities(opts: {
     const body = await res.text();
     let message = `Strava API error: ${res.status} ${res.statusText}`;
     try {
-      const json = JSON.parse(body);
-      if (json.message) message = `Strava API error: ${json.message}`;
+      const json: unknown = JSON.parse(body);
+      if (
+        isRecord(json) &&
+        'message' in json &&
+        typeof json.message === 'string'
+      ) {
+        message = `Strava API error: ${json.message}`;
+      }
     } catch {
       if (body) message += `\n${body}`;
     }
@@ -447,8 +457,17 @@ program
       process.exit(1);
     }
 
-    const tokens = JSON.parse(fs.readFileSync(storagePath, 'utf8'));
-    const refreshToken = tokens.refresh_token;
+    const tokensRaw: unknown = JSON.parse(
+      fs.readFileSync(storagePath, 'utf8')
+    );
+    if (!isRecord(tokensRaw)) {
+      console.error(`Invalid token file at ${storagePath}. Run strava auth.`);
+      process.exit(1);
+    }
+    const refreshToken =
+      'refresh_token' in tokensRaw && typeof tokensRaw.refresh_token === 'string'
+        ? tokensRaw.refresh_token
+        : undefined;
 
     if (!refreshToken) {
       console.error(

@@ -19,7 +19,7 @@ export async function sendMessage(
     type?: 'text' | 'markdown';
   } = { type: 'text' }
 ): Promise<void> {
-  if (options?.voice) {
+  if (options.voice) {
     const voiceId = config.voice?.elevenlabs?.voiceId;
     if (voiceId == null || voiceId === '') {
       throw new Error('ElevenLabs voiceId is not configured (voice.elevenlabs.voiceId)');
@@ -35,15 +35,15 @@ export async function sendMessage(
     return;
   }
 
-  if (options?.context) {
+  if (options.context) {
     if (text.length > 4000) {
-      await options?.context.replyWithDocument(
+      await options.context.replyWithDocument(
         new InputFile(text, 'content.md')
       );
     } else {
       const content =
         options.type === 'markdown' ? convert(text, 'escape') : text;
-      await options?.context.reply(content, {
+      await options.context.reply(content, {
         parse_mode: options.type === 'markdown' ? 'MarkdownV2' : undefined,
       });
     }

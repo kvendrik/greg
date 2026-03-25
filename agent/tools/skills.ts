@@ -50,7 +50,9 @@ export interface SkillMeta {
   requires?: string[];
 }
 
-const paths = (config: AgentConfig) => ({
+const paths = (
+  config: AgentConfig
+): { globalSkills: string; workspaceSkills: string } => ({
   globalSkills: path.join(rootDir, 'skills'),
   workspaceSkills: path.join(getWorkspacePath(config), 'skills'),
 });
@@ -98,10 +100,10 @@ export function discoverSkills(config: AgentConfig): SkillMeta[] {
       const raw = fs.readFileSync(skillMdPath, 'utf8');
       const parsed = matter(raw);
       const data = parsed.data as Record<string, unknown>;
-      const name = typeof data?.name === 'string' ? data.name.trim() : ent.name;
+      const name = typeof data.name === 'string' ? data.name.trim() : ent.name;
       const description =
-        typeof data?.description === 'string' ? data.description.trim() : '';
-      const requires = parseRequires(data?.requires);
+        typeof data.description === 'string' ? data.description.trim() : '';
+      const requires = parseRequires(data.requires);
       const meta: SkillMeta = {
         name: name || ent.name,
         description: description || '',
@@ -204,15 +206,17 @@ description: "${safeDescription}"
 ---
 
 `;
-  if (!filePath && !scope) {
-    throw new Error(
-      'Scope is required when creating a new skill without a known path. Ask the user whether the skill should be "global" (for all agents/users) or "workspace" (only for this agent/user).'
-    );
+  let finalPath: string;
+  if (filePath) {
+    finalPath = filePath;
+  } else {
+    if (scope === undefined) {
+      throw new Error(
+        'Scope is required when creating a new skill without a known path. Ask the user whether the skill should be "global" (for all agents/users) or "workspace" (only for this agent/user).'
+      );
+    }
+    finalPath = filePathForSkillName(skillName, scope, config);
   }
-
-  const finalPath = filePath
-    ? filePath
-    : filePathForSkillName(skillName, scope!, config);
   fs.writeFileSync(finalPath, frontmatter + content, 'utf8');
   return { name: skillName, path: finalPath };
 
@@ -276,7 +280,7 @@ function createSaveSkillTool(config: AgentConfig): AgentTool {
         ])
       ),
     }),
-    execute: async (_id, params, signal) => {
+    execute: (_id, params, signal) => {
       if (signal?.aborted) {
         throw new DOMException('Aborted', 'AbortError');
       }
@@ -298,10 +302,16 @@ function createSaveSkillTool(config: AgentConfig): AgentTool {
           config
         );
         const text = `Skill "${result.name}" saved to ${result.path}.`;
-        return { content: [{ type: 'text' as const, text }], details: {} };
+        return Promise.resolve({
+          content: [{ type: 'text' as const, text }],
+          details: {},
+        });
       } catch (err) {
         const text = err instanceof Error ? err.message : String(err);
-        return { content: [{ type: 'text' as const, text }], details: {} };
+        return Promise.resolve({
+          content: [{ type: 'text' as const, text }],
+          details: {},
+        });
       }
     },
   };

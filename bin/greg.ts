@@ -47,11 +47,23 @@ function getPm2StatusByProcessName(): Map<string, string> {
   const map = new Map<string, string>();
   if (result.status !== 0 || !result.stdout) return map;
   try {
-    const processes: { name?: string; pm2_env?: { status?: string } }[] =
-      JSON.parse(result.stdout);
-    for (const proc of processes) {
-      const name = proc.name;
-      const status = proc.pm2_env?.status;
+    const parsed: unknown = JSON.parse(result.stdout);
+    if (!Array.isArray(parsed)) return map;
+    for (const element of parsed) {
+      if (element === null || typeof element !== 'object') continue;
+      const record = element as {
+        name?: unknown;
+        pm2_env?: { status?: unknown };
+      };
+      const name = typeof record.name === 'string' ? record.name : undefined;
+      const pm2Env = record.pm2_env;
+      const status =
+        pm2Env !== undefined &&
+        typeof pm2Env === 'object' &&
+        'status' in pm2Env &&
+        typeof pm2Env.status === 'string'
+          ? pm2Env.status
+          : undefined;
       if (name != null && status != null) map.set(name, status);
     }
   } catch {
@@ -155,7 +167,7 @@ function createServiceCommand(serviceConfig: ServiceConfig): Command {
       .alias('s')
       .description(serviceConfig.descriptions.status)
       .action(() => {
-        runServiceStatus(serviceConfig);
+        void runServiceStatus(serviceConfig);
       })
   );
 
@@ -378,8 +390,8 @@ program
   .allowUnknownOption()
   // Forward `--help` to tools-cli so e.g. `greg tools read_file --help` shows tool options.
   .helpOption(false)
-  .action((_opts, toolsCmd) => {
-    const args = toolsCmd.args;
+  .action((_opts, toolsCmd: Command) => {
+    const args: string[] = toolsCmd.args;
     spawn('bun', ['run', 'gateway:tools', ...args], {
       stdio: 'inherit',
       cwd: projectRoot,
@@ -565,8 +577,8 @@ async function readPipedStdin(): Promise<string | undefined> {
   return await new Promise<string | undefined>((resolve, reject) => {
     let buffer = '';
     process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => {
-      buffer += chunk;
+    process.stdin.on('data', (chunk: string | Buffer) => {
+      buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
     });
     process.stdin.on('end', () => {
       const trimmedBuffer = buffer.trim();

@@ -45,6 +45,12 @@ function reasonFromError(err: unknown): string {
   return 'Service unreachable';
 }
 
+function trimmedOptional(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+}
+
 export function createWebSearchTool({ config }: ToolContext): AgentTool {
   return {
     name: 'web_search',
@@ -106,8 +112,8 @@ Returns { answer: string, citations: { title: string, url: string }[] }. When yo
         date_before?: string;
       };
 
-      const query = raw.query?.trim();
-      if (!query) {
+      const query = raw.query.trim();
+      if (query === '') {
         return {
           content: [{ type: 'text' as const, text: 'Query is required.' }],
           details: { answer: '', citations: [] },
@@ -128,24 +134,20 @@ Returns { answer: string, citations: { title: string, url: string }[] }. When yo
 
       const braveOptions = {
         count,
-        country: raw.country?.trim() || undefined,
-        search_lang: raw.language?.trim() || undefined,
-        freshness: raw.freshness?.trim() || undefined,
-        date_after: raw.date_after?.trim() || undefined,
-        date_before: raw.date_before?.trim() || undefined,
+        country: trimmedOptional(raw.country),
+        search_lang: trimmedOptional(raw.language),
+        freshness: trimmedOptional(raw.freshness),
+        date_after: trimmedOptional(raw.date_after),
+        date_before: trimmedOptional(raw.date_before),
       };
 
       let result: WebSearchSuccessDetails | null = null;
       let lastFailureReason: string | null = null;
 
-      if (config.tools?.webSearch?.provider === 'brave') {
+      const webSearch = config.tools.webSearch;
+      if (webSearch?.provider === 'brave') {
         try {
-          result = await searchWithBrave(
-            config.tools?.webSearch.key,
-            query,
-            signal,
-            braveOptions
-          );
+          result = await searchWithBrave(webSearch.key, query, signal, braveOptions);
         } catch (err) {
           if (isAbortError(err)) throw err;
           if (isConnectionOrTimeoutError(err)) {
@@ -156,13 +158,9 @@ Returns { answer: string, citations: { title: string, url: string }[] }. When yo
         }
       }
 
-      if (config.tools?.webSearch?.provider === 'gemini') {
+      if (webSearch?.provider === 'gemini') {
         try {
-          result = await searchWithGemini(
-            config.tools?.webSearch.key,
-            query,
-            signal
-          );
+          result = await searchWithGemini(webSearch.key, query, signal);
         } catch (err) {
           if (isAbortError(err)) throw err;
           if (isConnectionOrTimeoutError(err)) {

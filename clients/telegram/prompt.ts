@@ -6,23 +6,32 @@ import { type BotContext } from './bot';
 
 const logger = createLogger('TG');
 
-function createSendTypingAction(ctx: BotContext) {
+function createSendTypingAction(ctx: BotContext): {
+  start: () => void;
+  stop: () => void;
+} {
   const typingIntervalMs = 5000;
   const chat = ctx.chat;
   if (!chat) throw new Error('No chat on context');
   const chatId = chat.id;
-  let stopped = false;
+  const cancel = { stop: false };
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  const loop = async () => {
-    if (stopped) return;
+  const loop = async (): Promise<void> => {
+    if (cancel.stop) return;
     try {
       await ctx.api.sendChatAction(chatId, 'typing');
     } catch (error) {
       console.error(error);
     }
-    if (stopped) return;
-    timeoutId = setTimeout(loop, typingIntervalMs);
+    /* `cancel.stop` may be set while `sendChatAction` is in flight. */
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- race with `stop()`
+    if (cancel.stop) {
+      return;
+    }
+    timeoutId = setTimeout(() => {
+      void loop();
+    }, typingIntervalMs);
   };
 
   return {
@@ -30,7 +39,7 @@ function createSendTypingAction(ctx: BotContext) {
       void loop();
     },
     stop() {
-      stopped = true;
+      cancel.stop = true;
       if (timeoutId) clearTimeout(timeoutId);
     },
   };
@@ -45,7 +54,10 @@ interface State {
   initiatedBy: 'user' | 'agent' | null;
 }
 
-export async function createPromper() {
+export function createPromper(): (
+  input: gateway.PromptInput,
+  ctx?: BotContext
+) => Promise<void> {
   let state: State = emptyState();
 
   const callbacks: gateway.Callbacks = {
@@ -62,37 +74,37 @@ export async function createPromper() {
     onContent: (chunk: string) => {
       state.buffer += chunk;
     },
-    onToolcall: async () => {
+    onToolcall: () => {
       if (state.buffer.trim() !== '') {
         logger.write(`\n\n${state.log} (partial response)`);
         const text = state.buffer;
         state.buffer = '';
-        await sendMessage(text);
+        void sendMessage(text);
       }
     },
-    onTurnDone: async () => {
+    onTurnDone: () => {
       state.typingAction?.stop();
       if (state.buffer.trim() !== '') {
         logger.info(`\n\n${state.log}`);
         logger.info(`"${state.buffer}"`);
-        await sendMessage(state.buffer);
+        void sendMessage(state.buffer);
       }
       state.buffer = '';
       logger.write(`done. ${pc.green('✓')}\n`);
       state = emptyState();
     },
-    onTurnStop: async () => {
+    onTurnStop: () => {
       state.typingAction?.stop();
       state.buffer = '';
       logger.write(`stopped.\n`);
       state = emptyState();
     },
-    onError: async (error: string) => {
+    onError: (error: string) => {
       state.typingAction?.stop();
 
-      if (error) {
+      if (error !== '') {
         console.error(pc.red(`Error: ${error}`));
-        await sendMessage(error);
+        void sendMessage(error);
       }
 
       state = emptyState();
@@ -102,7 +114,10 @@ export async function createPromper() {
   const mainSession = gateway.get('main');
   mainSession.subscribe('telegram', callbacks);
 
-  return async function prompt(input: gateway.PromptInput, ctx?: BotContext) {
+  return async function prompt(
+    input: gateway.PromptInput,
+    ctx?: BotContext
+  ): Promise<void> {
     const typing = ctx ? createSendTypingAction(ctx) : null;
 
     const imageSuffix =
@@ -116,11 +131,7 @@ export async function createPromper() {
     state = {
       working: true,
       ctx: ctx ?? null,
-      typingAction: state.typingAction
-        ? state.typingAction
-        : typing
-          ? typing
-          : null,
+      typingAction: state.typingAction ?? typing ?? null,
       buffer: '',
       log: `Sending response to ${ctx ? ctx.from?.username : 'user'}...`,
       initiatedBy: 'user',

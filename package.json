@@ -1,7 +1,7 @@
 {
   "name": "@kvendrik/greg",
   "description": "OpenClaw-like personal assistant",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -26,7 +26,7 @@
     "gateway:restart": "pm2 restart greg:gateway",
     "gateway:logs": "pm2 logs greg:gateway",
     "gateway:tools": "bun run scripts/tools-cli.ts",
-    "test": "bun test",
+    "test": "TEST_ENV=1 bun test",
     "test:lint": "bun run lint && bun run typecheck",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

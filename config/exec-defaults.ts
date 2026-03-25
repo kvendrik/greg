@@ -372,11 +372,11 @@ export function merge<P extends AllowedProfiles>(
 
   for (const binConfig of bins) {
     for (const [binPath, binEntry] of Object.entries(binConfig)) {
-      const existing = merged[binPath];
-      if (!existing) {
+      if (!Object.hasOwn(merged, binPath)) {
         merged[binPath] = { profiles: [...binEntry.profiles] };
         continue;
       }
+      const existing = merged[binPath];
 
       // Union profiles, preserving existing order and de-duping.
       const seenProfiles = new Set(existing.profiles);

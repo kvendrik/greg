@@ -6,7 +6,9 @@ import type { ToolContext } from '../agent/types';
 const config = await getConfig();
 
 function camelCase(s: string): string {
-  return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+  return s.replace(/_([a-z])/g, (_match: string, letter: string) =>
+    letter.toUpperCase()
+  );
 }
 
 type JsonSchemaProp = Record<string, unknown>;
@@ -214,7 +216,7 @@ program
   .description('Run agent tools from the CLI (for debugging and scripting).')
   .option('-l, --list', 'List available tools and exit');
 
-async function main() {
+async function main(): Promise<void> {
   const toolContext: ToolContext = {
     config,
     onBackgroundUpdate: (...args) =>
@@ -233,10 +235,10 @@ async function main() {
 
   for (const tool of tools.tools) {
     const schema = tool.parameters as ParamsSchema;
-    const props = schema?.properties ?? {};
-    const required = schema?.required ?? [];
+    const props = schema.properties ?? {};
+    const required = schema.required ?? [];
 
-    const cmd = program.command(tool.name).description(tool.description ?? '');
+    const cmd = program.command(tool.name).description(tool.description);
 
     for (const [key, prop] of Object.entries(props)) {
       const opt = `--${key.replace(/_/g, '-')}`;

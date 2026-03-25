@@ -29,7 +29,7 @@ export type ToolName =
   | (typeof toolNames.read)[number]
   | (typeof toolNames.write)[number];
 
-export async function evaluate({
+export function evaluate({
   toolName,
   params,
   context,
@@ -37,7 +37,7 @@ export async function evaluate({
   toolName: ToolName;
   params: unknown;
   context: ToolContext;
-}): Promise<PolicyEvaluation> {
+}): PolicyEvaluation {
   if (!Object.values(toolNames).flat().includes(toolName)) {
     return {
       allowed: false,

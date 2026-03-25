@@ -48,16 +48,17 @@ export class TelegramGateway {
       'Xenova/whisper-small'
     )) as TelegramGateway['transcriber'];
 
-    const prompt: PromptFn = await createPromper();
+    const prompt: PromptFn = createPromper();
 
     return new TelegramGateway(prompt, transcriber);
   }
 
-  async start(): Promise<void> {
+  start(): Promise<void> {
     this.registerTextHandler();
     this.registerVoiceHandler();
     this.registerPhotoHandler();
-    bot.start();
+    void bot.start();
+    return Promise.resolve();
   }
 
   async getReply(text: string): Promise<string> {
@@ -80,13 +81,13 @@ export class TelegramGateway {
   }
 
   private registerTextHandler(): void {
-    bot.on('message:text', async (ctx) => {
+    bot.on('message:text', (ctx) => {
       if (!this.isAllowedSender(ctx)) {
         this.rejectUnauthorized(ctx, `Received: ${ctx.message.text}`);
         return;
       }
 
-      const text = ctx.message.text ?? '';
+      const text = ctx.message.text;
 
       if (this.messageInterceptor) {
         this.messageInterceptor(text);
@@ -94,7 +95,7 @@ export class TelegramGateway {
         return;
       }
 
-      this.prompt({ content: text, images: [] }, ctx);
+      void this.prompt({ content: text, images: [] }, ctx);
     });
   }
 
@@ -114,9 +115,7 @@ export class TelegramGateway {
         fileId: voice.file_id,
       });
 
-      const chat = ctx.chat;
-      if (!chat) return;
-      await ctx.api.sendChatAction(chat.id, 'upload_voice');
+      await ctx.api.sendChatAction(ctx.chat.id, 'upload_voice');
 
       const paths = {
         ogg: path.join(tmpdir(), `greg-telegram-${ctx.message.message_id}.ogg`),
@@ -133,7 +132,7 @@ export class TelegramGateway {
         return_timestamps: false,
       })) as { text: string };
 
-      this.prompt({ content: result.text.trim(), images: [] }, ctx);
+      void this.prompt({ content: result.text.trim(), images: [] }, ctx);
 
       fs.unlinkSync(paths.ogg);
       fs.unlinkSync(paths.pcm);
@@ -147,7 +146,7 @@ export class TelegramGateway {
         return;
       }
 
-      ctx.api.sendChatAction(ctx.chat.id, 'upload_photo');
+      void ctx.api.sendChatAction(ctx.chat.id, 'upload_photo');
 
       const mediaGroupId = ctx.message.media_group_id;
 
@@ -159,8 +158,11 @@ export class TelegramGateway {
           existing.timer = setTimeout(() => {
             this.mediaGroupCollector.delete(mediaGroupId);
             const contexts = existing.contexts;
-            this.processPhotoBatch(contexts, contexts[0]).catch((err) => {
-              logger.error('Error processing photo batch:', err);
+            this.processPhotoBatch(contexts, contexts[0]).catch((err: unknown) => {
+              logger.error(
+                'Error processing photo batch:',
+                err instanceof Error ? err : String(err)
+              );
               contexts[0]
                 .reply('Failed to process images.')
                 .catch(logger.error);
@@ -169,8 +171,11 @@ export class TelegramGateway {
         } else {
           const timer = setTimeout(() => {
             this.mediaGroupCollector.delete(mediaGroupId);
-            this.processPhotoBatch([ctx], ctx).catch((err) => {
-              logger.error('Error processing photo batch:', err);
+            this.processPhotoBatch([ctx], ctx).catch((err: unknown) => {
+              logger.error(
+                'Error processing photo batch:',
+                err instanceof Error ? err : String(err)
+              );
               ctx.reply('Failed to process images.').catch(logger.error);
             });
           }, 400);
@@ -183,9 +188,13 @@ export class TelegramGateway {
       }
 
       const { base64, caption } = await processPhotoMessage(ctx);
+      const content =
+        caption != null && caption.trim() !== ''
+          ? caption
+          : 'User sent an image.';
       await this.prompt(
         {
-          content: caption || 'User sent an image.',
+          content,
           images: [{ data: base64, mimeType: 'image/jpeg' }],
         },
         ctx
@@ -198,8 +207,11 @@ export class TelegramGateway {
     replyCtx: BotContext
   ): Promise<void> {
     const results = await Promise.all(contexts.map(processPhotoMessage));
+    const captionFromResults = results
+      .map((r) => r.caption)
+      .find((c) => c != null && c.trim() !== '');
     const caption =
-      results.map((r) => r.caption).find(Boolean) ||
+      captionFromResults ??
       (contexts.length > 1
         ? `User sent ${contexts.length} images.`
         : 'User sent an image.');

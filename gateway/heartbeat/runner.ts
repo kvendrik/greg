@@ -17,7 +17,7 @@ const HEARTBEAT_FILENAME = 'HEARTBEAT.md';
 const config = await getConfig();
 const heartbeatPath = join(getWorkspacePath(config), HEARTBEAT_FILENAME);
 
-function getInstructions(intervalMinutes: number) {
+function getInstructions(intervalMinutes: number): string {
   return `
 ## Heartbeat Run
 - You are running a heartbeat check. This is a system check that runs every ${intervalMinutes} minutes.
@@ -45,20 +45,24 @@ export class Heartbeat {
     this.intervalMs = intervalMinutes * 60 * 1000;
     this.activeHours = options.activeHours ?? null;
 
+    const trimmedPrompt = options.prompt?.trim();
     this.systemPrompt =
-      options.prompt && options?.prompt.trim().length > 0
-        ? options?.prompt.trim()
+      trimmedPrompt !== undefined && trimmedPrompt.length > 0
+        ? trimmedPrompt
         : getInstructions(intervalMinutes);
   }
 
-  start() {
+  start(): void {
     this.started = true;
     this.schedule();
   }
 
-  stop() {
+  stop(): void {
     this.shuttingDown = true;
-    clearTimeout(this.timeoutId!);
+    if (this.timeoutId !== null) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
+    }
   }
 
   async run(): Promise<void> {
@@ -92,7 +96,7 @@ export class Heartbeat {
     if (heartbeatPrompt === '') {
       logger.info('No heartbeat checklist found. Skipping heartbeat.');
       this.running = false;
-      if (!this.shuttingDown) this.schedule();
+      this.schedule();
       return;
     }
 
@@ -111,7 +115,7 @@ export class Heartbeat {
       });
     } finally {
       this.running = false;
-      if (!this.shuttingDown) this.schedule();
+      this.schedule();
     }
   }
 
@@ -159,6 +163,8 @@ export class Heartbeat {
   private schedule(): void {
     if (this.shuttingDown || !this.started) return;
     logger.info(`Next heartbeat in ${this.intervalMs / 1000 / 60} minutes.`);
-    this.timeoutId = setTimeout(this.run.bind(this), this.intervalMs);
+    this.timeoutId = setTimeout(() => {
+      void this.run();
+    }, this.intervalMs);
   }
 }

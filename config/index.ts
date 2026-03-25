@@ -15,7 +15,7 @@ type InternalConfig = Config & {
   workspace: AgentConfig['workspace'];
 };
 
-export const home = process.env.GITHUB_CI
+export const home = process.env.TEST_ENV
   ? join(tmpdir(), '.greg')
   : join(homedir(), '.greg');
 
@@ -36,7 +36,7 @@ export async function get(): Promise<InternalConfig> {
   }
 
   if (!(await exists(path))) {
-    if (process.env.GITHUB_CI) {
+    if (process.env.TEST_ENV) {
       await mkdir(dirname(path), { recursive: true });
       await writeFile(path, CI_DEFAULT_CONFIG_TS, 'utf8');
     } else {
@@ -45,8 +45,19 @@ export async function get(): Promise<InternalConfig> {
   }
 
   // Config is user-specific and usually gitignored. Avoid static module resolution.
-  const configModule = await import(pathToFileURL(path).href);
-  const globalConfig = (configModule as { default: Config }).default;
+  const configModule: unknown = await import(pathToFileURL(path).href);
+  if (
+    typeof configModule !== 'object' ||
+    configModule === null ||
+    !('default' in configModule)
+  ) {
+    throw new Error(`Invalid config module shape at ${path}`);
+  }
+  const defaultExport = (configModule as { default: unknown }).default;
+  if (typeof defaultExport !== 'object' || defaultExport === null) {
+    throw new Error(`Config default export must be an object at ${path}`);
+  }
+  const globalConfig = defaultExport as Config;
 
   return {
     id: 'greg',

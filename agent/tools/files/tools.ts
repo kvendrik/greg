@@ -122,7 +122,7 @@ async function applyUpdatePatch(
 
   let originalIndex = 0;
 
-  const applyHunk = (hunkBody: string[]) => {
+  const applyHunk = (hunkBody: string[]): void => {
     for (const rawLine of hunkBody) {
       if (!rawLine) {
         continue;
@@ -135,7 +135,7 @@ async function applyUpdatePatch(
         const originalLine = originalLines[originalIndex];
         if (originalLine !== content) {
           throw new Error(
-            `Context line mismatch while applying patch.\nExpected: "${originalLine ?? ''}"\nGot: "${content}".`
+            `Context line mismatch while applying patch.\nExpected: "${originalLine}"\nGot: "${content}".`
           );
         }
         newLines.push(originalLine);
@@ -144,7 +144,7 @@ async function applyUpdatePatch(
         const originalLine = originalLines[originalIndex];
         if (originalLine !== content) {
           throw new Error(
-            `Removal line mismatch while applying patch.\nExpected: "${originalLine ?? ''}"\nGot: "${content}".`
+            `Removal line mismatch while applying patch.\nExpected: "${originalLine}"\nGot: "${content}".`
           );
         }
         originalIndex += 1;

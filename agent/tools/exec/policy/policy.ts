@@ -38,11 +38,11 @@ export type AllowedBins<P extends AllowedProfiles = AllowedProfiles> = Record<
 
 export const execPolicyToolNames = ['execve', 'execve_pipeline'] as const;
 
-export async function evaluate(input: {
+export function evaluate(input: {
   toolName: string;
   params: unknown;
   context: ToolContext;
-}): Promise<PolicyEvaluation> {
+}): PolicyEvaluation {
   if (input.toolName === 'execve') {
     return evaluateExecve(input.params as ExecveToolParams, input.context);
   }
@@ -55,10 +55,10 @@ export async function evaluate(input: {
   return { allowed: true, reason: null };
 }
 
-async function evaluateExecve(
+function evaluateExecve(
   params: ExecveToolParams,
   context: ToolContext
-): Promise<PolicyEvaluation> {
+): PolicyEvaluation {
   const policyResult = evaluateExecCommand({
     command: params.command,
     args: params.args,
@@ -68,11 +68,11 @@ async function evaluateExecve(
   return policyResult;
 }
 
-async function evaluatePipeline(
+function evaluatePipeline(
   params: ExecvePipelineToolParams,
   context: ToolContext
-): Promise<PolicyEvaluation> {
-  const commands = params.commands ?? [];
+): PolicyEvaluation {
+  const commands = params.commands;
   for (const [index, step] of commands.entries()) {
     const stepPolicyResult = evaluateExecCommand({
       command: step.command,
@@ -93,7 +93,7 @@ function evaluateExecCommand(params: {
   context: ToolContext;
   kindPrefix: string;
 }): PolicyEvaluation {
-  const execConfig = params.context.config.tools?.guard.exec;
+  const execConfig = params.context.config.tools.guard.exec;
 
   const resolvedCwd = path.resolve(
     getWorkspacePath(params.context.config)
@@ -107,7 +107,7 @@ function evaluateExecCommand(params: {
     };
   }
 
-  let resolvedCommandPath = '';
+  let resolvedCommandPath: string;
   try {
     resolvedCommandPath = resolveCommandPath(params.command, resolvedCwd);
   } catch (error) {
@@ -135,18 +135,14 @@ function evaluateExecCommand(params: {
   };
 
   for (const profileName of allowedBin.profiles) {
-    const profileNameString = String(profileName);
-
-    const profile =
-      execConfig.profiles[profileName as keyof typeof execConfig.profiles];
-
-    if (!profile) {
+    if (!Object.hasOwn(execConfig.profiles, profileName)) {
       lastDenial = {
         allowed: false,
-        reason: `Command not allowed: profile "${profileNameString}" not found for "${resolvedCommandPath}".`,
+        reason: `Command not allowed: profile "${profileName}" not found for "${resolvedCommandPath}".`,
       };
       continue;
     }
+    const profile = execConfig.profiles[profileName];
 
     const argvResult = evaluateArgvAgainstProfile({
       args: params.args,
@@ -292,14 +288,14 @@ function evaluateLongFlag(params: {
   }
 
   // Allowlist mode: only allow flags present in allowFlags.
-  const flagSpec = params.allowFlags[flagName];
-  if (!flagSpec) {
+  if (!Object.hasOwn(params.allowFlags, flagName)) {
     return {
       allowed: false,
       reason: `Command not allowed: unlisted flag "${flagName}" (${params.kindPrefix}).`,
       consumedNextTokenCount: 0,
     };
   }
+  const flagSpec = params.allowFlags[flagName];
 
   if (!flagSpec.takesValue && hasInlineValue) {
     return {
@@ -378,14 +374,14 @@ function evaluateShortFlag(params: {
         };
       }
       if (typeof params.allowFlags !== 'undefined') {
-        const bundledSpec = params.allowFlags[bundledFlag];
-        if (!bundledSpec) {
+        if (!Object.hasOwn(params.allowFlags, bundledFlag)) {
           return {
             allowed: false,
             reason: `Command not allowed: unlisted bundled flag "${bundledFlag}" (${params.kindPrefix}).`,
             consumedNextTokenCount: 0,
           };
         }
+        const bundledSpec = params.allowFlags[bundledFlag];
         if (bundledSpec.takesValue) {
           return {
             allowed: false,
@@ -421,14 +417,14 @@ function evaluateShortFlag(params: {
   }
 
   // Allowlist mode: only allow flags present in allowFlags.
-  const flagSpec = params.allowFlags[params.token];
-  if (!flagSpec) {
+  if (!Object.hasOwn(params.allowFlags, params.token)) {
     return {
       allowed: false,
       reason: `Command not allowed: unlisted flag "${params.token}" (${params.kindPrefix}).`,
       consumedNextTokenCount: 0,
     };
   }
+  const flagSpec = params.allowFlags[params.token];
   if (!flagSpec.takesValue) {
     return { allowed: true, reason: null, consumedNextTokenCount: 0 };
   }
@@ -466,7 +462,8 @@ function validateFlagValue(params: {
   if (!params.spec) {
     return { allowed: true, reason: null };
   }
-  if (params.spec?.value?.type === 'int') {
+  const valueSpec = params.spec.value;
+  if (valueSpec?.type === 'int') {
     const parsedValue = Number.parseInt(params.value, 10);
     if (!Number.isInteger(parsedValue)) {
       return {
@@ -474,24 +471,26 @@ function validateFlagValue(params: {
         reason: `Command not allowed: flag "${params.flagName}" requires an integer value.`,
       };
     }
+    const min = valueSpec.min;
+    const max = valueSpec.max;
     if (
-      typeof params.spec?.value?.min === 'number' &&
-      Number.isInteger(params.spec?.value?.min) &&
-      parsedValue < params.spec?.value?.min
+      typeof min === 'number' &&
+      Number.isInteger(min) &&
+      parsedValue < min
     ) {
       return {
         allowed: false,
-        reason: `Command not allowed: flag "${params.flagName}" value ${parsedValue} is below min ${params.spec.value?.min}.`,
+        reason: `Command not allowed: flag "${params.flagName}" value ${parsedValue} is below min ${min}.`,
       };
     }
     if (
-      typeof params.spec?.value?.max === 'number' &&
-      Number.isInteger(params.spec?.value?.max) &&
-      parsedValue > params.spec?.value?.max
+      typeof max === 'number' &&
+      Number.isInteger(max) &&
+      parsedValue > max
     ) {
       return {
         allowed: false,
-        reason: `Command not allowed: flag "${params.flagName}" value ${parsedValue} is above max ${params.spec.value?.max}.`,
+        reason: `Command not allowed: flag "${params.flagName}" value ${parsedValue} is above max ${max}.`,
       };
     }
     return { allowed: true, reason: null };

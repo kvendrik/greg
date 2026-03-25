@@ -23,7 +23,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run tests
-        run: GITHUB_CI=1 bun test
+        run: bun test
 
       - name: Run lint
         run: bun run lint

@@ -36,9 +36,11 @@ function getTool(tools: AgentTool[], name: string): AgentTool {
 
 function toolText(result: { content: unknown[] }): string {
   const first = result.content[0];
-  return first != null && typeof first === 'object' && 'text' in first
-    ? String((first as { text: string }).text)
-    : '';
+  if (first != null && typeof first === 'object' && 'text' in first) {
+    const text = (first as { text: unknown }).text;
+    return typeof text === 'string' ? text : '';
+  }
+  return '';
 }
 
 function textContainsOneOf(text: string, phrases: string[]): boolean {
@@ -50,7 +52,7 @@ describe('memory', () => {
   const envBefore = { QMD_CONFIG_DIR: process.env.QMD_CONFIG_DIR, INDEX_PATH: process.env.INDEX_PATH };
 
   beforeAll(async () => {
-    qmdTestDir = join(tmpdir(), 'qmd-memory-test-' + Date.now());
+    qmdTestDir = join(tmpdir(), `qmd-memory-test-${Date.now()}`);
     await mkdir(qmdTestDir, { recursive: true });
     process.env.QMD_CONFIG_DIR = qmdTestDir;
     process.env.INDEX_PATH = join(qmdTestDir, 'index.sqlite');
@@ -145,7 +147,7 @@ describe('memory', () => {
 
       try {
         const note = 'We decided to use PostgreSQL.';
-        await saveConversationNote(note, DEFAULT_ISO, config);
+        saveConversationNote(note, DEFAULT_ISO, config);
 
         const notesDir = join(workspace, 'notes');
         const dateFile = join(notesDir, '2024-01-02.md');
@@ -225,7 +227,7 @@ describe('memory', () => {
       const config = createMockConfig(workspace);
 
       try {
-        await saveConversationNote('We chose PostgreSQL.', DEFAULT_ISO, config);
+        saveConversationNote('We chose PostgreSQL.', DEFAULT_ISO, config);
         const { tools } = await load(config, DEFAULT_ISO);
         const recent = getTool(tools, 'memory_recent');
         const result = await recent.execute('test', { max_notes: 5 }, undefined);
@@ -419,7 +421,7 @@ describe('memory', () => {
 
       try {
         const note = 'We discussed deployment strategy.';
-        await saveConversationNote(note, DEFAULT_ISO, config);
+        saveConversationNote(note, DEFAULT_ISO, config);
         const { tools } = await load(config, DEFAULT_ISO);
         const summarize = getTool(tools, 'memory_summarize');
         const result = await summarize.execute(

@@ -34,33 +34,72 @@ function normalizeSpacing(text: string): string {
     .replace(/\?([A-Za-z])/g, '? $1');
 }
 
+function readRecordProp(record: object, key: string): unknown {
+  if (!Object.prototype.hasOwnProperty.call(record, key)) {
+    return undefined;
+  }
+  return (record as Record<string, unknown>)[key];
+}
+
+function formatBrowserResultValue(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  ) {
+    return String(value);
+  }
+  if (value === null || value === undefined) {
+    return '';
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '[Unserializable result]';
+  }
+}
+
 function getProc(config: AgentConfig): {
   proc: ChildProcess;
   rl: readline.Interface;
 } {
-  const browserConfig = config.tools?.browser ?? null;
+  const browserConfig = config.tools.browser ?? null;
 
   if (!browserConfig) {
     throw new Error('Browser tool is not configured (config.tools.browser).');
   }
 
-  if (proc?.exitCode !== null) {
-    proc = spawn('uv', ['run', 'scripts/browser-use.py'], {
+  const currentProc = proc;
+  const currentRl = rl;
+  const needsSpawn =
+    currentProc === null ||
+    currentRl === null ||
+    currentProc.exitCode !== null;
+
+  if (needsSpawn) {
+    const newProc = spawn('uv', ['run', 'scripts/browser-use.py'], {
       stdio: ['pipe', 'pipe', 'inherit'],
       env: { ...process.env, BROWSER_USE_API_KEY: browserConfig.key },
       detached: true, // New process group so we can kill the whole tree (uv → python → browser) on abort
     });
 
-    rl = readline.createInterface({ input: proc.stdout! });
+    const newRl = readline.createInterface({ input: newProc.stdout });
 
-    proc.on('exit', (code) => {
+    newProc.on('exit', (code) => {
       console.error(`[browser-agent] exited with code ${code}`);
       proc = null;
       rl = null;
     });
+
+    proc = newProc;
+    rl = newRl;
+    return { proc: newProc, rl: newRl };
   }
 
-  return { proc, rl: rl! };
+  return { proc: currentProc, rl: currentRl };
 }
 
 export function runBrowserTask(
@@ -70,33 +109,57 @@ export function runBrowserTask(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const { proc: child, rl: readLine } = getProc(config);
+    const childStdin = child.stdin;
 
-    const onLine = (line: string) => {
+    const onLine = (line: string): void => {
       removeListeners();
       try {
-        const msg = JSON.parse(line);
-        if (msg.status === 'error') reject(new Error(msg.result));
-        else if (msg.status === 'aborted' || msg.status === 'nothing_to_abort')
+        const raw: unknown = JSON.parse(line);
+        if (typeof raw !== 'object' || raw === null) {
+          reject(new Error(`Failed to parse response: ${line}`));
+          return;
+        }
+        const statusUnknown = readRecordProp(raw, 'status');
+        if (typeof statusUnknown !== 'string') {
+          reject(new Error(`Failed to parse response: ${line}`));
+          return;
+        }
+        if (statusUnknown === 'error') {
+          const resultUnknown = readRecordProp(raw, 'result');
+          const errText =
+            typeof resultUnknown === 'string'
+              ? resultUnknown
+              : formatBrowserResultValue(resultUnknown);
+          reject(new Error(errText));
+          return;
+        }
+        if (
+          statusUnknown === 'aborted' ||
+          statusUnknown === 'nothing_to_abort'
+        ) {
           reject(new DOMException('Aborted', 'AbortError'));
-        else
-          resolve(
-            ' ' +
-              (typeof msg.result === 'string'
-                ? normalizeSpacing(msg.result)
-                : String(msg.result ?? ''))
-          );
+          return;
+        }
+        const resultUnknown = readRecordProp(raw, 'result');
+        const resultText =
+          typeof resultUnknown === 'string'
+            ? normalizeSpacing(resultUnknown)
+            : formatBrowserResultValue(resultUnknown);
+        resolve(' ' + resultText);
       } catch {
         reject(new Error(`Failed to parse response: ${line}`));
       }
     };
 
-    const onAbort = () => {
+    const onAbort = (): void => {
       removeListeners();
       try {
-        child.stdin!.write(
-          JSON.stringify({ action: 'abort' }) + '\n',
-          () => {}
-        );
+        if (childStdin !== null) {
+          childStdin.write(
+            JSON.stringify({ action: 'abort' }) + '\n',
+            () => {}
+          );
+        }
       } catch {
         // stdin may already be closed
       }
@@ -114,20 +177,25 @@ export function runBrowserTask(
       reject(new DOMException('Aborted', 'AbortError'));
     };
 
-    const removeListeners = () => {
+    const removeListeners = (): void => {
       signal.removeEventListener('abort', onAbort);
       readLine.removeListener('line', onLine);
     };
 
-    if (signal?.aborted) {
+    if (signal.aborted) {
       onAbort();
       return;
     }
-    signal?.addEventListener('abort', onAbort, { once: true });
+    signal.addEventListener('abort', onAbort, { once: true });
 
     readLine.once('line', onLine);
 
-    child.stdin!.write(JSON.stringify({ task }) + '\n', (err) => {
+    if (childStdin === null) {
+      removeListeners();
+      reject(new Error('Browser subprocess stdin is not available.'));
+      return;
+    }
+    childStdin.write(JSON.stringify({ task }) + '\n', (err) => {
       if (err) {
         removeListeners();
         reject(err);
@@ -138,7 +206,7 @@ export function runBrowserTask(
 
 export function getBrowserTools(context: ToolContext): AgentTool[] {
   const config = context.config;
-  return config.tools?.browser
+  return config.tools.browser
     ? [
         {
           name: 'run_browser_task',
@@ -179,7 +247,7 @@ export function getBrowserTools(context: ToolContext): AgentTool[] {
     : [];
 }
 
-export function cleanup() {
+export function cleanup(): void {
   if (proc !== null) {
     try {
       killProcessTree(proc);

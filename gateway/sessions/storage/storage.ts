@@ -40,21 +40,22 @@ export class Storage {
     fs.unlinkSync(sessionPath);
   }
 
-  async replace(sessionId: string, messages: AgentMessage[]): Promise<void> {
+  replace(sessionId: string, messages: AgentMessage[]): Promise<void> {
     const sessionPath = path.join(this.getSessionsDir(), `${sessionId}.jsonl`);
     fs.writeFileSync(
       sessionPath,
       messages.map((m) => JSON.stringify(m)).join('\n')
     );
+    return Promise.resolve();
   }
 
-  async create(sessionId: string): Promise<StorageSession> {
+  create(sessionId: string): Promise<StorageSession> {
     const sessionPath = path.join(this.getSessionsDir(), `${sessionId}.jsonl`);
     fs.writeFileSync(sessionPath, '');
     return this.load(sessionId);
   }
 
-  async load(sessionId: string): Promise<StorageSession> {
+  load(sessionId: string): Promise<StorageSession> {
     const sessionPath = path.join(this.getSessionsDir(), `${sessionId}.jsonl`);
 
     if (!fs.existsSync(sessionPath)) {
@@ -67,17 +68,20 @@ export class Storage {
       .readFileSync(sessionPath, 'utf8')
       .split('\n')
       .filter((l) => l.trim() !== '')
-      .map((l) => JSON.parse(l)) as AgentMessage[];
+      .map((line): AgentMessage => {
+        const raw: unknown = JSON.parse(line);
+        return raw as AgentMessage;
+      });
 
     logger.info(`[${sessionId}] Loaded ${messages.length} messages.`);
 
-    return {
+    return Promise.resolve({
       messages,
       proxy: (callbacks: Callbacks, agent: Agent): Callbacks => {
         const boundCallbacks = Object.entries(callbacks).reduce<Callbacks>(
           (acc, [key, callback]) => ({
             ...acc,
-            [key]: callback?.bind(agent),
+            [key]: callback.bind(agent),
           }),
           {}
         );
@@ -97,6 +101,6 @@ export class Storage {
           },
         };
       },
-    };
+    });
   }
 }

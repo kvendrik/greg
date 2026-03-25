@@ -12,7 +12,9 @@ export async function searchWithGemini(
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => { controller.abort(); }, SEARCH_TIMEOUT_MS);
-  const onAbort = () => { controller.abort(); };
+  const onAbort = (): void => {
+    controller.abort();
+  };
   signal?.addEventListener('abort', onAbort, { once: true });
 
   try {

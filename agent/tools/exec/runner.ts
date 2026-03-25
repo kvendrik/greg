@@ -193,7 +193,7 @@ function spawnAndCapture(params: {
           killProcess(child, 'SIGKILL');
         }
       }, NO_OUTPUT_TIMEOUT_MS);
-      noOutputTimer.unref?.();
+      noOutputTimer.unref();
     };
 
     if (signal) {
@@ -400,7 +400,7 @@ function terminateWithEscalation(child: ChildProcess, graceMs = 2000): void {
     if (!child.pid) return;
     killProcess(child, 'SIGKILL');
   }, graceMs);
-  timer.unref?.();
+  timer.unref();
 
   child.once('close', () => {
     clearTimeout(timer);

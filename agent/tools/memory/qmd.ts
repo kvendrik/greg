@@ -58,7 +58,7 @@ export class QMD {
   }
 
   static async healthy(): Promise<boolean> {
-    if (process.env.GITHUB_CI) {
+    if (process.env.TEST_ENV) {
       return true;
     }
 
@@ -74,7 +74,7 @@ export class QMD {
     return true;
   }
 
-  async ready() {
+  async ready(): Promise<void> {
     const dbPath = resolve(join(this.workspacePath, 'qmd.sqlite'));
     process.env.INDEX_PATH = dbPath;
 
@@ -138,7 +138,7 @@ export class QMD {
       return {
         filepath: r.doc.filepath,
         displayPath: r.doc.displayPath,
-        title: r.doc.title ?? '',
+        title: r.doc.title,
         body: r.doc.body ?? '',
         context: r.doc.context ?? undefined,
         skipped: false as const,
@@ -253,7 +253,7 @@ export class QMD {
 
     let promise = storePromises.get(dbPath);
     if (!promise) {
-      promise = createStore({ dbPath }).catch((err) => {
+      promise = createStore({ dbPath }).catch((err: unknown) => {
         storePromises.delete(dbPath);
         throw err;
       });
@@ -358,11 +358,11 @@ function runQmd(
       });
     }, RUN_QMD_TIMEOUT_MS);
 
-    child.stdout?.on('data', (chunk: Buffer) => {
+    child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString();
     });
 
-    child.stderr?.on('data', (chunk: Buffer) => {
+    child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString();
     });
 

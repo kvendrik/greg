@@ -89,12 +89,17 @@ export function prettify(
       const keys = Object.keys(recordValue);
       const limitedKeys = keys.slice(0, maxObjectKeys);
 
-      const sanitizedEntries = limitedKeys.map((entryKey) => [
-        entryKey,
-        sanitize(recordValue[entryKey], depth + 1, entryKey),
-      ]);
+      const sanitizedEntries: [string, unknown][] = limitedKeys.map(
+        (entryKey) => [
+          entryKey,
+          sanitize(recordValue[entryKey], depth + 1, entryKey),
+        ]
+      );
 
-      const sanitizedObject = Object.fromEntries(sanitizedEntries);
+      const sanitizedObject: Record<string, unknown> = {};
+      for (const [entryKey, entryValue] of sanitizedEntries) {
+        sanitizedObject[entryKey] = entryValue;
+      }
       if (keys.length <= maxObjectKeys) return sanitizedObject;
 
       return {

@@ -25,7 +25,7 @@ export function isAllowed(
 
   return get('read') && get('write');
 
-  function get(action: 'read' | 'write') {
+  function get(action: 'read' | 'write'): boolean {
     const all = getRoots(action, config);
     return (
       all.allow.some((root) => absolutePath.startsWith(root)) &&
@@ -41,10 +41,10 @@ export function getRoots(
   allow: string[];
   deny: string[];
 } {
-  const all = [
-    ...getDefaultAllowedPaths(config),
-    ...(config.tools?.guard?.files?.[forAction].map(expandPath) ?? []),
-  ];
+  const guardFiles = config.tools.guard.files;
+  const extraPaths =
+    guardFiles === undefined ? [] : guardFiles[forAction].map(expandPath);
+  const all = [...getDefaultAllowedPaths(config), ...extraPaths];
   return {
     allow: all.filter((root) => !root.startsWith('!')),
     deny: all.filter((root) => root.startsWith('!')),

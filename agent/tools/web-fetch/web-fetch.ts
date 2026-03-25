@@ -66,9 +66,9 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
         let totalBytes = 0;
         let capped = false;
 
-        while (true) {
+        for (;;) {
           const { done, value } = await reader.read();
-          if (done || !value) break;
+          if (done) break;
           totalBytes += value.byteLength;
           if (totalBytes > MAX_RESPONSE_BYTES) {
             chunks.push(
@@ -83,7 +83,7 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
           chunks.push(value);
         }
 
-        if (capped) reader.cancel();
+        if (capped) void reader.cancel();
 
         const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
         const combined = new Uint8Array(totalLength);
@@ -94,7 +94,7 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
         }
         const html = new TextDecoder().decode(combined);
 
-        const finalUrl = response.url ?? url;
+        const finalUrl = response.url;
         const { title, content } = extractContent(html, finalUrl);
 
         const truncated = capped || content.length > MAX_CHARS;
@@ -222,7 +222,7 @@ class SsrfBlockedError extends Error {
   }
 }
 
-async function checkSsrf(url: URL): Promise<void> {
+function checkSsrf(url: URL): void {
   const { hostname } = url;
 
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
@@ -256,7 +256,7 @@ async function guardedFetch(
     controller.abort(new DOMException('Timeout', 'AbortError'));
   }, FETCH_TIMEOUT_MS);
 
-  const onAbort = () => {
+  const onAbort = (): void => {
     controller.abort(new DOMException('Aborted', 'AbortError'));
   };
 
@@ -270,7 +270,7 @@ async function guardedFetch(
   try {
     while (hops <= maxRedirects) {
       const url = new URL(current);
-      await checkSsrf(url);
+      checkSsrf(url);
 
       const response = await fetch(current, {
         ...options,

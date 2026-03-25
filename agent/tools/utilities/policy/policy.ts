@@ -19,7 +19,7 @@ export async function evaluatePolicy(
 ): Promise<PolicyEvaluation> {
   const { config } = context;
 
-  if (!(config.tools?.guard.enabled)) {
+  if (!config.tools.guard.enabled) {
     return {
       allowed: true,
       reason: null,
@@ -29,7 +29,7 @@ export async function evaluatePolicy(
   let result: PolicyEvaluation = { allowed: true, reason: null };
 
   if ((execPolicyToolNames as readonly string[]).includes(call.name)) {
-    result = await evaluateExecPolicy({
+    result = evaluateExecPolicy({
       toolName: call.name,
       params: call.params,
       context,
@@ -39,7 +39,7 @@ export async function evaluatePolicy(
       .flat()
       .includes(call.name as FileToolName)
   ) {
-    result = await evaluateFilePolicy({
+    result = evaluateFilePolicy({
       toolName: call.name as FileToolName,
       params: call.params,
       context,
@@ -51,7 +51,7 @@ export async function evaluatePolicy(
     };
   }
 
-  if (!result?.allowed && config.tools?.guard?.ask) {
+  if (!result.allowed && config.tools.guard.ask) {
     if (!gatewayState.getReply) {
       return {
         allowed: false,

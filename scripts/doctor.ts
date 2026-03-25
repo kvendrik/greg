@@ -67,7 +67,7 @@ function checkBrowser(config: Config): CheckResult {
   console.log('');
   console.log(pc.bold('Browser Automation'));
 
-  const browserConfig = config.tools?.browser;
+  const browserConfig = config.tools.browser;
 
   if (!browserConfig) {
     console.warn(
@@ -84,7 +84,7 @@ function checkBrowser(config: Config): CheckResult {
 
   if (uvWhichResult.status !== 0) {
     const detail = uvWhichResult.error
-      ? String(uvWhichResult.error.message)
+      ? uvWhichResult.error.message
       : (uvWhichResult.stderr || uvWhichResult.stdout || '').trim();
     console.error(
       pc.red(

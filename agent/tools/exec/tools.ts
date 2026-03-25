@@ -55,7 +55,7 @@ function prepareCommand(
 
 export function getExecTools(context: ToolContext): AgentTool[] {
   const defaultCwd = path.resolve(getWorkspacePath(context.config));
-  const guardEnabled = context.config.tools?.guard.enabled;
+  const guardEnabled = context.config.tools.guard.enabled;
   process.chdir(defaultCwd);
 
   return [
@@ -127,12 +127,12 @@ export function getExecTools(context: ToolContext): AgentTool[] {
           description: 'Run ID returned by execve when background=true',
         }),
       }),
-      execute: async (_id, params) => {
+      execute: (_id, params) => {
         const { runId } = params as ExecveStopToolParams;
         const found = stopBackgroundRun(runId);
 
         if (!found) {
-          return {
+          return Promise.resolve({
             content: [
               {
                 type: 'text' as const,
@@ -140,10 +140,10 @@ export function getExecTools(context: ToolContext): AgentTool[] {
               },
             ],
             details: {},
-          };
+          });
         }
 
-        return {
+        return Promise.resolve({
           content: [
             {
               type: 'text' as const,
@@ -151,7 +151,7 @@ export function getExecTools(context: ToolContext): AgentTool[] {
             },
           ],
           details: {},
-        };
+        });
       },
     },
     {

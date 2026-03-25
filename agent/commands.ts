@@ -71,7 +71,7 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
     };
   }
 
-  while (true) {
+  for (;;) {
     const match = COMMAND_REGEX.exec(content);
     if (!match) break;
 

@@ -72,7 +72,7 @@ function createMemoryRecentTool(config: AgentConfig): AgentTool {
 
       const limit = Math.max(1, Math.min(50, max_notes));
       const notesPath = getNotesPath(config);
-      let notesDirOk = false;
+      let notesDirOk: boolean;
       try {
         notesDirOk =
           fs.existsSync(notesPath) && fs.statSync(notesPath).isDirectory();
@@ -348,7 +348,7 @@ function createMemorySummarizeTool(config: AgentConfig): AgentTool {
         } else {
           const limit = Math.max(1, Math.min(10, max_notes ?? 3));
           const notesPath = getNotesPath(config);
-          let notesDirOk = false;
+          let notesDirOk: boolean;
           try {
             notesDirOk =
               fs.existsSync(notesPath) && fs.statSync(notesPath).isDirectory();
@@ -501,7 +501,7 @@ function createMemoryUserSetTool(config: AgentConfig): AgentTool {
           'The full content for USER.md (include all existing facts plus updates)',
       }),
     }),
-    execute: async (_id, params, signal) => {
+    execute: (_id, params, signal) => {
       if (signal?.aborted) {
         throw new DOMException('Aborted', 'AbortError');
       }
@@ -510,10 +510,10 @@ function createMemoryUserSetTool(config: AgentConfig): AgentTool {
 
       const userPath = getUserPath(config);
       fs.writeFileSync(userPath, content, 'utf8');
-      return {
+      return Promise.resolve({
         content: [{ type: 'text' as const, text: `${userPath} updated.` }],
         details: {},
-      };
+      });
     },
   };
 }
@@ -530,7 +530,7 @@ function createMemoryIdentitySetTool(config: AgentConfig): AgentTool {
           'The full content for IDENTITY.md (include all existing identity info plus updates)',
       }),
     }),
-    execute: async (_id, params, signal) => {
+    execute: (_id, params, signal) => {
       if (signal?.aborted) {
         throw new DOMException('Aborted', 'AbortError');
       }
@@ -539,10 +539,10 @@ function createMemoryIdentitySetTool(config: AgentConfig): AgentTool {
 
       const identityPath = getIdentityPath(config);
       fs.writeFileSync(identityPath, content, 'utf8');
-      return {
+      return Promise.resolve({
         content: [{ type: 'text' as const, text: `${identityPath} updated.` }],
         details: {},
-      };
+      });
     },
   };
 }
@@ -551,11 +551,11 @@ function createMemoryIdentitySetTool(config: AgentConfig): AgentTool {
  * Append a conversation note to the workspace YYYY-MM-DD.md.
  * Exported for use by context condense (agent/context.ts).
  */
-export async function saveConversationNote(
+export function saveConversationNote(
   note: string,
   conversationStartIso: string,
   config: AgentConfig
-): Promise<void> {
+): void {
   const trimmed = note.trim();
   if (!trimmed) return;
 
@@ -632,7 +632,7 @@ function createMemoryNoteTool(config: AgentConfig): AgentTool {
           'ISO timestamp when this conversation started (use the value from the system prompt)',
       }),
     }),
-    execute: async (_id, params, signal) => {
+    execute: (_id, params, signal) => {
       if (signal?.aborted) {
         throw new DOMException('Aborted', 'AbortError');
       }
@@ -644,15 +644,15 @@ function createMemoryNoteTool(config: AgentConfig): AgentTool {
       };
       const trimmed = note.trim();
       if (!trimmed) {
-        return {
+        return Promise.resolve({
           content: [{ type: 'text' as const, text: 'No content to save.' }],
           details: {},
-        };
+        });
       }
 
       const d = new Date(conversation_start_iso);
       if (Number.isNaN(d.getTime())) {
-        return {
+        return Promise.resolve({
           content: [
             {
               type: 'text' as const,
@@ -660,7 +660,7 @@ function createMemoryNoteTool(config: AgentConfig): AgentTool {
             },
           ],
           details: {},
-        };
+        });
       }
 
       const prefix =
@@ -673,8 +673,8 @@ function createMemoryNoteTool(config: AgentConfig): AgentTool {
       });
 
       try {
-        await saveConversationNote(prefix, conversation_start_iso, config);
-        return {
+        saveConversationNote(prefix, conversation_start_iso, config);
+        return Promise.resolve({
           content: [
             {
               type: 'text' as const,
@@ -682,13 +682,13 @@ function createMemoryNoteTool(config: AgentConfig): AgentTool {
             },
           ],
           details: {},
-        };
+        });
       } catch (err) {
         const message =
           err instanceof Error
             ? err.message
             : 'Unknown error while saving note.';
-        return {
+        return Promise.resolve({
           content: [
             {
               type: 'text' as const,
@@ -696,7 +696,7 @@ function createMemoryNoteTool(config: AgentConfig): AgentTool {
             },
           ],
           details: {},
-        };
+        });
       }
     },
   };
@@ -709,14 +709,14 @@ function createMemoryUserGetTool(config: AgentConfig): AgentTool {
     description:
       'Read USER.md (persistent facts about the user). Use when you need current user context or before updating with memory_user_set.',
     parameters: Type.Object({}),
-    execute: async (_id, _params, signal) => {
+    execute: (_id, _params, signal) => {
       if (signal?.aborted) {
         throw new DOMException('Aborted', 'AbortError');
       }
 
       const userPath = getUserPath(config);
       if (!fs.existsSync(userPath)) {
-        return {
+        return Promise.resolve({
           content: [
             {
               type: 'text' as const,
@@ -724,13 +724,16 @@ function createMemoryUserGetTool(config: AgentConfig): AgentTool {
             },
           ],
           details: {},
-        };
+        });
       }
       try {
         const text = fs.readFileSync(userPath, 'utf8');
-        return { content: [{ type: 'text' as const, text }], details: {} };
+        return Promise.resolve({
+          content: [{ type: 'text' as const, text }],
+          details: {},
+        });
       } catch (err) {
-        return {
+        return Promise.resolve({
           content: [
             {
               type: 'text' as const,
@@ -740,7 +743,7 @@ function createMemoryUserGetTool(config: AgentConfig): AgentTool {
             },
           ],
           details: {},
-        };
+        });
       }
     },
   };
@@ -753,14 +756,14 @@ function createMemoryIdentityGetTool(config: AgentConfig): AgentTool {
     description:
       'Read IDENTITY.md (your identity, persona, and how to behave). Use when you need your current identity or before updating with memory_identity_set.',
     parameters: Type.Object({}),
-    execute: async (_id, _params, signal) => {
+    execute: (_id, _params, signal) => {
       if (signal?.aborted) {
         throw new DOMException('Aborted', 'AbortError');
       }
 
       const identityPath = getIdentityPath(config);
       if (!fs.existsSync(identityPath)) {
-        return {
+        return Promise.resolve({
           content: [
             {
               type: 'text' as const,
@@ -768,13 +771,16 @@ function createMemoryIdentityGetTool(config: AgentConfig): AgentTool {
             },
           ],
           details: {},
-        };
+        });
       }
       try {
         const text = fs.readFileSync(identityPath, 'utf8');
-        return { content: [{ type: 'text' as const, text }], details: {} };
+        return Promise.resolve({
+          content: [{ type: 'text' as const, text }],
+          details: {},
+        });
       } catch (err) {
-        return {
+        return Promise.resolve({
           content: [
             {
               type: 'text' as const,
@@ -784,7 +790,7 @@ function createMemoryIdentityGetTool(config: AgentConfig): AgentTool {
             },
           ],
           details: {},
-        };
+        });
       }
     },
   };

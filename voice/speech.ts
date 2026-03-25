@@ -88,9 +88,7 @@ function getApiKey(): string {
 let client: ElevenLabsClient | null = null;
 
 function getClient(): ElevenLabsClient {
-  if (!client) {
-    client = new ElevenLabsClient({ apiKey: getApiKey() });
-  }
+  client ??= new ElevenLabsClient({ apiKey: getApiKey() });
   return client;
 }
 
@@ -105,7 +103,7 @@ function playAudioFile(audioPath: string): Promise<void> {
     });
 
     let settled = false;
-    const finish = (error: Error | null) => {
+    const finish = (error: Error | null): void => {
       if (settled) return;
       settled = true;
       if (error) reject(error);

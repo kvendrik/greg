@@ -40,7 +40,12 @@ let lastToolCall: string | null = null;
 
 const config = await getConfig();
 
-function createContentStream() {
+function createContentStream(): {
+  value: () => string;
+  push: (chunk: string) => void;
+  end: () => void;
+  iterable: AsyncIterable<string>;
+} {
   const chunks: string[] = [];
   let resolve: (() => void) | null = null;
   let done = false;
@@ -48,14 +53,15 @@ function createContentStream() {
   const iterable: AsyncIterable<string> = {
     [Symbol.asyncIterator]() {
       return {
-        async next() {
+        async next(): Promise<IteratorResult<string>> {
           while (chunks.length === 0 && !done) {
             await new Promise<void>((r) => {
               resolve = r;
             });
           }
-          if (chunks.length > 0) {
-            return { value: chunks.shift()!, done: false };
+          const next = chunks.shift();
+          if (next !== undefined) {
+            return { value: next, done: false };
           }
           return { value: '', done: true };
         },
@@ -77,7 +83,7 @@ function createContentStream() {
   };
 }
 
-function clearThinking() {
+function clearThinking(): void {
   if (thinkingSpinner) {
     thinkingSpinner.clear();
     thinkingSpinner = null;
@@ -89,14 +95,14 @@ function clearThinking() {
   }
 }
 
-function startThinkingStream() {
+function startThinkingStream(): void {
   if (!thinkingStream) {
     thinkingStream = createContentStream();
     thinkingStreamPromise = stream.info(thinkingStream.iterable);
   }
 }
 
-async function flushThinkingStream() {
+async function flushThinkingStream(): Promise<void> {
   if (thinkingStream) {
     thinkingStream.end();
     thinkingStream = null;
@@ -107,14 +113,14 @@ async function flushThinkingStream() {
   }
 }
 
-function startContentStream() {
+function startContentStream(): void {
   if (!contentStream) {
     contentStream = createContentStream();
     streamPromise = stream.step(contentStream.iterable);
   }
 }
 
-async function flushStream() {
+async function flushStream(): Promise<void> {
   await flushThinkingStream();
   if (contentStream) {
     contentStream.end();
@@ -143,29 +149,23 @@ session.subscribe('tui', {
       thinkingStream = null;
     }
     startContentStream();
-    contentStream!.push(chunk);
+    const activeContentStream = contentStream;
+    if (activeContentStream) {
+      activeContentStream.push(chunk);
+    }
     lastAssistantOutput += chunk;
   },
-  onToolcall: async (name, _args) => {
-    clearThinking();
-    await flushStream();
-    //log.info(pc.dim(`🔧 [${name}](${JSON.stringify(args)})`));
-    toolSpinner = spinner();
-    lastToolCall = name;
-    toolSpinner.start(`🔧 Calling ${name}...`);
+  onToolcall: (name, _args) => {
+    void (async () => {
+      clearThinking();
+      await flushStream();
+      //log.info(pc.dim(`🔧 [${name}](${JSON.stringify(args)})`));
+      toolSpinner = spinner();
+      lastToolCall = name;
+      toolSpinner.start(`🔧 Calling ${name}...`);
+    })();
   },
-  onTurnDone: async () => {
-    clearThinking();
-    if (thinkingStream) {
-      thinkingStream.end();
-      thinkingStream = null;
-    }
-    if (contentStream) {
-      contentStream.end();
-      contentStream = null;
-    }
-  },
-  onTurnStop: () => {
+  onTurnDone: () => {
     clearThinking();
     if (thinkingStream) {
       thinkingStream.end();
@@ -176,7 +176,18 @@ session.subscribe('tui', {
       contentStream = null;
     }
   },
-  onError: (error) => {
+  onTurnStop: (): void => {
+    clearThinking();
+    if (thinkingStream) {
+      thinkingStream.end();
+      thinkingStream = null;
+    }
+    if (contentStream) {
+      contentStream.end();
+      contentStream = null;
+    }
+  },
+  onError: (error): void => {
     clearThinking();
     if (thinkingStream) {
       thinkingStream.end();
@@ -215,22 +226,22 @@ if (initialPrompt) {
   await flushStream();
 }
 
-inputLoop().catch((error) => {
-  log.error(String(error));
+inputLoop().catch((error: unknown) => {
+  log.error(error instanceof Error ? error.message : String(error));
   shutdown();
 });
 
 process.once('SIGINT', shutdown);
 process.once('SIGTERM', shutdown);
 
-function shutdown() {
+function shutdown(): void {
   outro('👋 Goodbye!');
   stop();
   process.exit(0);
 }
 
-async function inputLoop() {
-  while (true) {
+async function inputLoop(): Promise<void> {
+  for (;;) {
     if (voiceMode) {
       const transcript = await handleVoiceInput();
       if (!transcript) continue;
@@ -300,10 +311,8 @@ async function inputLoop() {
     }
 
     if (message === '/v') {
-      if (
-        !config.voice?.elevenlabs?.key ||
-        !config.voice?.elevenlabs?.voiceId
-      ) {
+      const eleven = config.voice?.elevenlabs;
+      if (!eleven?.key || !eleven.voiceId) {
         log.warn(
           'Voice not configured — set voice.elevenlabs.key and voice.elevenlabs.voiceId in your config.'
         );
@@ -322,8 +331,6 @@ async function inputLoop() {
 
     await flushStream();
   }
-
-  shutdown();
 }
 
 async function handleVoiceInput(): Promise<string | null> {
@@ -350,7 +357,7 @@ async function handleVoiceInput(): Promise<string | null> {
   if (!avDeviceIndex) {
     const device = await select({
       message: 'Select a microphone',
-      options: devices?.map((device) => ({
+      options: devices.map((device) => ({
         label: device.name,
         value: device.index,
       })),

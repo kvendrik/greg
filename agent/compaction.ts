@@ -61,7 +61,6 @@ function messagesToTranscript(messages: AgentMessage[]): string {
       text = content
         .filter(
           (b) =>
-            b &&
             (b as { type?: string }).type === 'text' &&
             typeof (b as { text?: string }).text === 'string'
         )
@@ -78,8 +77,11 @@ function extractTextFromAssistantMessage(msg: {
 }): string {
   const content = msg.content ?? [];
   return content
-    .filter((b) => b?.type === 'text' && typeof b.text === 'string')
-    .map((b) => b.text!)
+    .filter(
+      (b): b is { type: 'text'; text: string } =>
+        b.type === 'text' && typeof b.text === 'string'
+    )
+    .map((b) => b.text)
     .join('');
 }
 
@@ -94,8 +96,12 @@ export async function compactContext(
     throw new DOMException('Aborted', 'AbortError');
   }
 
-  const model = config.models.find((model) => model.role === 'primary')!.model;
-  const contextWindow = model?.contextWindow ?? 128_000;
+  const primaryEntry = config.models.find((model) => model.role === 'primary');
+  if (!primaryEntry) {
+    throw new Error('No primary model in config.models.');
+  }
+  const model = primaryEntry.model;
+  const contextWindow = model.contextWindow;
 
   // compaction can take a long time so the soft limit is 60% of the context window
   // so that it's faster. better to do it in chunks.
@@ -128,7 +134,11 @@ export async function compact(
   messages: AgentMessage[],
   { config, signal }: { config: AgentConfig; signal: AbortSignal }
 ): Promise<AgentMessage[]> {
-  const model = config.models.find((model) => model.role === 'primary')!.model;
+  const primaryEntry = config.models.find((model) => model.role === 'primary');
+  if (!primaryEntry) {
+    throw new Error('No primary model in config.models.');
+  }
+  const model = primaryEntry.model;
 
   logger.info(`Compacting ${messages.length} messages using ${model.name}...`);
 

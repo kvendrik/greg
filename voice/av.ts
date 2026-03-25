@@ -30,7 +30,7 @@ export async function listAvFoundationDevices(): Promise<
     ]);
 
     const stderrChunks: Buffer[] = [];
-    listProcess.stderr?.on('data', (chunk: Buffer) => {
+    listProcess.stderr.on('data', (chunk: Buffer) => {
       stderrChunks.push(chunk);
     });
 
@@ -93,7 +93,7 @@ export function recordAudioChunk(
     ]);
 
     const chunks: Buffer[] = [];
-    recordingProcess.stdout?.on('data', (chunk: Buffer) => {
+    recordingProcess.stdout.on('data', (chunk: Buffer) => {
       chunks.push(chunk);
     });
 
@@ -146,7 +146,7 @@ export function realtimeTranscribeFromMic(
     let finalTranscript = '';
     let ffmpegProcess: ReturnType<typeof spawn> | null = null;
 
-    const resolveOnce = (value: string | null) => {
+    const resolveOnce = (value: string | null): void => {
       if (resolved) return;
       resolved = true;
       resolve(value);
@@ -156,7 +156,7 @@ export function realtimeTranscribeFromMic(
       headers: { 'xi-api-key': apiKey },
     });
 
-    const stopRecording = () => {
+    const stopRecording = (): void => {
       if (ffmpegProcess && !ffmpegProcess.killed) {
         ffmpegProcess.kill('SIGINT');
       }
@@ -180,7 +180,7 @@ export function realtimeTranscribeFromMic(
       ]);
       ffmpegProcess = recordingProcess;
 
-      recordingProcess.stdout?.on('data', (chunk: Buffer) => {
+      recordingProcess.stdout.on('data', (chunk: Buffer) => {
         if (ws.readyState !== WebSocket.OPEN) return;
         const audioBase64 = chunk.toString('base64');
         const payload = {
@@ -198,9 +198,7 @@ export function realtimeTranscribeFromMic(
 
       recordingProcess.on('error', (error) => {
         const message =
-          error instanceof Error
-            ? error.message
-            : String(error ?? 'Unknown error');
+          error instanceof Error ? error.message : String(error);
         console.error(
           `Failed to start ffmpeg for realtime recording. Is ffmpeg installed and available on PATH?\n${message}`
         );
@@ -211,7 +209,7 @@ export function realtimeTranscribeFromMic(
       const startTime = Date.now();
       process.stdin.resume();
       process.stdin.setEncoding('utf8');
-      const onData = (chunk: string) => {
+      const onData = (chunk: string): void => {
         const elapsed = Date.now() - startTime;
         if (elapsed < 500 && chunk.trim() === '') return;
         process.stdin.off('data', onData);

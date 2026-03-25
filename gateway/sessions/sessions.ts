@@ -126,11 +126,13 @@ export async function load(
     prompt: agent.prompt.bind(agent),
   };
 
-  if (!loadedSessions.has(workspacePath)) {
-    loadedSessions.set(workspacePath, new Map());
+  let workspaceMap = loadedSessions.get(workspacePath);
+  if (workspaceMap === undefined) {
+    workspaceMap = new Map();
+    loadedSessions.set(workspacePath, workspaceMap);
   }
 
-  loadedSessions.get(workspacePath)!.set(sessionId, session);
+  workspaceMap.set(sessionId, session);
 
   return session;
 }

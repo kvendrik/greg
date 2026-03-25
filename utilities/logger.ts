@@ -23,19 +23,29 @@ export function createLogger(
   });
 
   return {
-    log: (...logs: Log) => !isMuted() && console.log(join(logs)),
-    info: (...logs: Log) => !isMuted() && console.log(join(logs)),
-    warn: (...logs: Log) => !isMuted() && console.warn(join(logs)),
-    error: (...logs: Log) => { console.error(join(logs)); },
-    write: (...logs: Log) => !isMuted() && process.stdout.write(join(logs)),
+    log: (...logs: Log): void => {
+      if (!isMuted()) console.log(join(logs));
+    },
+    info: (...logs: Log): void => {
+      if (!isMuted()) console.log(join(logs));
+    },
+    warn: (...logs: Log): void => {
+      if (!isMuted()) console.warn(join(logs));
+    },
+    error: (...logs: Log): void => {
+      console.error(join(logs));
+    },
+    write: (...logs: Log): void => {
+      if (!isMuted()) process.stdout.write(join(logs));
+    },
   };
 
-  function join(logs: Log) {
+  function join(logs: Log): string {
     const p = prefix();
     return p.length > 0 ? `${p} ${transform(logs)}` : transform(logs);
   }
 
-  function transform(logs: Log) {
+  function transform(logs: Log): string {
     return logs
       .map((log) => {
         if (typeof log === 'object') {
@@ -46,11 +56,11 @@ export function createLogger(
       .join(' ');
   }
 
-  function prefix() {
+  function prefix(): string {
     return `${addTimestamp ? `[${timeFormat.format(new Date())}]` : ''}${serviceId ? `[${serviceId}]` : ''}`;
   }
 
-  function isMuted() {
+  function isMuted(): boolean {
     return process.env.GREG_LOG === 'silent';
   }
 }

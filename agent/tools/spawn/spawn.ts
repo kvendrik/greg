@@ -1,4 +1,4 @@
-import { Type } from '@sinclair/typebox';
+import { Type, type TSchema } from '@sinclair/typebox';
 import { join } from 'node:path';
 import {
   mkdir,
@@ -22,7 +22,7 @@ export type BackgroundUpdate = {
   message: string;
 };
 
-export const createRunId = () =>
+export const createRunId = (): string =>
   customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 10)(5);
 
 interface SubagentConfig {
@@ -33,7 +33,14 @@ interface SubagentConfig {
   tools: ('web_search' | 'web_fetch' | 'exec' | 'files')[];
 }
 
-function subagentConfigSchema(parentConfig: AgentConfig) {
+type SubagentValidateResult =
+  | { valid: true; message: null }
+  | { valid: false; message: string };
+
+function subagentConfigSchema(parentConfig: AgentConfig): {
+  schema: TSchema;
+  validate: (subagentConfig: SubagentConfig) => SubagentValidateResult;
+} {
   const schema = Type.Object({
     name: Type.String({
       description:
@@ -78,13 +85,11 @@ function subagentConfigSchema(parentConfig: AgentConfig) {
 
   return {
     schema,
-    validate(subagentConfig: SubagentConfig) {
+    validate(subagentConfig: SubagentConfig): SubagentValidateResult {
       if (
         !subagentConfig.name ||
         !subagentConfig.emoji ||
-        !subagentConfig.systemPrompt ||
-        !subagentConfig.model ||
-        !subagentConfig.tools
+        !subagentConfig.systemPrompt
       ) {
         return {
           valid: false,
@@ -139,7 +144,7 @@ export async function createSpawnTools({
           content: [
             {
               type: 'text' as const,
-              text: message!,
+              text: message,
             },
           ],
           details: {},
@@ -226,7 +231,7 @@ export async function createSpawnTools({
           let working = false;
 
           try {
-            working = sessions.get('main', agentConfig)?.working ?? false;
+            working = sessions.get('main', agentConfig).working;
           } catch {
             // do nothing
             // get() call will error if session is not loaded
@@ -347,19 +352,7 @@ export async function createSpawnTools({
           content: [
             {
               type: 'text' as const,
-              text: message!,
-            },
-          ],
-          details: {},
-        };
-      }
-
-      if (!emoji || !name || !systemPrompt || !model || !tools) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: 'Invalid update_agent parameters. Expected name, emoji, systemPrompt, model ("provider/id"), and tools (comma-separated or array).',
+              text: message,
             },
           ],
           details: {},
@@ -470,7 +463,7 @@ export async function createSpawnTools({
         },
       });
 
-      session.prompt(
+      void session.prompt(
         { content: prompt, images: [] },
         {
           channelId: 'tool',
@@ -523,10 +516,8 @@ export async function createSpawnTools({
 
       try {
         const loadedSession = sessions.get('main', agentConfig);
-        if (loadedSession) {
-          loaded = true;
-          working = loadedSession?.working ?? false;
-        }
+        loaded = true;
+        working = loadedSession.working;
       } catch {
         // do nothing
         // get() call will error if session is not loaded
@@ -588,7 +579,7 @@ export async function createSpawnTools({
       const storage = new Storage(agentConfig);
       const storedSession = await storage.load('main');
 
-      const allMessages = storedSession.messages ?? [];
+      const allMessages = storedSession.messages;
       const messages =
         typeof limit === 'number' && limit > 0 && limit < allMessages.length
           ? allMessages.slice(-limit)
@@ -665,7 +656,7 @@ export async function createSpawnTools({
     }
 
     const config = readFileSync(path, 'utf8');
-    return JSON.parse(config);
+    return JSON.parse(config) as SubagentConfig;
   }
 
   function createAgentConfig({
@@ -695,7 +686,7 @@ export async function createSpawnTools({
       tools: {
         allow: tools,
         webSearch: tools.includes('web_search')
-          ? parentConfig.tools?.webSearch
+          ? parentConfig.tools.webSearch
           : undefined,
         guard: parentConfig.tools.guard,
       },
