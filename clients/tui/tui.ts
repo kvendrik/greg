@@ -1,4 +1,4 @@
-import * as gateway from '../gateway';
+import * as gateway from '../../gateway';
 import {
   intro,
   outro,
@@ -10,12 +10,12 @@ import {
   isCancel,
 } from '@clack/prompts';
 import pc from 'picocolors';
-import { get as getConfig } from '../config';
+import { get as getConfig } from '../../config';
 import {
   realtimeTranscribeFromMic,
   listAvFoundationDevices,
-} from '../voice/av';
-import { synthesizeToBuffer, play } from '../voice/speech';
+} from '../../voice/av';
+import { synthesizeToBuffer, play } from '../../voice/speech';
 
 process.env.GREG_LOG = 'silent';
 
@@ -191,7 +191,7 @@ setGetReply(async (question, { toolName, prettyParams }) => {
       { label: 'allow once', value: '/once' },
       { label: `allow ${toolName}() for the next 5 minutes`, value: `/5m` },
     ],
-    initialValue: '/once',
+    initialValue: '/5m',
   });
   if (isCancel(answer)) {
     process.exit(0);

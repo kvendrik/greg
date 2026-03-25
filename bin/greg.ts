@@ -370,7 +370,7 @@ program
       'bun',
       [
         'run',
-        path.join(projectRoot, 'clients/tui.ts'),
+        path.join(projectRoot, 'clients/tui/tui.ts'),
         ...(combinedPrompt ? [combinedPrompt] : []),
       ],
       {
