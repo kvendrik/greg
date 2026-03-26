@@ -79,15 +79,13 @@ export const chat = (tui: TUI): Tools => {
     stream: (role: Role) => {
       if (streamOpen) return null;
       streamOpen = true;
-
-      messages.push();
       tui.requestRender();
 
       let messageIndex: number | null = null;
 
       return {
         append: (chunk: string) => {
-          if (!messageIndex) {
+          if (messageIndex === null) {
             const prefix = pc.dim(`${role}:\n`);
             messages.push(`${prefix}${chunk}`);
             messageIndex = messages.length - 1;

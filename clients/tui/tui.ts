@@ -1,15 +1,35 @@
 import pc from 'picocolors';
 import { tui as createTui } from './components/tui';
 import { chat as createChat, type Stream } from './components/chat';
+import { overlay as createOverlay } from './components/overlay';
 import { client as createClient } from './client';
 import { validate as validateConfig, get as getConfig } from '../../config';
 
+process.env.GREG_LOG = 'silent';
+
 const tui = createTui();
 const chat = createChat(tui);
-let captureMessage: ((reply: string) => void) | null = null;
+const overlay = createOverlay(tui);
 
+tui.start();
+
+overlay.show('Loading config...');
+const config = await getConfig();
+
+overlay.setMessage('Validating...');
+const validConfig = await validateConfig(config);
+
+const primaryModel =
+  config.models.find((m) => m.role === 'primary')?.model ?? null;
+
+if (!validConfig) {
+  throw new Error('TUI usage requires a valid config');
+}
+
+let captureMessage: ((reply: string) => void) | null = null;
 let stream: Stream | null = null;
 
+overlay.setMessage('Creating client...');
 const client = await createClient({
   onTurnStart() {
     chat.spinner('Thinking...');
@@ -23,8 +43,6 @@ const client = await createClient({
   onTurnStop() {
     chat.hideSpinner();
     chat.setDisabled(false);
-    stream?.close();
-    stream = null;
   },
   onTurnDone() {
     chat.hideSpinner();
@@ -50,33 +68,11 @@ client.onCommands((commands) => {
   chat.setCommands(commands);
 });
 
-chat.onSubmit((message) => {
-  if (captureMessage) {
-    captureMessage(message);
-    return;
-  }
-  if (stream) {
-    return;
-  }
-  chat.setDisabled(true);
-  stream = chat.stream('Greg');
-  void client.prompt(message).then(() => {
-    stream?.close();
-    stream = null;
-  });
-});
-
-const config = await getConfig();
-const validConfig = await validateConfig(config);
-const primaryModel =
-  config.models.find((m) => m.role === 'primary')?.model ?? null;
-
-if (!validConfig) {
-  throw new Error('TUI usage requires a valid config');
-}
+chat.onSubmit(handleMessage);
 
 const footer = (width: number): string => {
-  const left = process.cwd().replace(process.env.HOME ?? '', '~');
+  const currentWorkingDirectory = process.env.PWD ?? process.cwd();
+  const left = currentWorkingDirectory.replace(process.env.HOME ?? '', '~');
   const right = primaryModel?.name.toLowerCase() ?? '';
   return `${pc.dim(left)}${' '.repeat(Math.max(1, width - left.length - right.length))}${pc.dim(right)}`;
 };
@@ -104,4 +100,23 @@ const app = {
 
 tui.addChild(app);
 tui.setFocus(app);
-tui.start();
+overlay.hide();
+
+const initialPrompt = process.argv[2]?.trim();
+if (initialPrompt) handleMessage(initialPrompt);
+
+function handleMessage(message: string): void {
+  if (captureMessage) {
+    captureMessage(message);
+    return;
+  }
+  if (stream) {
+    return;
+  }
+  chat.setDisabled(true);
+  stream = chat.stream('Greg');
+  void client.prompt(message).then(() => {
+    stream?.close();
+    stream = null;
+  });
+}

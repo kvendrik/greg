@@ -22,8 +22,6 @@ export async function client(
 }> {
   let onCommands: ((commands: Record<string, string>) => void) | null = null;
 
-  process.env.GREG_LOG = 'silent';
-
   const { setGetReply } = await gateway.start();
 
   const session = gateway.get('main');
