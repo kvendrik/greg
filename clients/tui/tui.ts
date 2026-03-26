@@ -30,10 +30,11 @@ const session = gateway.get('main');
 
 let thinkingStream: ReturnType<typeof createContentStream> | null = null;
 let thinkingStreamPromise: Promise<void> | null = null;
+let assistantStream: ReturnType<typeof createContentStream> | null = null;
+let assistantStreamPromise: Promise<void> | null = null;
 let thinkingSpinner: ReturnType<typeof spinner> | null = null;
 let thinkingStartTime: DOMHighResTimeStamp | null = null;
 let lastAssistantOutput = '';
-let assistantSegmentForLog = '';
 
 const config = await getConfig();
 
@@ -89,11 +90,23 @@ function clearThinking(): void {
   }
 }
 
-function startThinkingStream(): void {
+function startThinkingStream(): ReturnType<typeof createContentStream> {
   if (!thinkingStream) {
     thinkingStream = createContentStream();
     thinkingStreamPromise = stream.info(thinkingStream.iterable);
   }
+  return thinkingStream;
+}
+
+function startAssistantStream(): ReturnType<typeof createContentStream> {
+  if (!assistantStream) {
+    assistantStream = createContentStream();
+    assistantStreamPromise = stream.message(assistantStream.iterable, {
+      //symbol: '',
+      withGuide: false,
+    });
+  }
+  return assistantStream;
 }
 
 async function flushThinkingStream(): Promise<void> {
@@ -107,22 +120,25 @@ async function flushThinkingStream(): Promise<void> {
   }
 }
 
-function logAssistantSegmentIfNeeded(): void {
-  const segment = assistantSegmentForLog.trim();
-  if (segment) {
-    log.step(segment);
+async function flushAssistantStream(): Promise<void> {
+  if (assistantStream) {
+    assistantStream.end();
+    assistantStream = null;
   }
-  assistantSegmentForLog = '';
+  if (assistantStreamPromise) {
+    await assistantStreamPromise.catch(() => {});
+    assistantStreamPromise = null;
+  }
 }
 
 async function flushStream(): Promise<void> {
   await flushThinkingStream();
+  await flushAssistantStream();
 }
 
 session.subscribe('tui', {
   onTurnStart: () => {
     lastAssistantOutput = '';
-    assistantSegmentForLog = '';
     thinkingSpinner = spinner();
     thinkingSpinner.start('🧠 Thinking...');
     thinkingStartTime = performance.now();
@@ -133,19 +149,23 @@ session.subscribe('tui', {
     //thinkingStream!.push(pc.dim(chunk));
   },
   onContent: (chunk) => {
+    if (chunk.length === 0) {
+      return;
+    }
     clearThinking();
     if (thinkingStream) {
       thinkingStream.end();
       thinkingStream = null;
     }
-    assistantSegmentForLog += chunk;
+    const activeAssistantStream = startAssistantStream();
+    activeAssistantStream.push(chunk);
     lastAssistantOutput += chunk;
   },
   onToolcall: (_name, _args) => {
     clearThinking();
     void (async () => {
       await flushThinkingStream();
-      logAssistantSegmentIfNeeded();
+      await flushAssistantStream();
     })().catch((error: unknown) => {
       log.error(error instanceof Error ? error.message : String(error));
     });
@@ -156,7 +176,7 @@ session.subscribe('tui', {
       thinkingStream.end();
       thinkingStream = null;
     }
-    logAssistantSegmentIfNeeded();
+    void flushAssistantStream();
   },
   onTurnStop: (): void => {
     clearThinking();
@@ -164,7 +184,7 @@ session.subscribe('tui', {
       thinkingStream.end();
       thinkingStream = null;
     }
-    logAssistantSegmentIfNeeded();
+    void flushAssistantStream();
   },
   onError: (error): void => {
     clearThinking();
@@ -172,7 +192,7 @@ session.subscribe('tui', {
       thinkingStream.end();
       thinkingStream = null;
     }
-    assistantSegmentForLog = '';
+    void flushAssistantStream();
     if (error) {
       log.error(error);
       process.exit(1);

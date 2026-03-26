@@ -3,9 +3,12 @@ import { homedir, tmpdir } from 'node:os';
 import type { AgentConfig } from '../../types';
 import { getWorkspacePath } from '../../utilities';
 
+const projectRoot = resolve(join(__dirname, '../../../'));
 const getDefaultAllowedPaths = (config: AgentConfig): string[] => [
   resolve(getWorkspacePath(config)),
   resolve(join(tmpdir(), 'greg')),
+  projectRoot,
+  `!${join(projectRoot, 'agent')}`,
 ];
 
 export function isAllowed(
@@ -47,7 +50,9 @@ export function getRoots(
   const all = [...getDefaultAllowedPaths(config), ...extraPaths];
   return {
     allow: all.filter((root) => !root.startsWith('!')),
-    deny: all.filter((root) => root.startsWith('!')),
+    deny: all
+      .filter((root) => root.startsWith('!'))
+      .map((root) => root.slice(1)),
   };
 }
 

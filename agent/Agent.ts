@@ -49,7 +49,9 @@ export class Agent {
 
   private constructor(core: CoreAgent, config: AgentConfig) {
     this.core = core;
-    const primaryEntry = config.models.find((model) => model.role === 'primary');
+    const primaryEntry = config.models.find(
+      (model) => model.role === 'primary'
+    );
     if (!primaryEntry) {
       throw new Error('No primary model in config.models.');
     }
@@ -206,7 +208,7 @@ export class Agent {
           `🧠 Model: ${this.lastModel ? this.lastModel.name : 'nothing sent yet'}`,
           `💭 Thinking: ${thinkingLevel}`,
           contextLine,
-          `🕵️‍♂️ Busy: ${!this.abortController ? 'Yes (send /stop to stop)' : 'No. Ready for a new task.'}`,
+          `🕵️‍♂️ Busy: ${this.abortController ? 'Yes (send /stop to stop)' : 'No. Ready for a new task.'}`,
           `\nOptions given for this prompt:`,
           `- Model: ${model.name}`,
           `- Thinking: ${thinkingLevel}`,
@@ -424,7 +426,9 @@ export class Agent {
       },
     });
 
-    const primaryEntry = config.models.find((model) => model.role === 'primary');
+    const primaryEntry = config.models.find(
+      (model) => model.role === 'primary'
+    );
     if (!primaryEntry) {
       throw new Error('No primary model in config.models.');
     }

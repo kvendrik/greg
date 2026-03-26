@@ -59,6 +59,12 @@ export async function evaluatePolicy(
   }
 
   if (!result.allowed && config.tools.guard.ask) {
+    return ask();
+  }
+
+  return result;
+
+  async function ask(): Promise<PolicyEvaluation> {
     if (!gatewayState.getReply) {
       return {
         allowed: false,
@@ -106,8 +112,6 @@ export async function evaluatePolicy(
       reason: `Tool call allowed. Permission was granted by the user. User replied: "${reply}".`,
     };
   }
-
-  return result;
 }
 
 const tmpAllowedTools = new Map<string, Date>();
