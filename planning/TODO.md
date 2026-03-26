@@ -4,3 +4,4 @@
 - [ ] Make gateway logs accessible from sandboxed exec environment (pm2 log piping)
 - [ ] Support `open` URLs from sandbox
 - [ ] Global push-to-talk hotkey (node-global-key-listener) — trigger voice recording from anywhere, not just when TUI is focused
+- [ ] Use this instead of clack: https://github.com/badlogic/pi-mono/tree/main/packages/tui
