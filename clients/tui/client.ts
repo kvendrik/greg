@@ -1,4 +1,5 @@
 import * as gateway from '../../gateway';
+import pc from 'picocolors';
 
 // const c = await client({
 //   onContent(chunk) {
@@ -17,7 +18,10 @@ export async function client(
   }
 ): Promise<{
   prompt: (content: string) => Promise<void>;
+  onCommands: (callback: (commands: Record<string, string>) => void) => void;
 }> {
+  let onCommands: ((commands: Record<string, string>) => void) | null = null;
+
   process.env.GREG_LOG = 'silent';
 
   const { setGetReply } = await gateway.start();
@@ -26,16 +30,22 @@ export async function client(
   session.subscribe('tui', callbacks);
 
   if (callbacks.getReply) {
-    setGetReply(async (_message, _details) => {
+    setGetReply(async (_message, details) => {
       if (!callbacks.getReply) {
         return '';
       }
-      const reply = await callbacks.getReply(_message);
+      onCommands?.(details.commands);
+      const reply = await callbacks.getReply(
+        `${pc.yellow(details.toolName)}${pc.dim(`(${details.prettyParams})`)}`
+      );
       return reply;
     });
   }
 
   return {
+    onCommands: (callback: (commands: Record<string, string>) => void) => {
+      onCommands = callback;
+    },
     prompt: async (content: string): Promise<void> =>
       session.prompt(
         {

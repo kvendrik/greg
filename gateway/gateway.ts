@@ -18,6 +18,7 @@ interface GatewayState {
           toolParams: Record<string, unknown>;
           prettyParams: string;
           commandsHint: string;
+          commands: Record<string, string>;
         }
       ) => Promise<string>)
     | null;

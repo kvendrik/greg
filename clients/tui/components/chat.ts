@@ -20,6 +20,8 @@ interface Tools {
   stream: (role: Role) => Stream | null;
   spinner: (message: string) => void;
   hideSpinner: () => void;
+  setDisabled: (disabled: boolean) => void;
+  setCommands: (commands: Record<string, string>) => void;
 }
 
 type Role = 'Greg' | 'System';
@@ -27,6 +29,7 @@ type Role = 'Greg' | 'System';
 export const chat = (tui: TUI): Tools => {
   let streamOpen = false;
   let showSpinner = false;
+  let isSpinnerRunning = false;
   let onSubmit: (message: string) => void = () => {};
 
   const messages: string[] = [];
@@ -37,19 +40,32 @@ export const chat = (tui: TUI): Tools => {
     (s) => pc.gray(s)
   );
 
+  const startSpinner = (message: string): void => {
+    if (!isSpinnerRunning) {
+      loader.start();
+      isSpinnerRunning = true;
+    }
+    loader.setMessage(message);
+    showSpinner = true;
+  };
+
+  const stopSpinner = (): void => {
+    if (isSpinnerRunning) {
+      loader.stop();
+      isSpinnerRunning = false;
+    }
+    showSpinner = false;
+  };
+
   editor.onSubmit((text) => {
     messages.push(`${pc.dim('You: ')}\n${text}`);
     onSubmit(text);
-
-    loader.start();
-    loader.setMessage('Thinking...');
-
-    setTimeout(() => {
-      loader.stop();
-    }, 3000);
+    startSpinner('Thinking...');
   });
 
   return {
+    setDisabled: editor.setDisabled,
+    setCommands: editor.setCommands,
     onSubmit: (callback: (message: string) => void) => {
       onSubmit = callback;
     },
@@ -88,13 +104,10 @@ export const chat = (tui: TUI): Tools => {
       };
     },
     spinner: (message: string) => {
-      loader.start();
-      loader.setMessage(message);
-      showSpinner = true;
+      startSpinner(message);
     },
     hideSpinner: () => {
-      loader.stop();
-      showSpinner = false;
+      stopSpinner();
     },
     component: {
       render: (width) => {
@@ -109,8 +122,8 @@ export const chat = (tui: TUI): Tools => {
           })
         );
 
-        const lastFadedMessages = messages.slice(-10, -12);
-        const lastVisibleMessages = messages.slice(-10);
+        const lastFadedMessages = messages.slice(-5, -8);
+        const lastVisibleMessages = messages.slice(-5);
 
         for (const message of lastFadedMessages) {
           renderedLines.push(
