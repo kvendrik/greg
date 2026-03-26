@@ -66,13 +66,20 @@ chat.onSubmit((message) => {
 });
 
 tui.addChild(chat.component);
-tui.setFocus(chat.component);
-
-tui.start();
 
 const config = await getConfig();
 const validConfig = await validateConfig(config);
+const primaryModel =
+  config.models.find((m) => m.role === 'primary')?.model ?? null;
 
 if (!validConfig) {
   throw new Error('TUI usage requires a valid config');
 }
+
+tui.addChild({
+  render: () => (primaryModel ? [primaryModel.name] : []),
+  invalidate: () => {},
+});
+
+tui.setFocus(chat.component);
+tui.start();
