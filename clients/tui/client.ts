@@ -13,6 +13,7 @@ import pc from 'picocolors';
 // void c.prompt('Hello, world!');
 
 export async function client(
+  sessionId: string,
   callbacks: gateway.Callbacks & {
     getReply?: (message: string) => Promise<string>;
   }
@@ -24,7 +25,12 @@ export async function client(
 
   const { setGetReply } = await gateway.start();
 
-  const session = gateway.get('main');
+  if (!gateway.exists(sessionId)) {
+    await gateway.create(sessionId);
+    await gateway.load(sessionId);
+  }
+
+  const session = gateway.get(sessionId);
   session.subscribe('tui', callbacks);
 
   if (callbacks.getReply) {

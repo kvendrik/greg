@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import pc from 'picocolors';
 import { tui as createTui } from './components/tui';
 import { chat as createChat, type Stream } from './components/chat';
@@ -12,8 +13,11 @@ import {
 
 process.env.GREG_LOG = 'silent';
 
+const SESSION_ID = 'main';
+
 const tui = createTui();
 const chat = createChat(tui);
+const currentGitBranch = getCurrentGitBranch();
 
 let config: Config | null = null;
 
@@ -31,10 +35,12 @@ let stream: Stream | null = null;
 
 const footer = (width: number): string => {
   const currentWorkingDirectory = process.env.PWD ?? process.cwd();
-  const left = currentWorkingDirectory.replace(process.env.HOME ?? '', '~');
+  const branchSuffix = currentGitBranch ? ` (${currentGitBranch})` : '';
+  const left =
+    currentWorkingDirectory.replace(process.env.HOME ?? '', '~') + branchSuffix;
   const primaryModel =
     config?.models.find((m) => m.role === 'primary')?.model ?? null;
-  const right = primaryModel?.name.toLowerCase() ?? '';
+  const right = `${SESSION_ID} • ${primaryModel?.name.toLowerCase() ?? ''}`;
   return `${pc.dim(left)}${' '.repeat(Math.max(1, width - left.length - right.length))}${pc.dim(right)}`;
 };
 
@@ -91,7 +97,7 @@ if (!validConfig) {
 }
 
 setLoadingMessage('Creating client');
-const client = await createClient({
+const client = await createClient(SESSION_ID, {
   onTurnStart() {
     chat.spinner('Thinking...');
   },
@@ -152,4 +158,19 @@ function handleMessage(message: string): void {
     stream?.close();
     stream = null;
   });
+}
+
+function getCurrentGitBranch(): string | undefined {
+  const branchResult = spawnSync('git', ['branch', '--show-current'], {
+    cwd: process.cwd(),
+    stdio: 'pipe',
+    encoding: 'utf-8',
+  });
+
+  if (branchResult.status !== 0) {
+    return undefined;
+  }
+
+  const branch = branchResult.stdout.trim();
+  return branch === '' ? undefined : branch;
 }
