@@ -87,9 +87,9 @@ export async function evaluatePolicy(
       prettyParams,
       commandsHint,
       commands: {
-        deny: 'deny to run this command, optionally provide a reason',
         once: 'allow to run this command this time',
         '5m': `allow ${call.name}() for the next 5 minutes`,
+        deny: 'deny to run this command, optionally provide a reason',
       },
     });
 

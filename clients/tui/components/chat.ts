@@ -2,6 +2,7 @@ import {
   type Component,
   type TUI,
   CancellableLoader,
+  Text,
 } from '@mariozechner/pi-tui';
 import pc from 'picocolors';
 import { markdown } from './markdown';
@@ -25,6 +26,12 @@ interface Tools {
 }
 
 type Role = 'Greg' | 'System';
+type MessageRole = Role | 'You';
+
+interface ChatMessage {
+  role: MessageRole;
+  content: string;
+}
 
 export const chat = (tui: TUI): Tools => {
   let streamOpen = false;
@@ -32,7 +39,7 @@ export const chat = (tui: TUI): Tools => {
   let isSpinnerRunning = false;
   let onSubmit: (message: string) => void = () => {};
 
-  const messages: string[] = [];
+  const messages: ChatMessage[] = [];
   const editor = createEditor(tui);
   const loader = new CancellableLoader(
     tui,
@@ -58,7 +65,7 @@ export const chat = (tui: TUI): Tools => {
   };
 
   editor.onSubmit((text) => {
-    messages.push(`${pc.dim('You: ')}\n${text}`);
+    messages.push({ role: 'You', content: text });
     onSubmit(text);
     startSpinner('Thinking...');
   });
@@ -73,7 +80,7 @@ export const chat = (tui: TUI): Tools => {
       loader.onAbort = callback;
     },
     addMessage: (message: string, role: Role) => {
-      messages.push(`${pc.dim(`${role}: `)}\n${message}`);
+      messages.push({ role, content: message });
       tui.requestRender();
     },
     stream: (role: Role) => {
@@ -86,14 +93,13 @@ export const chat = (tui: TUI): Tools => {
       return {
         append: (chunk: string) => {
           if (messageIndex === null) {
-            const prefix = pc.dim(`${role}:\n`);
-            messages.push(`${prefix}${chunk}`);
+            messages.push({ role, content: chunk });
             messageIndex = messages.length - 1;
             tui.requestRender();
             return;
           }
 
-          messages[messageIndex] += chunk;
+          messages[messageIndex].content += chunk;
           tui.requestRender();
         },
         close: () => {
@@ -109,45 +115,29 @@ export const chat = (tui: TUI): Tools => {
     },
     component: {
       render: (width) => {
-        const renderedLines: string[] = [];
-
-        renderedLines.push(
-          ...markdown({
-            content: '# 🤖 Greg',
+        const renderMessage = (message: ChatMessage): string[] => {
+          const renderedContent = markdown({
+            content: message.content,
             width,
             paddingX: 1,
-            paddingY: 1,
-          })
-        );
+            paddingY: 0,
+          });
 
-        const lastFadedMessages = messages.slice(-5, -8);
-        const lastVisibleMessages = messages.slice(-5);
+          return [
+            ...new Text(pc.dim(message.role), 1, 0).render(width),
+            ...renderedContent,
+          ];
+        };
 
-        for (const [index, message] of lastFadedMessages.entries()) {
+        const renderedLines: string[] = [];
+
+        for (const [index, message] of messages.entries()) {
           if (index > 0) renderedLines.push('');
-          renderedLines.push(
-            ...markdown({
-              content: pc.dim(message),
-              width,
-              paddingX: 1,
-              paddingY: 0,
-            })
-          );
-        }
-
-        for (const [index, message] of lastVisibleMessages.entries()) {
-          if (index > 0) renderedLines.push('');
-          renderedLines.push(
-            ...markdown({
-              content: message,
-              width,
-              paddingX: 1,
-              paddingY: 0,
-            })
-          );
+          renderedLines.push(...renderMessage(message));
         }
 
         if (showSpinner) renderedLines.push(...loader.render(width));
+
         renderedLines.push(...editor.render(width));
         return renderedLines;
       },

@@ -5,7 +5,9 @@ import { listCommands } from '../../../agent/commands';
 import pc from 'picocolors';
 
 const config = await getConfig();
-const globalCommands = listCommands(config);
+const globalCommands = listCommands(config).map((command) =>
+  command.replace('/', '')
+);
 
 interface Tools {
   render: (width: number) => string[];
@@ -21,7 +23,7 @@ export function editor(tui: TUI): Tools {
     {
       borderColor: (text) => pc.dim(text),
       selectList: {
-        selectedPrefix: (text) => pc.cyan(text),
+        selectedPrefix: (text) => pc.bold(text),
         selectedText: (text) => pc.bold(text),
         description: (text) => pc.dim(text),
         scrollInfo: (text) => pc.gray(text),
@@ -39,7 +41,7 @@ export function editor(tui: TUI): Tools {
         name: command,
         description: '',
       })),
-      process.cwd()
+      process.env.PWD
     )
   );
 

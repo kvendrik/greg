@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { nanoid } from 'nanoid';
-import pc from 'picocolors';
+import { createLogger } from '../../../utilities/logger';
 
 export type CommandSpec = {
   command: string;
@@ -24,6 +24,7 @@ export type BackgroundUpdate = {
 
 const MAX_CAPTURED_BYTES = 200_000;
 const NO_OUTPUT_TIMEOUT_MS = 60_000;
+const logger = createLogger('execve');
 
 /** Minimal PATH for exec; includes ~/.bun/bin so `#!/usr/bin/env bun` entrypoints resolve. */
 function safePath(): string {
@@ -291,7 +292,7 @@ function spawnAndCapture(params: {
 
     for (const child of children) {
       child.stderr?.on('data', (data: Buffer) => {
-        process.stderr.write(pc.red(data.toString()));
+        logger.warn(data.toString().trimEnd());
         armTimer();
         stderrTotal += data.length;
         stderrBuf = captureTail(stderrBuf, data, MAX_CAPTURED_BYTES);
@@ -299,7 +300,7 @@ function spawnAndCapture(params: {
 
       child.on('error', (error) => {
         const msg = `Failed to start command: ${error.message}`;
-        console.error(pc.red(msg));
+        logger.error(msg);
         cleanup();
         if (isPipeline) {
           reject(new Error(msg));
@@ -316,7 +317,8 @@ function spawnAndCapture(params: {
       const stdout = stdoutBuf.toString('utf8');
       const stderr = stderrBuf.toString('utf8');
       const combined = stdout + (stderr ? `\n[stderr]\n${stderr}` : '');
-      const truncated = stdoutTotal > MAX_CAPTURED_BYTES || stderrTotal > MAX_CAPTURED_BYTES;
+      const truncated =
+        stdoutTotal > MAX_CAPTURED_BYTES || stderrTotal > MAX_CAPTURED_BYTES;
       const truncationNote = truncated
         ? `\n\n[output truncated]\nCaptured up to ${MAX_CAPTURED_BYTES} bytes of stdout and stderr each.`
         : '';
@@ -330,7 +332,9 @@ function spawnAndCapture(params: {
       }
 
       if (sig != null) {
-        resolve(`${label} killed by signal ${sig}\n${combined}${truncationNote}`);
+        resolve(
+          `${label} killed by signal ${sig}\n${combined}${truncationNote}`
+        );
         return;
       }
 
@@ -347,7 +351,7 @@ function spawnAndCapture(params: {
 function captureTail(current: Buffer, chunk: Buffer, maxBytes: number): Buffer {
   const combined = Buffer.concat([current, chunk]) as Buffer;
   return combined.length > maxBytes
-    ? (combined.subarray(combined.length - maxBytes))
+    ? combined.subarray(combined.length - maxBytes)
     : combined;
 }
 
@@ -388,7 +392,10 @@ function toErrorMessage(error: unknown): string {
   }
 }
 
-function killProcess(child: ChildProcess, sig: NodeJS.Signals = 'SIGTERM'): void {
+function killProcess(
+  child: ChildProcess,
+  sig: NodeJS.Signals = 'SIGTERM'
+): void {
   if (!child.pid) return;
 
   try {

@@ -1,6 +1,7 @@
 import {
   Agent as CoreAgent,
   type AgentMessage,
+  type ThinkingLevel,
 } from '@mariozechner/pi-agent-core';
 import type { Model, Api, ImageContent } from '@mariozechner/pi-ai';
 import { compactContext, deriveContextTokens } from './compaction';
@@ -22,6 +23,9 @@ export type Callbacks = Partial<{
   onTurnDone: (newMessages?: AgentMessage[]) => void;
   onTurnStop: () => void;
   onError: (error: string) => void;
+
+  onModelChange: (model: Model<Api>) => void;
+  onThinkingLevelChange: (thinkingLevel: ThinkingLevel) => void;
 }>;
 
 type Image = {
@@ -40,9 +44,12 @@ export interface AgentOptions extends ToolContext {
 export class Agent {
   private readonly core: CoreAgent;
   private readonly logger: Logger;
-  private readonly primaryModel: Model<Api>;
   private readonly config: AgentConfig;
   private readonly callbacks = new Map<string, Callbacks[]>();
+  private readonly primaryModel: Model<Api>;
+
+  private model: Model<Api>;
+  private thinkingLevel: ThinkingLevel = 'medium';
 
   private abortController: AbortController | null = null;
   private lastModel: Model<Api> | null = null;
@@ -55,6 +62,7 @@ export class Agent {
     if (!primaryEntry) {
       throw new Error('No primary model in config.models.');
     }
+    this.model = primaryEntry.model;
     this.primaryModel = primaryEntry.model;
     this.config = config;
     this.logger = createLogger(`agent/${config.id}`);
@@ -155,7 +163,6 @@ export class Agent {
     const parsed = parseCommands({
       content: input.content,
       currentModel: this.core.state.model,
-      primaryModel: this.primaryModel,
       config: this.config,
     });
 
@@ -186,8 +193,18 @@ export class Agent {
       return;
     }
 
-    const model = parsed.result.model ?? this.primaryModel;
-    const thinkingLevel = parsed.result.thinkingLevel ?? 'medium';
+    const model = parsed.result.model ?? this.model;
+    const thinkingLevel = parsed.result.thinkingLevel ?? this.thinkingLevel;
+
+    if (model !== this.model) {
+      this.model = model;
+      callbacks.onModelChange?.(model);
+    }
+
+    if (thinkingLevel !== this.thinkingLevel) {
+      this.thinkingLevel = thinkingLevel;
+      callbacks.onThinkingLevelChange?.(thinkingLevel);
+    }
 
     if (parsed.result.statusRequested) {
       let contextLine: string;
@@ -206,12 +223,12 @@ export class Agent {
         [
           'Status:',
           `🧠 Model: ${this.lastModel ? this.lastModel.name : 'nothing sent yet'}`,
-          `💭 Thinking: ${thinkingLevel}`,
+          `💭 Thinking: ${this.thinkingLevel}`,
           contextLine,
           `🕵️‍♂️ Busy: ${this.abortController ? 'Yes (send /stop to stop)' : 'No. Ready for a new task.'}`,
           `\nOptions given for this prompt:`,
-          `- Model: ${model.name}`,
-          `- Thinking: ${thinkingLevel}`,
+          `- Model: ${this.model.name}`,
+          `- Thinking: ${this.thinkingLevel}`,
         ]
           .filter(Boolean)
           .join('\n')
@@ -260,9 +277,9 @@ export class Agent {
       { once: true }
     );
 
-    this.core.setModel(model);
-    this.lastModel = model;
-    this.core.setThinkingLevel(thinkingLevel);
+    this.core.setModel(this.model);
+    this.lastModel = this.model;
+    this.core.setThinkingLevel(this.thinkingLevel);
 
     const nowIso = new Date().toISOString();
     const messageWithMeta = `Date and time is ${formatDate(

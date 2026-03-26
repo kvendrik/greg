@@ -3,6 +3,7 @@ import { tui as createTui } from './components/tui';
 import { chat as createChat, type Stream } from './components/chat';
 //import { overlay as createOverlay } from './components/overlay';
 import { client as createClient } from './client';
+import { markdown } from './components/markdown';
 import {
   validate as validateConfig,
   get as getConfig,
@@ -39,14 +40,27 @@ const footer = (width: number): string => {
 
 const app = {
   render: (width: number) => {
+    const footerLines = [
+      footer(width),
+      ...(loadingMessage
+        ? [pc.dim(`loading... (${loadingMessage.toLowerCase()})`)]
+        : []),
+    ];
+
+    const availableChatRows = Math.max(
+      0,
+      tui.terminal.rows - footerLines.length
+    );
+
     const renderedLines = [
-      ...chat.component.render(width),
-      ...[
-        footer(width),
-        ...(loadingMessage
-          ? [pc.dim(`loading... (${loadingMessage.toLowerCase()})`)]
-          : []),
-      ],
+      ...markdown({
+        content: '# 🤖 Greg',
+        width,
+        paddingX: 1,
+        paddingY: 1,
+      }),
+      ...chat.component.render(width).slice(-availableChatRows),
+      ...footerLines,
     ];
 
     const rowsToFill = Math.max(0, tui.terminal.rows - renderedLines.length);
@@ -102,8 +116,10 @@ const client = await createClient({
   },
   getReply: async (message: string) => {
     chat.addMessage(message, 'Greg');
+    chat.setDisabled(false);
     return new Promise((resolve) => {
       captureMessage = (reply: string) => {
+        chat.setDisabled(true);
         resolve(reply);
         captureMessage = null;
       };

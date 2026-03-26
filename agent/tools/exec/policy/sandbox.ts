@@ -57,11 +57,33 @@ const SEATBELT_SYSCTL_READ_NAMES = [
   'sysctl.proc_cputype',
 ] as const;
 
+const SEATBELT_DEVICE_ALLOW_PATHS = ['/dev/null'] as const;
+const SEATBELT_TEMP_ALLOW_SUBPATHS = ['/tmp'] as const;
+
 function seatbeltSysctlReadAllow(): string {
   const sysctlLines = SEATBELT_SYSCTL_READ_NAMES.map(
     (name) => ` (sysctl-name "${name}")`
   ).join('\n');
   return `(allow sysctl-read\n${sysctlLines}\n (sysctl-name-prefix "hw.perflevel"))`;
+}
+
+function seatbeltLiteralPaths(paths: readonly string[]): string {
+  return paths.map((path) => `(literal "${path}")`).join(' ');
+}
+
+function seatbeltSubpaths(paths: readonly string[]): string {
+  return paths.map((path) => `(subpath "${path}")`).join(' ');
+}
+
+function seatbeltTempAllowSubpaths(): string {
+  const tempPaths = new Set<string>(SEATBELT_TEMP_ALLOW_SUBPATHS);
+  const tempDirectory = process.env.TMPDIR;
+
+  if (tempDirectory) {
+    tempPaths.add(tempDirectory.replace(/\/+$/, ''));
+  }
+
+  return seatbeltSubpaths([...tempPaths]);
 }
 
 export function sandbox(
@@ -94,6 +116,8 @@ function seatbeltDenySubpaths(roots: string[]): string {
 }
 
 function createProfile(config: AgentConfig): string {
+  const deviceAllow = seatbeltLiteralPaths(SEATBELT_DEVICE_ALLOW_PATHS);
+  const tempAllow = seatbeltTempAllowSubpaths();
   const readDeny = seatbeltDenySubpaths(getRoots('read', config).deny);
 
   const writeAllow = getRoots('write', config)
@@ -113,6 +137,8 @@ function createProfile(config: AgentConfig): string {
     '(allow process-fork)',
     '(allow signal (target self))',
     '(allow file-read*)',
+    `(allow file-write* ${deviceAllow})`,
+    `(allow file-write* ${tempAllow})`,
     seatbeltSysctlReadAllow(),
   ];
   if (readDeny.length > 0) {

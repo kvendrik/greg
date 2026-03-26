@@ -6,7 +6,6 @@ type ConfigModel = Config['models'][number]['model'];
 export type ParseCommandsInput = {
   content: string;
   currentModel: ConfigModel;
-  primaryModel: ConfigModel;
   config: Config;
 };
 
