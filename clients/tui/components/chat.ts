@@ -125,7 +125,8 @@ export const chat = (tui: TUI): Tools => {
         const lastFadedMessages = messages.slice(-5, -8);
         const lastVisibleMessages = messages.slice(-5);
 
-        for (const message of lastFadedMessages) {
+        for (const [index, message] of lastFadedMessages.entries()) {
+          if (index > 0) renderedLines.push('');
           renderedLines.push(
             ...markdown({
               content: pc.dim(message),
@@ -134,10 +135,10 @@ export const chat = (tui: TUI): Tools => {
               paddingY: 0,
             })
           );
-          renderedLines.push('');
         }
 
-        for (const message of lastVisibleMessages) {
+        for (const [index, message] of lastVisibleMessages.entries()) {
+          if (index > 0) renderedLines.push('');
           renderedLines.push(
             ...markdown({
               content: message,
@@ -146,21 +147,10 @@ export const chat = (tui: TUI): Tools => {
               paddingY: 0,
             })
           );
-          renderedLines.push('');
         }
 
         if (showSpinner) renderedLines.push(...loader.render(width));
         renderedLines.push(...editor.render(width));
-
-        const rowsToFill = Math.max(
-          0,
-          tui.terminal.rows - renderedLines.length
-        );
-
-        for (let index = 0; index < rowsToFill; index += 1) {
-          renderedLines.push(' '.repeat(width));
-        }
-
         return renderedLines;
       },
       handleInput: (input) => {

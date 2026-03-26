@@ -1,3 +1,4 @@
+import pc from 'picocolors';
 import { tui as createTui } from './components/tui';
 import { chat as createChat, type Stream } from './components/chat';
 import { client as createClient } from './client';
@@ -65,8 +66,6 @@ chat.onSubmit((message) => {
   });
 });
 
-tui.addChild(chat.component);
-
 const config = await getConfig();
 const validConfig = await validateConfig(config);
 const primaryModel =
@@ -76,10 +75,33 @@ if (!validConfig) {
   throw new Error('TUI usage requires a valid config');
 }
 
-tui.addChild({
-  render: () => (primaryModel ? [primaryModel.name] : []),
-  invalidate: () => {},
-});
+const footer = (width: number): string => {
+  const left = process.cwd().replace(process.env.HOME ?? '', '~');
+  const right = primaryModel?.name.toLowerCase() ?? '';
+  return `${pc.dim(left)}${' '.repeat(Math.max(1, width - left.length - right.length))}${pc.dim(right)}`;
+};
 
-tui.setFocus(chat.component);
+const app = {
+  render: (width: number) => {
+    const renderedLines = [
+      ...chat.component.render(width),
+      ...(primaryModel ? [footer(width)] : []),
+    ];
+
+    const rowsToFill = Math.max(0, tui.terminal.rows - renderedLines.length);
+
+    for (let index = 0; index < rowsToFill; index += 1) {
+      renderedLines.push(' '.repeat(width));
+    }
+
+    return renderedLines;
+  },
+  handleInput: (input: string) => {
+    chat.component.handleInput?.(input);
+  },
+  invalidate: () => {},
+};
+
+tui.addChild(app);
+tui.setFocus(app);
 tui.start();
