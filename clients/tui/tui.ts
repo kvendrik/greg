@@ -180,7 +180,7 @@ session.subscribe('tui', {
   },
 });
 
-setGetReply(async (question, { toolName, prettyParams }) => {
+setGetReply(async (_question, { toolName, prettyParams }) => {
   clearThinking();
   await flushThinkingStream();
 
@@ -193,9 +193,25 @@ setGetReply(async (question, { toolName, prettyParams }) => {
     ],
     initialValue: '/5m',
   });
+
   if (isCancel(answer)) {
     process.exit(0);
   }
+
+  if (answer.startsWith('/deny')) {
+    const reason = await text({
+      message: 'Reason (optional):',
+      placeholder: 'A reason steers the LLM in the right direction',
+      initialValue: '',
+    });
+
+    if (isCancel(reason)) {
+      process.exit(0);
+    }
+
+    return `/deny ${reason}`;
+  }
+
   return answer;
 });
 

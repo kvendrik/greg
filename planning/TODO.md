@@ -1,5 +1,4 @@
 - [ ] Pre-exec policy for dangerous patterns
-- [ ] Add /10m to allowlist commands
 - [ ] Fix TUI `getReply` styling
 - [ ] More testing
 - [ ] Make gateway logs accessible from sandboxed exec environment (pm2 log piping)
