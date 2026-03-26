@@ -1,35 +1,82 @@
 import pc from 'picocolors';
 import { tui as createTui } from './components/tui';
 import { chat as createChat, type Stream } from './components/chat';
-import { overlay as createOverlay } from './components/overlay';
+//import { overlay as createOverlay } from './components/overlay';
 import { client as createClient } from './client';
-import { validate as validateConfig, get as getConfig } from '../../config';
+import {
+  validate as validateConfig,
+  get as getConfig,
+  type Config,
+} from '../../config';
 
 process.env.GREG_LOG = 'silent';
 
 const tui = createTui();
 const chat = createChat(tui);
-const overlay = createOverlay(tui);
+
+let config: Config | null = null;
+
+let loadingMessage: string | null = null;
+const setLoadingMessage = (message: string | null): void => {
+  loadingMessage = message;
+  tui.requestRender();
+};
 
 tui.start();
+chat.setDisabled(true);
 
-overlay.show('Loading config...');
-const config = await getConfig();
+let captureMessage: ((reply: string) => void) | null = null;
+let stream: Stream | null = null;
 
-overlay.setMessage('Validating...');
+const footer = (width: number): string => {
+  const currentWorkingDirectory = process.env.PWD ?? process.cwd();
+  const left = currentWorkingDirectory.replace(process.env.HOME ?? '', '~');
+  const primaryModel =
+    config?.models.find((m) => m.role === 'primary')?.model ?? null;
+  const right = primaryModel?.name.toLowerCase() ?? '';
+  return `${pc.dim(left)}${' '.repeat(Math.max(1, width - left.length - right.length))}${pc.dim(right)}`;
+};
+
+const app = {
+  render: (width: number) => {
+    const renderedLines = [
+      ...chat.component.render(width),
+      ...[
+        footer(width),
+        ...(loadingMessage
+          ? [pc.dim(`loading... (${loadingMessage.toLowerCase()})`)]
+          : []),
+      ],
+    ];
+
+    const rowsToFill = Math.max(0, tui.terminal.rows - renderedLines.length);
+
+    for (let index = 0; index < rowsToFill; index += 1) {
+      renderedLines.push(' '.repeat(width));
+    }
+
+    return renderedLines;
+  },
+  handleInput: (input: string) => {
+    chat.component.handleInput?.(input);
+  },
+  invalidate: () => {},
+};
+
+tui.addChild(app);
+tui.setFocus(app);
+
+setLoadingMessage('Loading config');
+config = await getConfig();
+
+setLoadingMessage('Validating');
 const validConfig = await validateConfig(config);
-
-const primaryModel =
-  config.models.find((m) => m.role === 'primary')?.model ?? null;
 
 if (!validConfig) {
   throw new Error('TUI usage requires a valid config');
 }
 
-let captureMessage: ((reply: string) => void) | null = null;
-let stream: Stream | null = null;
-
-overlay.setMessage('Creating client...');
+setLoadingMessage('Creating client');
 const client = await createClient({
   onTurnStart() {
     chat.spinner('Thinking...');
@@ -69,38 +116,8 @@ client.onCommands((commands) => {
 });
 
 chat.onSubmit(handleMessage);
-
-const footer = (width: number): string => {
-  const currentWorkingDirectory = process.env.PWD ?? process.cwd();
-  const left = currentWorkingDirectory.replace(process.env.HOME ?? '', '~');
-  const right = primaryModel?.name.toLowerCase() ?? '';
-  return `${pc.dim(left)}${' '.repeat(Math.max(1, width - left.length - right.length))}${pc.dim(right)}`;
-};
-
-const app = {
-  render: (width: number) => {
-    const renderedLines = [
-      ...chat.component.render(width),
-      ...(primaryModel ? [footer(width)] : []),
-    ];
-
-    const rowsToFill = Math.max(0, tui.terminal.rows - renderedLines.length);
-
-    for (let index = 0; index < rowsToFill; index += 1) {
-      renderedLines.push(' '.repeat(width));
-    }
-
-    return renderedLines;
-  },
-  handleInput: (input: string) => {
-    chat.component.handleInput?.(input);
-  },
-  invalidate: () => {},
-};
-
-tui.addChild(app);
-tui.setFocus(app);
-overlay.hide();
+setLoadingMessage(null);
+chat.setDisabled(false);
 
 const initialPrompt = process.argv[2]?.trim();
 if (initialPrompt) handleMessage(initialPrompt);
@@ -115,7 +132,7 @@ function handleMessage(message: string): void {
   }
   chat.setDisabled(true);
   stream = chat.stream('Greg');
-  void client.prompt(message).then(() => {
+  void client.prompt(`${message}\n\n[Sent from the TUI]`).then(() => {
     stream?.close();
     stream = null;
   });
