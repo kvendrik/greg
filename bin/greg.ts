@@ -7,6 +7,7 @@ import pc from 'picocolors';
 import * as config from '../config';
 import type { AgentConfig } from '../agent/types';
 import { QMD } from '../agent/tools/memory/qmd';
+import { tuiCommand } from '../clients/tui';
 
 const projectRoot = path.join(import.meta.dirname, '..');
 const program = new Command();
@@ -351,38 +352,7 @@ program
     process.exit(result.status ?? 0);
   });
 
-program
-  .command('tui')
-  .description('Start an interactive TUI chat client')
-  .option('-v, --voice', 'Start in voice mode')
-  .option('-p, --prompt <prompt>', 'Prompt to run right away')
-  .action(async ({ voice, prompt }: { voice?: boolean; prompt?: string }) => {
-    const pipedInput = await readPipedStdin();
-
-    const initialPrompt = [prompt?.trim(), pipedInput?.trim()].filter(
-      (part): part is string => Boolean(part)
-    );
-
-    const combinedPrompt =
-      initialPrompt.length > 0 ? initialPrompt.join('\n\n') : undefined;
-
-    spawn(
-      'bun',
-      [
-        'run',
-        path.join(projectRoot, 'clients/tui/tui.ts'),
-        ...(combinedPrompt ? [combinedPrompt] : []),
-      ],
-      {
-        stdio: 'inherit',
-        cwd: projectRoot,
-        env: {
-          ...process.env,
-          VOICE_MODE: voice ? '1' : undefined,
-        },
-      }
-    ).on('exit', (code) => process.exit(code ?? 0));
-  });
+program.addCommand(tuiCommand);
 
 program
   .command('tools')
@@ -568,25 +538,6 @@ program
   );
 
 program.parse();
-
-async function readPipedStdin(): Promise<string | undefined> {
-  if (process.stdin.isTTY) {
-    return undefined;
-  }
-
-  return await new Promise<string | undefined>((resolve, reject) => {
-    let buffer = '';
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk: string | Buffer) => {
-      buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-    });
-    process.stdin.on('end', () => {
-      const trimmedBuffer = buffer.trim();
-      resolve(trimmedBuffer ? trimmedBuffer : undefined);
-    });
-    process.stdin.on('error', reject);
-  });
-}
 
 async function loadConfig(): Promise<config.Config> {
   try {

@@ -10,6 +10,7 @@ import { editor as createEditor } from './editor';
 
 export interface Stream {
   append: (chunk: string) => void;
+  value: () => string;
   close: () => void;
 }
 
@@ -33,14 +34,17 @@ interface ChatMessage {
   content: string;
 }
 
-export const chat = (tui: TUI): Tools => {
+export const chat = (
+  tui: TUI,
+  { voiceMode }: { voiceMode: boolean }
+): Tools => {
   let streamOpen = false;
   let showSpinner = false;
   let isSpinnerRunning = false;
   let onSubmit: (message: string) => void = () => {};
 
   const messages: ChatMessage[] = [];
-  const editor = createEditor(tui);
+  const editor = createEditor(tui, { voiceMode });
   const loader = new CancellableLoader(
     tui,
     (s) => pc.cyan(s),
@@ -104,6 +108,8 @@ export const chat = (tui: TUI): Tools => {
           messages[messageIndex].content += chunk;
           tui.requestRender();
         },
+        value: () =>
+          messageIndex === null ? '' : messages[messageIndex].content,
         close: () => {
           streamOpen = false;
         },
