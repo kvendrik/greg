@@ -16,6 +16,7 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ fewer
 - 🚏 **Supports Most Popular Models**. Greg uses [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) and therefore supports most popular models. He ships with a fallback system that allows you to configure what model should be used in case your preferred model isn't available. You can also define additional models and invoke them for whatever prompt you want using `/` commands.
 - 💂 **Guarding**. If Greg tries to run tools or commands that you've not pre-approved a separate system will ask for your permission first.
 - 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of sending voice messages by transcribing his responses using [ElevenLabs](https://elevenlabs.io/). This does require a ElevenLabs API key. See "Voice Messages" below for more info.
+- 📱💾 **Telegram & TUI Clients**. Greg comes with a Telegram client to communicate with Greg on the go, and a TUI based on [`pi-coding-agent`](https://shittycodingagent.ai/) for when you're at your computer. Both have voice features. On Telegram you can send voice messages back and forth, and the TUI features a voice mode.
 
 Oh and you don't have to call him Greg. Just say "From now on your name is John" and that's it.
 
@@ -397,7 +398,7 @@ The recommended to use Greg is through Telegram. Greg comes with a `greg telegra
 
 ### TUI
 
-Additionally, Greg comes with a TUI that's available through `greg tui`. The TUI can also be used to work with Greg through your command-line:
+Additionally, Greg comes with a TUI based on [`pi-coding-agent`](https://shittycodingagent.ai/), that's available through `greg tui`. The TUI can also be used to work with Greg through your command-line:
 
 ```bash
 cat ~/path/to/some/file.md | greg tui -p "Summarize this file"
