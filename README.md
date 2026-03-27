@@ -18,9 +18,6 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ fewer
 - 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of sending voice messages by transcribing his responses using [ElevenLabs](https://elevenlabs.io/). This does require a ElevenLabs API key. See "Voice Messages" below for more info.
 - 📱💾 **Telegram & TUI Clients**. Greg comes with a Telegram client to communicate with Greg on the go, and a TUI based on [`pi-coding-agent`](https://shittycodingagent.ai/) for when you're at your computer. Both have voice features. On Telegram you can send voice messages back and forth, and the TUI features a voice mode.
 
-![TUI Screenshot](/assets/tui.png)
-_Greg running in its TUI_
-
 ## Setup
 
 ```bash
@@ -188,6 +185,74 @@ greg gateway start
 ```
 
 You should see logs that indicate that both the gateway and the Telegram service are ready! 🎉 If you're not using Telegram you can try out the TUI by running `greg tui`.
+
+## 📱 Clients
+
+### TUI
+
+Greg comes with a TUI based on [`pi-coding-agent`](https://shittycodingagent.ai/), that's available through running: `greg tui`.
+
+![TUI Screenshot](/assets/tui.png)
+
+> Greg running in its TUI
+
+The TUI can also be used to work with Greg through your command-line:
+
+```bash
+cat ~/path/to/some/file.md | greg tui "Summarize this file"
+```
+
+### Telegram
+
+Greg comes with a Telegram integration which starts automatically when you run `greg gateway start`. It uses the Telegram bot configured in your `~/.greg/config.ts` file. He also comes with a `greg telegram` command that lets both you and Greg send text and voice messages.
+
+### Custom
+
+You can also create a custom client to communicate with Greg:
+
+```ts
+// your-custom-client.ts
+// run using `bun run your-custom-client.ts`
+
+import { createInterface } from 'node:readline/promises';
+import * as gateway from '@kvendrik/greg/gateway';
+
+const { setGetReply, stop } = await gateway.start();
+const session = gateway.get('main');
+
+session.subscribe('your-channel-name', {
+  onTurnStart: () => {},
+  onThinking: (chunk) => {},
+  onContent: (chunk) => {},
+  onToolcall: async (name, args) => {},
+  onTurnDone: async () => {},
+  onTurnStop: () => {},
+  onError: (error) => {},
+});
+
+const rl = createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
+
+setGetReply(rl.question.bind(rl));
+
+await session.prompt(
+  {
+    content: 'Hey Greg!',
+    images: [],
+  },
+  { channelId: 'your-channel-name' }
+);
+
+process.once('SIGINT', shutdown);
+process.once('SIGTERM', shutdown);
+
+function shutdown() {
+  stop();
+  process.exit(0);
+}
+```
 
 ## 🔨 Skills
 
@@ -390,65 +455,3 @@ const config: Config = {
 The purpose of the Guard is to reduce the risk Greg does something you don't want due to misunderstanding or confusion, and exfiltration risk (attackers transfering data without your permission). Next to using the Guard it's important to use a reliable LLM provider and frontier model when using Greg. Providers like Anthropic both run classifiers on incoming data and train their frontier models on prompt injection techniques. Using the newest models helps reduce the risk of prompt injection, and being careful with what you allow Greg to do through the Guard prevents the risk of what could happen in case prompt injection does happen.
 
 If you're concerned about privacy and want to use a local model you can configure a [custom model](https://github.com/badlogic/pi-mono/tree/main/packages/ai#custom-models). Be extra careful when you do this because local models don't have the same protection the large providers and frontier models offer.
-
-## 📱 Clients
-
-### Telegram
-
-The recommended to use Greg is through Telegram. Greg comes with a `greg telegram` command that lets both you and Greg send text and voice messages to the Telegram bot configured in your `~/.greg/config.ts` file.
-
-### TUI
-
-Additionally, Greg comes with a TUI based on [`pi-coding-agent`](https://shittycodingagent.ai/), that's available through `greg tui`. The TUI can also be used to work with Greg through your command-line:
-
-```bash
-cat ~/path/to/some/file.md | greg tui "Summarize this file"
-```
-
-### Custom
-
-You can also create a custom client to communicate with Greg:
-
-```ts
-// your-custom-client.ts
-// run using `bun run your-custom-client.ts`
-
-import { createInterface } from 'node:readline/promises';
-import * as gateway from '@kvendrik/greg/gateway';
-
-const { setGetReply, stop } = await gateway.start();
-const session = gateway.get('main');
-
-session.subscribe('your-channel-name', {
-  onTurnStart: () => {},
-  onThinking: (chunk) => {},
-  onContent: (chunk) => {},
-  onToolcall: async (name, args) => {},
-  onTurnDone: async () => {},
-  onTurnStop: () => {},
-  onError: (error) => {},
-});
-
-const rl = createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
-
-setGetReply(rl.question.bind(rl));
-
-await session.prompt(
-  {
-    content: 'Hey Greg!',
-    images: [],
-  },
-  { channelId: 'your-channel-name' }
-);
-
-process.once('SIGINT', shutdown);
-process.once('SIGTERM', shutdown);
-
-function shutdown() {
-  stop();
-  process.exit(0);
-}
-```
