@@ -224,6 +224,14 @@ import { createInterface } from 'node:readline/promises';
 import * as gateway from '@kvendrik/greg/gateway';
 
 const { setGetReply, stop } = await gateway.start();
+
+// `main` loads by default. If you want to create and
+// load a new session then create and load it first:
+// if (!gateway.exists(sessionId)) {
+//   await gateway.create(sessionId);
+//   await gateway.load(sessionId);
+// }
+
 const session = gateway.get('main');
 
 session.subscribe('your-channel-name', {
