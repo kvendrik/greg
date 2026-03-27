@@ -18,7 +18,8 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ fewer
 - 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of sending voice messages by transcribing his responses using [ElevenLabs](https://elevenlabs.io/). This does require a ElevenLabs API key. See "Voice Messages" below for more info.
 - 📱💾 **Telegram & TUI Clients**. Greg comes with a Telegram client to communicate with Greg on the go, and a TUI based on [`pi-coding-agent`](https://shittycodingagent.ai/) for when you're at your computer. Both have voice features. On Telegram you can send voice messages back and forth, and the TUI features a voice mode.
 
-Oh and you don't have to call him Greg. Just say "From now on your name is John" and that's it.
+![TUI Screenshot](/assets/tui.png)
+_Greg running in its TUI_
 
 ## Setup
 
@@ -403,8 +404,6 @@ Additionally, Greg comes with a TUI based on [`pi-coding-agent`](https://shittyc
 ```bash
 cat ~/path/to/some/file.md | greg tui "Summarize this file"
 ```
-
-![TUI Screenshot](/assets/tui.png)
 
 ### Custom
 
