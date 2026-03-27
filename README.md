@@ -252,6 +252,9 @@ const rl = createInterface({
   output: process.stdout,
 });
 
+// This is how the Guard asks for permission if
+// config.tools.guard.ask is enabled. See the
+// "Guard" section below for more info
 setGetReply(rl.question.bind(rl));
 
 await session.prompt(
