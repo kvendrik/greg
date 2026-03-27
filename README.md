@@ -16,7 +16,7 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ fewer
 - 🚏 **Supports Most Popular Models**. Greg uses [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) and therefore supports most popular models. He ships with a fallback system that allows you to configure what model should be used in case your preferred model isn't available. You can also define additional models and invoke them for whatever prompt you want using `/` commands.
 - 💂 **Guarding**. If Greg tries to run tools or commands that you've not pre-approved a separate system will ask for your permission first.
 - 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of sending voice messages by transcribing his responses using [ElevenLabs](https://elevenlabs.io/). This does require an ElevenLabs API key. See "Voice Messages" below for more info.
-- 📱💾 **Telegram & TUI Clients**. Greg comes with a Telegram client to communicate with Greg on the go, and a TUI based on [`pi-coding-agent`](https://shittycodingagent.ai/) for when you're at your computer. Both have voice features. On Telegram you can send voice messages back and forth, and the TUI features a voice mode.
+- 📱💾 **Telegram & TUI Clients**. Greg comes with a Telegram client to communicate with Greg on the go, and a TUI based on [`pi`](https://shittycodingagent.ai/) for when you're at your computer. Both have voice features. On Telegram you can send voice messages back and forth, and the TUI features a voice mode.
 
 ## Setup
 
@@ -190,7 +190,9 @@ You should see logs that indicate that both the gateway and the Telegram service
 
 ### TUI
 
-Greg comes with a TUI based on [`pi-coding-agent`](https://shittycodingagent.ai/), available by running `greg tui`.
+Greg comes with a TUI based on [`pi`](https://shittycodingagent.ai/), available by running `greg tui`.
+
+The TUI is a good way to get started because it helps you get familiar with how Greg works. Just like [`pi`](https://shittycodingagent.ai/), Greg's TUI shows you exactly what goes in and comes out. This gives you great insight into how Greg works. In contrast, the Telegram client doesn't show what context gets injected into the system prompt, token usage and cost (unless you ask with the `/status` command), or tool call results. The TUI is meant to help you really monitor what Greg is doing, while the Telegram client is designed to be more conversational and therefore abstracts away details you might not care about when you're on the go.
 
 ![TUI Screenshot](/assets/tui.png)
 
