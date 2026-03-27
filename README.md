@@ -17,7 +17,7 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ fewer
 - 💂 **Guarding**. If Greg tries to run tools or commands that you've not pre-approved a separate system will ask for your permission first.
 - 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of both receiving and sending voice messages.
 - 🎙️ **Voice Mode**. Greg comes with a TUI that allows you to speak to Greg without having to touch your keyboard.
-- 📱💾 **Telegram & TUI Clients**. Talk to Greg how you like. He comes with a Telegram integration, a [`pi`](https://shittycodingagent.ai/)-like TUI, and an easy-to-use SDK to create custom clients.
+- 📱💾 **Telegram & TUI Clients**. Talk to Greg however you like. He comes with a Telegram integration, a [`pi`](https://shittycodingagent.ai/)-like TUI, and an easy-to-use SDK to create custom clients.
 
 ## Setup
 
