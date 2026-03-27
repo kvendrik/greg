@@ -216,6 +216,10 @@ The `greg telegram` command is available independently and lets both you and Gre
 
 You can also create a custom client to communicate with Greg:
 
+<details>
+
+<summary>Show example code</summary>
+
 ```ts
 // your-custom-client.ts
 // run using `bun run your-custom-client.ts`
@@ -273,6 +277,8 @@ function shutdown() {
   process.exit(0);
 }
 ```
+
+</details>
 
 ## 🔨 Skills
 
