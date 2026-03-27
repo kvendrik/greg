@@ -202,7 +202,7 @@ cat ~/path/to/some/file.md | greg tui "Summarize this file"
 
 ### Telegram
 
-Greg comes with a Telegram integration which starts automatically when you run `greg gateway start`. It uses the Telegram bot configured in your `~/.greg/config.ts` file. He also comes with a `greg telegram` command that lets both you and Greg send text and voice messages.
+Greg comes with a Telegram integration which starts automatically when you run `greg gateway start`. It uses the Telegram bot configured in your `~/.greg/config.ts` file. The `greg telegram` command that lets both you and Greg send text and voice messages.
 
 ### Custom
 
