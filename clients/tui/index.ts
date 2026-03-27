@@ -1,17 +1,20 @@
 import { Command } from 'commander';
 import { start } from './tui';
+import * as gateway from '../../gateway';
 
 export const tuiCommand = new Command('tui')
   .description('Start an interactive TUI chat client')
   .argument('[prompt]', 'An initial prompt to run')
   .option('-v, --voice', 'Start in voice mode')
+  .option('-s, --session [sessionId]', 'The session ID to use')
+  .option('-p, --print', 'Print mode')
   .action(
     async (
       prompt: string | undefined,
-      options: { voice: boolean } | undefined
+      options: { voice: boolean; session?: string; print: boolean }
     ) => {
+      const sessionId = options.session ?? 'main';
       const pipedInput = await readPipedStdin();
-      const voiceMode = options?.voice ?? false;
 
       const initialPrompt = [prompt?.trim(), pipedInput?.trim()].filter(
         (part): part is string => Boolean(part)
@@ -20,11 +23,44 @@ export const tuiCommand = new Command('tui')
       const combinedPrompt =
         initialPrompt.length > 0 ? initialPrompt.join('\n\n') : null;
 
-      await start({
-        voiceMode,
-        initialPrompt: combinedPrompt,
-        sessionId: 'main',
+      if (!options.print) {
+        await start({
+          voiceMode: options.voice,
+          initialPrompt: combinedPrompt,
+          sessionId,
+        });
+      }
+
+      if (!combinedPrompt) {
+        throw new Error('No prompt provided. Print mode requires a prompt.');
+      }
+
+      if (!gateway.exists(sessionId)) {
+        throw new Error(
+          `Session ${sessionId} not found. Print mode only works with existing sessions.`
+        );
+      }
+
+      process.env.GREG_LOG = 'silent';
+      await gateway.start();
+      const session = gateway.get(sessionId);
+
+      session.subscribe('tui', {
+        onContent(chunk) {
+          process.stdout.write(chunk);
+        },
+        onError(error) {
+          process.stderr.write(error);
+        },
       });
+
+      await session.prompt(
+        {
+          content: combinedPrompt,
+          images: [],
+        },
+        { channelId: 'tui' }
+      );
     }
   );
 
