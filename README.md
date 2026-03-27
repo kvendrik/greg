@@ -226,7 +226,7 @@ import * as gateway from '@kvendrik/greg/gateway';
 const { setGetReply, stop } = await gateway.start();
 
 /**
- * `main` loads by default. If you want to create and
+ * Session `main` loads by default. If you want to create and
  * load a new session then create and load it first:
  *
  * if (!gateway.exists(sessionId)) {
