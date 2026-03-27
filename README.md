@@ -207,12 +207,6 @@ greg tui --voice
 
 #### Print mode
 
-The TUI can also be used to work with Greg through your command-line:
-
-```bash
-cat ~/path/to/some/file.md | greg tui "Summarize this file"
-```
-
 To only print Greg's response without launching the TUI, use print mode:
 
 ```bash
