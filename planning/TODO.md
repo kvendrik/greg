@@ -1,5 +1,4 @@
 - [ ] Pre-exec policy for dangerous patterns
 - [ ] Make gateway logs accessible from sandboxed exec environment (pm2 log piping)
 - [ ] Support `open` URLs from sandbox
-- [ ] Add voice mode to TUI
 - [ ] Improve TUI CLI by adding argument and --print mode

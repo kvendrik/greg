@@ -401,8 +401,10 @@ The recommended to use Greg is through Telegram. Greg comes with a `greg telegra
 Additionally, Greg comes with a TUI based on [`pi-coding-agent`](https://shittycodingagent.ai/), that's available through `greg tui`. The TUI can also be used to work with Greg through your command-line:
 
 ```bash
-cat ~/path/to/some/file.md | greg tui -p "Summarize this file"
+cat ~/path/to/some/file.md | greg tui "Summarize this file"
 ```
+
+![TUI Screenshot](/assets/tui.png)
 
 ### Custom
 

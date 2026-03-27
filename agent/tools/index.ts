@@ -14,13 +14,15 @@ import { createWebSearchTool } from './web-search';
 import { createSpawnTools } from './spawn';
 import { evaluatePolicy } from './utilities/policy';
 
+export interface Tools {
+  tools: AgentTool[];
+  instructions: string;
+}
+
 export async function get(
   conversationStartIso: string,
   context: ToolContext
-): Promise<{
-  tools: AgentTool[];
-  instructions: string;
-}> {
+): Promise<Tools> {
   const deniedTools = context.config.tools.deny ?? null;
   const allowedTools = context.config.tools.allow ?? [
     'skills',

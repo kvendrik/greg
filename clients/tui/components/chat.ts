@@ -2,7 +2,7 @@ import {
   type Component,
   type TUI,
   CancellableLoader,
-  Text,
+  Box,
 } from '@mariozechner/pi-tui';
 import pc from 'picocolors';
 import { markdown } from './markdown';
@@ -26,7 +26,7 @@ interface Tools {
   setCommands: (commands: Record<string, string>) => void;
 }
 
-type Role = 'Greg' | 'System';
+type Role = 'Greg' | 'System' | 'Tool';
 type MessageRole = Role | 'You';
 
 interface ChatMessage {
@@ -126,15 +126,19 @@ export const chat = (
         const renderMessage = (message: ChatMessage): string[] => {
           const renderedContent = markdown({
             content: message.content,
-            width,
             paddingX: 1,
             paddingY: 0,
           });
 
-          return [
-            ...new Text(pc.dim(message.role), 1, 0).render(width),
-            ...renderedContent,
-          ];
+          if (message.role === 'You') {
+            const box = new Box(1, 1, (text) => pc.bgBlack(text));
+            box.addChild(renderedContent);
+            return box.render(width);
+          }
+
+          const box = new Box(1, 1, (text) => text);
+          box.addChild(renderedContent);
+          return box.render(width);
         };
 
         const renderedLines: string[] = [];
@@ -146,8 +150,7 @@ export const chat = (
 
         if (showSpinner) renderedLines.push(...loader.render(width));
 
-        renderedLines.push(...editor.render(width));
-        return renderedLines;
+        return [...renderedLines, '', ...editor.render(width)];
       },
       handleInput: (input) => {
         editor.handleInput(input);

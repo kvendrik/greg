@@ -15,6 +15,8 @@ const logger = createLogger('Sessions Manager');
 
 export type Session = {
   id: string;
+  location: string;
+  usage: typeof Agent.prototype.usage;
   state: typeof Agent.prototype.state;
   working: typeof Agent.prototype.working;
   subscribe: typeof Agent.prototype.subscribe;
@@ -116,6 +118,10 @@ export async function load(
 
   const session: Session = {
     id: sessionId,
+    location: sessionStorage.location,
+    get usage() {
+      return agent.usage;
+    },
     get state() {
       return agent.state;
     },

@@ -1,64 +1,19 @@
 import { completeSimple } from '@mariozechner/pi-ai';
-import type { Usage } from '@mariozechner/pi-ai';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import type { AgentConfig } from './types';
-import { createLogger } from '../utilities/logger';
+import type { AgentConfig } from '../types';
+import { createLogger } from '../../utilities/logger';
+import {
+  CONTEXT_SOFT_LIMIT_RATIO,
+  getLatestAssistantUsage,
+  usage,
+} from './usage';
 
 const logger = createLogger('Compact');
 
 const SUMMARIZE_SYSTEM = `You are a summarizer. Given a conversation history, produce a concise summary that preserves key facts, decisions, topics, and context needed to continue the conversation. Output only the summary, no preamble.`;
 
-type MessageWithUsage = AgentMessage & (Usage & { role: 'assistant' });
-
-function hasUsage(msg: AgentMessage): msg is MessageWithUsage {
-  return (
-    (msg as { role?: string }).role === 'assistant' &&
-    typeof (msg as { usage?: Usage }).usage?.input === 'number'
-  );
-}
-
-function getContextTokensFromUsage(usage: Usage): number {
-  return usage.input + usage.cacheRead + usage.cacheWrite;
-}
-
-/**
- * Context size in tokens based solely on provider‑reported usage.
- *
- * We take the latest assistant message with a non-zero `usage` field and
- * interpret its context size as:
- *
- *   input tokens + cache read tokens + cache write tokens
- *
- * This matches the tokens the provider actually saw as prompt/cache at the
- * time of that call. Messages after that point are *not* estimated. Zero-token
- * error turns are skipped so status reflects the last meaningful context size.
- */
-export function deriveContextTokens(messages: AgentMessage[]): number {
-  if (messages.filter(({ role }) => role === 'assistant').length === 0) {
-    return 0;
-  }
-
-  let sawAssistantUsage = false;
-
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (hasUsage(messages[i])) {
-      sawAssistantUsage = true;
-      const u = (messages[i] as { usage: Usage }).usage;
-      const contextTokens = getContextTokensFromUsage(u);
-      if (contextTokens > 0) {
-        return contextTokens;
-      }
-    }
-  }
-
-  if (sawAssistantUsage) {
-    return 0;
-  }
-
-  throw new Error(
-    'Cannot derive context tokens: no assistant message with provider usage found.'
-  );
-}
+const LATEST_TURN_CACHE_WRITE_COST_LIMIT_USD = 0.05;
+const LATEST_TURN_CACHE_WRITE_TOKEN_LIMIT_RATIO = 0.4;
 
 function messagesToTranscript(messages: AgentMessage[]): string {
   const lines: string[] = [];
@@ -100,7 +55,7 @@ function extractTextFromAssistantMessage(msg: {
     .join('');
 }
 
-export async function compactContext(
+export async function compact(
   messages: AgentMessage[],
   signal: AbortSignal | undefined,
   config: AgentConfig
@@ -116,12 +71,61 @@ export async function compactContext(
     throw new Error('No primary model in config.models.');
   }
   const model = primaryEntry.model;
-  const contextWindow = model.contextWindow;
+  const currentUsage = usage(messages);
+  const contextWindow =
+    currentUsage.tokens.window > 0
+      ? currentUsage.tokens.window
+      : model.contextWindow;
 
   // compaction can take a long time so the soft limit is 60% of the context window
   // so that it's faster. better to do it in chunks.
-  const softLimit = Math.floor(contextWindow * 0.6);
-  const currentTokens = deriveContextTokens(messages);
+  const softLimit =
+    currentUsage.tokens.limit > 0
+      ? currentUsage.tokens.limit
+      : Math.floor(contextWindow * CONTEXT_SOFT_LIMIT_RATIO);
+  const latestTurnTokenLimit = Math.floor(
+    contextWindow * LATEST_TURN_CACHE_WRITE_TOKEN_LIMIT_RATIO
+  );
+  const currentTokens = currentUsage.tokens.used;
+  const latestUsage = getLatestAssistantUsage(messages);
+  const latestTurnCacheWriteCost =
+    currentUsage.cost.cacheWrite === 0
+      ? undefined
+      : currentUsage.cost.cacheWrite;
+  const latestTurnCacheWriteTokens = latestUsage?.cacheWrite ?? 0;
+
+  if (
+    typeof latestTurnCacheWriteCost === 'number' &&
+    latestTurnCacheWriteCost >= LATEST_TURN_CACHE_WRITE_COST_LIMIT_USD
+  ) {
+    logger.info(
+      `Latest turn cache write cost $${latestTurnCacheWriteCost.toFixed(4)} above $${LATEST_TURN_CACHE_WRITE_COST_LIMIT_USD.toFixed(2)} threshold`
+    );
+
+    const lastMessage = messages[messages.length - 1];
+    const allWithoutLastMessage = messages.slice(0, -1);
+    const compactedMessages = await summarize(allWithoutLastMessage, {
+      config,
+      signal: effectiveSignal,
+    });
+
+    return { messages: [...compactedMessages, lastMessage], didCompact: true };
+  }
+
+  if (latestTurnCacheWriteTokens >= latestTurnTokenLimit) {
+    logger.info(
+      `Latest turn cache write tokens ${latestTurnCacheWriteTokens} above ${latestTurnTokenLimit} token threshold`
+    );
+
+    const lastMessage = messages[messages.length - 1];
+    const allWithoutLastMessage = messages.slice(0, -1);
+    const compactedMessages = await summarize(allWithoutLastMessage, {
+      config,
+      signal: effectiveSignal,
+    });
+
+    return { messages: [...compactedMessages, lastMessage], didCompact: true };
+  }
 
   if (currentTokens <= softLimit) {
     logger.info(
@@ -137,7 +141,7 @@ export async function compactContext(
   const lastMessage = messages[messages.length - 1];
   const allWithoutLastMessage = messages.slice(0, -1);
 
-  const compactedMessages = await compact(allWithoutLastMessage, {
+  const compactedMessages = await summarize(allWithoutLastMessage, {
     config,
     signal: effectiveSignal,
   });
@@ -145,7 +149,7 @@ export async function compactContext(
   return { messages: [...compactedMessages, lastMessage], didCompact: true };
 }
 
-export async function compact(
+async function summarize(
   messages: AgentMessage[],
   { config, signal }: { config: AgentConfig; signal: AbortSignal }
 ): Promise<AgentMessage[]> {

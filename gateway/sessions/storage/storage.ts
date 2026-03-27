@@ -11,6 +11,7 @@ const logger = createLogger('Session Storage');
 export interface StorageSession {
   messages: AgentMessage[];
   proxy: (callbacks: Callbacks, agent: Agent) => Callbacks;
+  location: string;
 }
 
 export class Storage {
@@ -76,6 +77,7 @@ export class Storage {
     logger.info(`[${sessionId}] Loaded ${messages.length} messages.`);
 
     return Promise.resolve({
+      location: sessionPath,
       messages,
       proxy: (callbacks: Callbacks, agent: Agent): Callbacks => {
         const boundCallbacks = Object.entries(callbacks).reduce<Callbacks>(

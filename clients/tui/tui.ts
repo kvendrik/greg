@@ -1,19 +1,16 @@
-import { spawnSync } from 'node:child_process';
-import type { Model, Api } from '@mariozechner/pi-ai';
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
+import { truncateToWidth, visibleWidth } from '@mariozechner/pi-tui';
 import pc from 'picocolors';
 import { tui as createTui } from './components/tui';
 import { chat as createChat, type Stream } from './components/chat';
-//import { overlay as createOverlay } from './components/overlay';
-import { client as createClient } from './client';
+import { footer } from './components/footer';
+import { discoverSkills } from '../../agent/tools/skills';
+import { client as createClient, type Client as TuiClient } from './client';
 import { markdown } from './components/markdown';
 import { version } from '../../package.json';
+import { getInfo as getMemoryInfo } from '../../agent/tools/memory';
 import { play, synthesizeToBuffer } from '../../voice/speech';
-import {
-  validate as validateConfig,
-  get as getConfig,
-  type Config,
-} from '../../config';
+import { validate as validateConfig, get as getConfig } from '../../config';
 
 interface StartOptions {
   voiceMode: boolean;
@@ -30,12 +27,19 @@ export async function start({
 
   const tui = createTui();
   const chat = createChat(tui, { voiceMode });
-  const currentGitBranch = getCurrentGitBranch();
 
-  let config: Config | null = null;
+  const config = await getConfig();
+  let model = config.models.find((entry) => entry.role === 'primary')?.model;
+
+  if (!model) {
+    throw new Error('No primary model in config.models.');
+  }
+
+  const skills = discoverSkills(config);
+
   let thinkingLevel: ThinkingLevel = 'medium';
-  let model: Model<Api> | null = null;
   let isPlayingVoiceReply = false;
+  let client: TuiClient | null = null;
 
   let loadingMessage: string | null = null;
   const setLoadingMessage = (message: string | null): void => {
@@ -49,40 +53,52 @@ export async function start({
   let captureMessage: ((reply: string) => void) | null = null;
   let stream: Stream | null = null;
 
-  const footer = (width: number): string => {
-    const currentWorkingDirectory = process.env.PWD ?? process.cwd();
-    const branchSuffix = currentGitBranch ? ` @ ${currentGitBranch}` : '';
-    const left =
-      currentWorkingDirectory.replace(process.env.HOME ?? '', '~') +
-      branchSuffix;
-    const primaryModel =
-      config?.models.find((m) => m.role === 'primary')?.model ?? null;
-    const right = `${sessionId} • ${model?.name.toLowerCase() ?? primaryModel?.name.toLowerCase() ?? ''} • thinking: ${thinkingLevel}`;
-    return `${pc.dim(left)}${' '.repeat(Math.max(1, width - left.length - right.length))}${pc.dim(right)}`;
+  const fitLineToWidth = (line: string, width: number): string => {
+    return visibleWidth(line) <= width ? line : truncateToWidth(line, width);
   };
 
   const app = {
     render: (width: number) => {
+      const headerLines = markdown({
+        content: `${pc.bold(pc.blue('🤖 Greg'))} ${pc.dim(`v${version}`)}`,
+        paddingX: 1,
+        paddingY: 1,
+      }).render(width);
+
       const footerLines = [
-        footer(width),
+        '',
+        ...footer({
+          width,
+          sessionId,
+          model: (model?.name ?? 'unknown').toLowerCase(),
+          thinkingLevel,
+          usage: client?.usage ?? null,
+        }),
         ...(loadingMessage
-          ? [pc.dim(`loading... (${loadingMessage.toLowerCase()})`)]
+          ? [
+              fitLineToWidth(
+                pc.dim(`loading... (${loadingMessage.toLowerCase()})`),
+                width
+              ),
+            ]
           : []),
       ];
 
-      const availableChatRows = Math.max(
+      const bodyLines = [
+        ...helpMessage()
+          .split('\n')
+          .map((l) => fitLineToWidth(pc.dim(l), width)),
+        ...chat.component.render(width),
+      ];
+
+      const availableBodyRows = Math.max(
         0,
-        tui.terminal.rows - footerLines.length
+        tui.terminal.rows - headerLines.length - footerLines.length
       );
 
       const renderedLines = [
-        ...markdown({
-          content: `${pc.bold(pc.blue('🤖 Greg'))} ${pc.dim(`v${version}`)}`,
-          width,
-          paddingX: 1,
-          paddingY: 1,
-        }),
-        ...chat.component.render(width).slice(-availableChatRows),
+        ...headerLines,
+        ...bodyLines.slice(-availableBodyRows),
         ...footerLines,
       ];
 
@@ -103,9 +119,6 @@ export async function start({
   tui.addChild(app);
   tui.setFocus(app);
 
-  setLoadingMessage('Loading config');
-  config = await getConfig();
-
   setLoadingMessage('Validating');
   const validConfig = await validateConfig(config);
 
@@ -114,7 +127,7 @@ export async function start({
   }
 
   setLoadingMessage('Creating client');
-  const client = await createClient(sessionId, {
+  client = await createClient(sessionId, {
     onTurnStart() {
       chat.spinner('Thinking...');
     },
@@ -123,6 +136,9 @@ export async function start({
     },
     onToolcall(name) {
       chat.spinner(`Calling ${name}()`);
+    },
+    onToolcallResult(name, result) {
+      chat.addMessage(result, 'Tool');
     },
     onTurnStop() {
       finishTurn();
@@ -155,7 +171,7 @@ export async function start({
     },
   });
 
-  client.onCommands((commands) => {
+  client.onCommands((commands: Record<string, string>) => {
     chat.setCommands(commands);
   });
 
@@ -181,7 +197,16 @@ export async function start({
     chat.setDisabled(true);
     stream = chat.stream('Greg');
 
-    void client
+    const activeClient = client;
+    if (activeClient === null) {
+      chat.addMessage('TUI client is not ready yet.', 'System');
+      chat.setDisabled(false);
+      stream?.close();
+      stream = null;
+      return;
+    }
+
+    void activeClient
       .prompt(`${message}\n\n[Sent from the TUI]`)
       .then(() => {
         stream?.close();
@@ -229,7 +254,7 @@ export async function start({
       return;
     }
 
-    const voiceId = config?.voice?.elevenlabs?.voiceId;
+    const voiceId = config.voice?.elevenlabs?.voiceId;
     if (!voiceId) {
       chat.addMessage(
         'Voice playback is unavailable. Set voice.elevenlabs.voiceId in your config.',
@@ -256,19 +281,28 @@ export async function start({
       chat.hideSpinner();
     }
   }
-}
 
-function getCurrentGitBranch(): string | undefined {
-  const branchResult = spawnSync('git', ['branch', '--show-current'], {
-    cwd: process.cwd(),
-    stdio: 'pipe',
-    encoding: 'utf-8',
-  });
+  function helpMessage(): string {
+    const memoryInfo = getMemoryInfo(config);
+    return `
+    Usage Legend:
+      ↑ fresh input tokens
+      ↓ output tokens
+      R cached tokens reused
+      W cached tokens written
+      $ cost of last assistant turn
+      Σ$ cumulative session cost
+      W% model context window used
+      C% compaction threshold used
 
-  if (branchResult.status !== 0) {
-    return undefined;
+    Session location:
+      ~/.greg/workspace/sessions/${sessionId}.jsonl
+
+    Memory files:
+${memoryInfo.map((info) => `      ${info.location.replace(process.env.HOME ?? '', '~')} ${info.injected ? '(injected)' : ''}`).join('\n')}
+
+    Loaded skills:
+${skills.map((skill) => `      ${skill.location.replace(process.env.HOME ?? '', '~')}`).join('\n')}
+    `;
   }
-
-  const branch = branchResult.stdout.trim();
-  return branch === '' ? undefined : branch;
 }

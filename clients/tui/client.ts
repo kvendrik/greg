@@ -12,15 +12,18 @@ import pc from 'picocolors';
 
 // void c.prompt('Hello, world!');
 
+export interface Client {
+  prompt: (content: string) => Promise<void>;
+  onCommands: (callback: (commands: Record<string, string>) => void) => void;
+  usage: gateway.Session['usage'];
+}
+
 export async function client(
   sessionId: string,
   callbacks: gateway.Callbacks & {
     getReply?: (message: string) => Promise<string>;
   }
-): Promise<{
-  prompt: (content: string) => Promise<void>;
-  onCommands: (callback: (commands: Record<string, string>) => void) => void;
-}> {
+): Promise<Client> {
   let onCommands: ((commands: Record<string, string>) => void) | null = null;
 
   const { setGetReply } = await gateway.start();
@@ -47,6 +50,9 @@ export async function client(
   }
 
   return {
+    get usage() {
+      return session.usage;
+    },
     onCommands: (callback: (commands: Record<string, string>) => void) => {
       onCommands = callback;
     },

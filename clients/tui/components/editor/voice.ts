@@ -1,100 +1,19 @@
 import {
   Box,
-  Editor,
   Text,
   SelectList,
   type Component,
   type TUI,
-  CombinedAutocompleteProvider,
   Spacer,
 } from '@mariozechner/pi-tui';
-import { get as getConfig } from '../../../config';
-import { listCommands } from '../../../agent/commands';
+import { get as getConfig } from '../../../../config';
 import {
   listAvFoundationDevices,
   type AvFoundationDevice,
   realtimeTranscribeFromMic,
-} from '../../../voice/av';
+} from '../../../../voice/av';
 import pc from 'picocolors';
-
-const config = await getConfig();
-const globalCommands = listCommands(config).map((command) =>
-  command.replace('/', '')
-);
-
-interface Tools {
-  render: (width: number) => string[];
-  onSubmit: (callback: (text: string) => void) => void;
-  setDisabled: (disabled: boolean) => void;
-  handleInput: (input: string) => void;
-  setCommands: (commands: Record<string, string>) => void;
-}
-
-const selectListTheme = {
-  selectedPrefix: (text: string) => pc.bold(text),
-  selectedText: (text: string) => pc.bold(pc.blue(text)),
-  description: (text: string) => pc.dim(text),
-  scrollInfo: (text: string) => pc.gray(text),
-  noMatch: (text: string) => pc.yellow(text),
-};
-
-export function editor(tui: TUI, { voiceMode }: { voiceMode: boolean }): Tools {
-  return voiceMode ? createVoiceEditor(tui) : createTextEditor(tui);
-}
-
-function createTextEditor(tui: TUI): Tools {
-  const editor = new Editor(
-    tui,
-    {
-      borderColor: (text) => pc.dim(text),
-      selectList: selectListTheme,
-    },
-    {
-      paddingX: 1,
-    }
-  );
-
-  editor.setAutocompleteProvider(
-    new CombinedAutocompleteProvider(
-      globalCommands.map((command) => ({
-        name: command,
-        description: '',
-      })),
-      process.env.PWD
-    )
-  );
-
-  return {
-    render: (width) => {
-      return editor.render(width);
-    },
-    onSubmit(callback) {
-      editor.onSubmit = (text) => {
-        editor.addToHistory(text);
-        callback(text);
-        tui.requestRender();
-      };
-    },
-    handleInput(input) {
-      editor.handleInput(input);
-    },
-    setDisabled(disabled: boolean) {
-      editor.disableSubmit = disabled;
-    },
-    setCommands(cmds: Record<string, string>) {
-      const prov = new CombinedAutocompleteProvider(
-        Object.entries(cmds).map(([name, description]) => ({
-          name,
-          description,
-        })),
-        process.cwd()
-      );
-      editor.setAutocompleteProvider(prov);
-      editor.setText('');
-      editor.handleInput('/');
-    },
-  };
-}
+import type { Tools } from './index';
 
 type VoiceEditorState =
   | {
@@ -118,7 +37,17 @@ type VoiceEditorState =
       message: string;
     };
 
-function createVoiceEditor(tui: TUI): Tools {
+const config = await getConfig();
+
+const selectListTheme = {
+  selectedPrefix: (text: string) => pc.bold(text),
+  selectedText: (text: string) => pc.bold(pc.blue(text)),
+  description: (text: string) => pc.dim(text),
+  scrollInfo: (text: string) => pc.gray(text),
+  noMatch: (text: string) => pc.yellow(text),
+};
+
+export function createVoiceEditor(tui: TUI): Tools {
   let disabled = false;
   let isRecording = false;
   let deviceSelectList: SelectList | undefined = undefined;

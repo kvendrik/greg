@@ -29,6 +29,15 @@ function getIdentityPath(config: AgentConfig): string {
   return join(getWorkspacePath(config), 'IDENTITY.md');
 }
 
+export const getInfo = (
+  config: AgentConfig
+): { location: string; injected: boolean }[] => [
+  { location: getNotesPath(config), injected: false },
+  { location: getSessionsPath(config), injected: false },
+  { location: getUserPath(config), injected: true },
+  { location: getIdentityPath(config), injected: true },
+];
+
 function createNotesQmd(config: AgentConfig): QMD {
   return new QMD({
     collectionName: `${config.id}-notes`,

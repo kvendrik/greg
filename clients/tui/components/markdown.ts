@@ -28,13 +28,12 @@ export const markdownTheme: MarkdownTheme = {
 
 export const markdown = (options: {
   content: string;
-  width: number;
   paddingX: number;
   paddingY: number;
-}): string[] =>
+}): Markdown =>
   new Markdown(
     options.content,
     options.paddingX,
     options.paddingY,
     markdownTheme
-  ).render(options.width);
+  );

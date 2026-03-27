@@ -1,10 +1,11 @@
 import {
   Agent as CoreAgent,
   type AgentMessage,
+  type AgentTool,
   type ThinkingLevel,
 } from '@mariozechner/pi-agent-core';
 import type { Model, Api, ImageContent } from '@mariozechner/pi-ai';
-import { compactContext, deriveContextTokens } from './compaction';
+import { compact, usage as getContextUsage } from './context';
 import { listCommands, parseCommands } from './commands';
 import { get as getTools } from './tools';
 import { formatDate, getWorkspacePath } from './utilities';
@@ -35,10 +36,17 @@ type Image = {
 
 export type PromptInput = { content: string; images: Image[] };
 
-export interface AgentOptions extends ToolContext {
+export interface CreateOptions extends ToolContext {
   messages: AgentMessage[];
   onCompact?: (newMessages: AgentMessage[]) => Promise<void>;
   getSystemPrompt?: (toolInstructions: string, config: AgentConfig) => string;
+}
+
+interface AgentOptions {
+  tools: AgentTool[];
+  systemPrompt: string;
+  messages: AgentMessage[];
+  onCompact: CreateOptions['onCompact'];
 }
 
 export class Agent {
@@ -50,14 +58,55 @@ export class Agent {
 
   private abortController: AbortController | null = null;
 
-  private constructor(core: CoreAgent, config: AgentConfig) {
-    this.core = core;
+  private constructor(
+    { tools, systemPrompt, messages, onCompact }: AgentOptions,
+    config: AgentConfig
+  ) {
     const primaryEntry = config.models.find(
       (model) => model.role === 'primary'
     );
+
     if (!primaryEntry) {
       throw new Error('No primary model in config.models.');
     }
+
+    const primaryModel = primaryEntry.model;
+    const core = new CoreAgent({
+      initialState: {
+        systemPrompt,
+        model: primaryModel,
+        thinkingLevel: 'medium',
+        tools,
+        messages,
+      },
+      getApiKey(provider) {
+        const key =
+          config.models.find((model) => model.model.provider === provider)
+            ?.key ?? null;
+        if (!key) {
+          throw new Error(
+            `No API key found for provider "${provider}" in config.models.`
+          );
+        }
+        return key;
+      },
+      transformContext: async (messages, signal) => {
+        const { messages: newMessages, didCompact } = await compact(
+          messages,
+          signal,
+          config
+        );
+
+        if (didCompact) {
+          core.replaceMessages(newMessages);
+          await onCompact?.(newMessages);
+        }
+
+        return newMessages;
+      },
+    });
+
+    this.core = core;
     this.core.setModel(primaryEntry.model);
     this.primaryModel = primaryEntry.model;
     this.config = config;
@@ -66,6 +115,13 @@ export class Agent {
 
   get state(): CoreAgent['state'] {
     return this.core.state;
+  }
+
+  get usage(): ReturnType<typeof getContextUsage> & { messages: number } {
+    return {
+      ...getContextUsage(this.core.state.messages),
+      messages: this.core.state.messages.length,
+    };
   }
 
   get working(): boolean {
@@ -226,13 +282,8 @@ export class Agent {
     if (parsed.result.statusRequested) {
       let contextLine: string;
       try {
-        const contextTokens = deriveContextTokens(this.core.state.messages);
-        const contextWindow = model.contextWindow;
-        const percentage =
-          contextWindow > 0
-            ? Math.min(100, (contextTokens / contextWindow) * 100).toFixed(1)
-            : '0.0';
-        contextLine = `📊  ${contextTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tokens (${percentage}%) (${this.core.state.messages.length} messages)`;
+        const currentUsage = this.usage;
+        contextLine = `📊  ${currentUsage.tokens.used.toLocaleString()} / ${currentUsage.tokens.window.toLocaleString()} tokens (${currentUsage.tokens.percentageWindow.toFixed(1)}%) (${currentUsage.messages} messages)`;
       } catch {
         contextLine = '📊  Tokens: unknown';
       }
@@ -401,7 +452,9 @@ export class Agent {
 
           await this.core.continue();
         } else {
-          callbacks.onError?.(this.core.state.error);
+          callbacks.onError?.(
+            attemptFormatProviderError(this.core.state.error)
+          );
         }
       }
     } catch (err) {
@@ -435,10 +488,10 @@ export class Agent {
     messages,
     onCompact,
     getSystemPrompt = getDefaultSystemPrompt,
-  }: AgentOptions): Promise<Agent> {
+  }: CreateOptions): Promise<Agent> {
     const logger = createLogger(`agent/${config.id}`);
-    const conversationStartIso = new Date().toISOString();
     const agentHolder: { current: Agent | null } = { current: null };
+    const conversationStartIso = new Date().toISOString();
     const tools = await getTools(conversationStartIso, {
       config,
       onBackgroundUpdate: (update) => {
@@ -461,55 +514,23 @@ export class Agent {
       },
     });
 
-    const primaryEntry = config.models.find(
-      (model) => model.role === 'primary'
-    );
-    if (!primaryEntry) {
-      throw new Error('No primary model in config.models.');
-    }
-    const primaryModel = primaryEntry.model;
-
     const systemPrompt = getSystemPrompt(tools.instructions, config);
 
-    const core = new CoreAgent({
-      initialState: {
-        systemPrompt,
-        model: primaryModel,
-        thinkingLevel: 'medium',
-        tools: tools.tools,
-        messages,
-      },
-      getApiKey(provider) {
-        const key =
-          config.models.find((model) => model.model.provider === provider)
-            ?.key ?? null;
-        if (!key) {
-          throw new Error(
-            `No API key found for provider "${provider}" in config.models.`
-          );
-        }
-        return key;
-      },
-      transformContext: async (messages, signal) => {
-        const { messages: newMessages, didCompact } = await compactContext(
-          messages,
-          signal,
-          config
-        );
+    const agent = new Agent(
+      { tools: tools.tools, systemPrompt, messages, onCompact },
+      config
+    );
 
-        if (didCompact) {
-          core.replaceMessages(newMessages);
-          await onCompact?.(newMessages);
-        }
-
-        return newMessages;
-      },
-    });
-
-    const agent = new Agent(core, config);
     agentHolder.current = agent;
     return agent;
   }
+}
+
+function attemptFormatProviderError(error: string): string {
+  if (error.includes('credit')) {
+    return "😬 Looks like you're out of credits.\n\n" + error;
+  }
+  return error;
 }
 
 function getDefaultSystemPrompt(

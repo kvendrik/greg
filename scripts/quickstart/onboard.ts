@@ -9,13 +9,7 @@ const firstChatPrompt =
 export function onboard(): void {
   spawnSync(
     'bun',
-    [
-      'run',
-      path.join(projectRoot, 'bin/greg.ts'),
-      'tui',
-      '-p',
-      firstChatPrompt,
-    ],
+    ['run', path.join(projectRoot, 'bin/greg.ts'), 'tui', firstChatPrompt],
     {
       stdio: 'inherit',
       cwd: projectRoot,
