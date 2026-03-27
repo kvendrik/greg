@@ -200,6 +200,12 @@ The TUI can also be used to work with Greg through your command-line:
 cat ~/path/to/some/file.md | greg tui "Summarize this file"
 ```
 
+To only print Greg's response without launching the TUI, use print mode:
+
+```bash
+cat ~/path/to/some/file.md | greg tui -p "Summarize this file"
+```
+
 ### Telegram
 
 Greg comes with a Telegram integration which starts automatically when you run `greg gateway start`. It uses the Telegram bot configured in your `~/.greg/config.ts` file.
