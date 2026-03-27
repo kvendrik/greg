@@ -54,6 +54,7 @@ export const chat = (tui: TUI): Tools => {
     }
     loader.setMessage(message);
     showSpinner = true;
+    tui.requestRender();
   };
 
   const stopSpinner = (): void => {
@@ -62,12 +63,13 @@ export const chat = (tui: TUI): Tools => {
       isSpinnerRunning = false;
     }
     showSpinner = false;
+    tui.requestRender();
   };
 
   editor.onSubmit((text) => {
     messages.push({ role: 'You', content: text });
-    onSubmit(text);
     startSpinner('Thinking...');
+    onSubmit(text);
   });
 
   return {

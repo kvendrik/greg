@@ -17,27 +17,42 @@ function hasUsage(msg: AgentMessage): msg is MessageWithUsage {
   );
 }
 
+function getContextTokensFromUsage(usage: Usage): number {
+  return usage.input + usage.cacheRead + usage.cacheWrite;
+}
+
 /**
  * Context size in tokens based solely on provider‑reported usage.
  *
- * We take the last assistant message that has a `usage` field and interpret
- * its context size as:
+ * We take the latest assistant message with a non-zero `usage` field and
+ * interpret its context size as:
  *
  *   input tokens + cache read tokens + cache write tokens
  *
  * This matches the tokens the provider actually saw as prompt/cache at the
- * time of that call. Messages after that point are *not* estimated.
+ * time of that call. Messages after that point are *not* estimated. Zero-token
+ * error turns are skipped so status reflects the last meaningful context size.
  */
 export function deriveContextTokens(messages: AgentMessage[]): number {
   if (messages.filter(({ role }) => role === 'assistant').length === 0) {
     return 0;
   }
 
+  let sawAssistantUsage = false;
+
   for (let i = messages.length - 1; i >= 0; i--) {
     if (hasUsage(messages[i])) {
+      sawAssistantUsage = true;
       const u = (messages[i] as { usage: Usage }).usage;
-      return u.input + u.cacheRead + u.cacheWrite;
+      const contextTokens = getContextTokensFromUsage(u);
+      if (contextTokens > 0) {
+        return contextTokens;
+      }
     }
+  }
+
+  if (sawAssistantUsage) {
+    return 0;
   }
 
   throw new Error(

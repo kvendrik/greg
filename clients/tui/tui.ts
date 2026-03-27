@@ -1,10 +1,13 @@
 import { spawnSync } from 'node:child_process';
+import type { Model, Api } from '@mariozechner/pi-ai';
+import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
 import pc from 'picocolors';
 import { tui as createTui } from './components/tui';
 import { chat as createChat, type Stream } from './components/chat';
 //import { overlay as createOverlay } from './components/overlay';
 import { client as createClient } from './client';
 import { markdown } from './components/markdown';
+import { version } from '../../package.json';
 import {
   validate as validateConfig,
   get as getConfig,
@@ -21,6 +24,9 @@ const currentGitBranch = getCurrentGitBranch();
 
 let config: Config | null = null;
 
+let thinkingLevel: ThinkingLevel = 'medium';
+let model: Model<Api> | null = null;
+
 let loadingMessage: string | null = null;
 const setLoadingMessage = (message: string | null): void => {
   loadingMessage = message;
@@ -35,12 +41,12 @@ let stream: Stream | null = null;
 
 const footer = (width: number): string => {
   const currentWorkingDirectory = process.env.PWD ?? process.cwd();
-  const branchSuffix = currentGitBranch ? ` (${currentGitBranch})` : '';
+  const branchSuffix = currentGitBranch ? ` @ ${currentGitBranch}` : '';
   const left =
     currentWorkingDirectory.replace(process.env.HOME ?? '', '~') + branchSuffix;
   const primaryModel =
     config?.models.find((m) => m.role === 'primary')?.model ?? null;
-  const right = `${SESSION_ID} • ${primaryModel?.name.toLowerCase() ?? ''}`;
+  const right = `${SESSION_ID} • ${model?.name.toLowerCase() ?? primaryModel?.name.toLowerCase() ?? ''} • thinking: ${thinkingLevel}`;
   return `${pc.dim(left)}${' '.repeat(Math.max(1, width - left.length - right.length))}${pc.dim(right)}`;
 };
 
@@ -60,7 +66,7 @@ const app = {
 
     const renderedLines = [
       ...markdown({
-        content: '# 🤖 Greg',
+        content: `${pc.bold(pc.blue('🤖 Greg'))} ${pc.dim(`v${version}`)}`,
         width,
         paddingX: 1,
         paddingY: 1,
@@ -130,6 +136,14 @@ const client = await createClient(SESSION_ID, {
         captureMessage = null;
       };
     });
+  },
+  onThinkingLevelChange(level) {
+    thinkingLevel = level;
+    tui.requestRender();
+  },
+  onModelChange(newModel) {
+    model = newModel;
+    tui.requestRender();
   },
 });
 

@@ -48,11 +48,7 @@ export class Agent {
   private readonly callbacks = new Map<string, Callbacks[]>();
   private readonly primaryModel: Model<Api>;
 
-  private model: Model<Api>;
-  private thinkingLevel: ThinkingLevel = 'medium';
-
   private abortController: AbortController | null = null;
-  private lastModel: Model<Api> | null = null;
 
   private constructor(core: CoreAgent, config: AgentConfig) {
     this.core = core;
@@ -62,10 +58,14 @@ export class Agent {
     if (!primaryEntry) {
       throw new Error('No primary model in config.models.');
     }
-    this.model = primaryEntry.model;
+    this.core.setModel(primaryEntry.model);
     this.primaryModel = primaryEntry.model;
     this.config = config;
     this.logger = createLogger(`agent/${config.id}`);
+  }
+
+  get state(): CoreAgent['state'] {
+    return this.core.state;
   }
 
   get working(): boolean {
@@ -132,6 +132,16 @@ export class Agent {
         channelCallbacks.forEach((callback) => callback.onError?.(error));
         extraCallbacks?.onError?.(error);
       },
+      onModelChange: (model: Model<Api>) => {
+        channelCallbacks.forEach((callback) => callback.onModelChange?.(model));
+        extraCallbacks?.onModelChange?.(model);
+      },
+      onThinkingLevelChange: (thinkingLevel: ThinkingLevel) => {
+        channelCallbacks.forEach((callback) =>
+          callback.onThinkingLevelChange?.(thinkingLevel)
+        );
+        extraCallbacks?.onThinkingLevelChange?.(thinkingLevel);
+      },
     };
   }
 
@@ -193,45 +203,46 @@ export class Agent {
       return;
     }
 
-    const model = parsed.result.model ?? this.model;
-    const thinkingLevel = parsed.result.thinkingLevel ?? this.thinkingLevel;
+    const model = parsed.result.model ?? this.core.state.model;
+    const thinkingLevel =
+      parsed.result.thinkingLevel ?? this.core.state.thinkingLevel;
 
-    if (model !== this.model) {
-      this.model = model;
+    if (model !== this.core.state.model) {
+      this.core.setModel(model);
       callbacks.onModelChange?.(model);
+      callbacks.onContent?.(`Model changed to ${model.name}.`);
+      callbacks.onTurnDone?.();
+      return;
     }
 
-    if (thinkingLevel !== this.thinkingLevel) {
-      this.thinkingLevel = thinkingLevel;
+    if (thinkingLevel !== this.core.state.thinkingLevel) {
+      this.core.setThinkingLevel(thinkingLevel);
       callbacks.onThinkingLevelChange?.(thinkingLevel);
+      callbacks.onContent?.(`Thinking level changed to ${thinkingLevel}.`);
+      callbacks.onTurnDone?.();
+      return;
     }
 
     if (parsed.result.statusRequested) {
       let contextLine: string;
       try {
         const contextTokens = deriveContextTokens(this.core.state.messages);
-        const contextWindow = this.lastModel?.contextWindow ?? 0;
+        const contextWindow = model.contextWindow;
         const percentage =
           contextWindow > 0
             ? Math.min(100, (contextTokens / contextWindow) * 100).toFixed(1)
             : '0.0';
-        contextLine = `📊 ${contextTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tokens (${percentage}%)`;
+        contextLine = `📊  ${contextTokens.toLocaleString()} / ${contextWindow.toLocaleString()} tokens (${percentage}%) (${this.core.state.messages.length} messages)`;
       } catch {
-        contextLine = '📊 Tokens: unknown';
+        contextLine = '📊  Tokens: unknown';
       }
       callbacks.onContent?.(
         [
-          'Status:',
-          `🧠 Model: ${this.lastModel ? this.lastModel.name : 'nothing sent yet'}`,
-          `💭 Thinking: ${this.thinkingLevel}`,
+          `🧠  Model: ${model.name}`,
+          `💭  Thinking: ${thinkingLevel}`,
           contextLine,
-          `🕵️‍♂️ Busy: ${this.abortController ? 'Yes (send /stop to stop)' : 'No. Ready for a new task.'}`,
-          `\nOptions given for this prompt:`,
-          `- Model: ${this.model.name}`,
-          `- Thinking: ${this.thinkingLevel}`,
-        ]
-          .filter(Boolean)
-          .join('\n')
+          `🕵️‍♂️   Busy: ${this.abortController ? 'Yes (send /stop to stop)' : 'No. Ready for a new task.'}`,
+        ].join('\n')
       );
       callbacks.onTurnDone?.();
       return;
@@ -277,9 +288,10 @@ export class Agent {
       { once: true }
     );
 
-    this.core.setModel(this.model);
-    this.lastModel = this.model;
-    this.core.setThinkingLevel(this.thinkingLevel);
+    if (parsed.cleanPrompt.trim() === '') {
+      callbacks.onTurnDone?.();
+      return;
+    }
 
     const nowIso = new Date().toISOString();
     const messageWithMeta = `Date and time is ${formatDate(
@@ -369,12 +381,18 @@ export class Agent {
               ?.model ?? null;
 
           if (!fallbackModel) {
-            callbacks.onError?.(this.core.state.error);
+            callbacks.onError?.(
+              `${modelLabel} is overloaded. No fallback model configured.`
+            );
             this.logger.warn('No fallback model found in config.models.');
             return;
           }
 
           this.logger.warn(
+            `${modelLabel} is overloaded. Trying again with ${fallbackModel.name}.`
+          );
+
+          callbacks.onError?.(
             `${modelLabel} is overloaded. Trying again with ${fallbackModel.name}.`
           );
 
