@@ -15,7 +15,7 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ fewer
 - 🤖🤖🤖 **Subagents**. Greg can spawn subagents who complete tasks in the background. Subagents can use different models, system prompts, and access than Greg.
 - 🚏 **Supports Most Popular Models**. Greg uses [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) and therefore supports most popular models. He ships with a fallback system that allows you to configure what model should be used in case your preferred model isn't available. You can also define additional models and invoke them for whatever prompt you want using `/` commands.
 - 💂 **Guarding**. If Greg tries to run tools or commands that you've not pre-approved a separate system will ask for your permission first.
-- 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of sending voice messages by transcribing his responses using [ElevenLabs](https://elevenlabs.io/). This does require a ElevenLabs API key. See "Voice Messages" below for more info.
+- 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of sending voice messages by transcribing his responses using [ElevenLabs](https://elevenlabs.io/). This does require an ElevenLabs API key. See "Voice Messages" below for more info.
 - 📱💾 **Telegram & TUI Clients**. Greg comes with a Telegram client to communicate with Greg on the go, and a TUI based on [`pi-coding-agent`](https://shittycodingagent.ai/) for when you're at your computer. Both have voice features. On Telegram you can send voice messages back and forth, and the TUI features a voice mode.
 
 ## Setup
@@ -178,7 +178,7 @@ export default config;
 greg doctor
 ```
 
-4. If all is good start the gateway!
+4. If all is good, start the gateway!
 
 ```bash
 greg gateway start
@@ -190,7 +190,7 @@ You should see logs that indicate that both the gateway and the Telegram service
 
 ### TUI
 
-Greg comes with a TUI based on [`pi-coding-agent`](https://shittycodingagent.ai/), that's available through running: `greg tui`.
+Greg comes with a TUI based on [`pi-coding-agent`](https://shittycodingagent.ai/), available by running `greg tui`.
 
 ![TUI Screenshot](/assets/tui.png)
 
@@ -202,7 +202,9 @@ cat ~/path/to/some/file.md | greg tui "Summarize this file"
 
 ### Telegram
 
-Greg comes with a Telegram integration which starts automatically when you run `greg gateway start`. It uses the Telegram bot configured in your `~/.greg/config.ts` file. The `greg telegram` command that lets both you and Greg send text and voice messages.
+Greg comes with a Telegram integration which starts automatically when you run `greg gateway start`. It uses the Telegram bot configured in your `~/.greg/config.ts` file.
+
+The `greg telegram` command is available independently and lets both you and Greg send text and voice messages to the configured Telegram bot.
 
 ### Custom
 
@@ -291,7 +293,7 @@ Subagents have their own workspace with persistent session storage, their own sy
 
 Spawning subagents allows you to do some fun things. I've used it to spawn agents for specialized tasks like doing research, to give me my morning update (it takes a while to fetch and compose all the data), or to debate topics by spawning a [council of agents](skills/agent-council/SKILL.md).
 
-To try it out just ask Greg to spawn a new agent to for example do research online. Greg will create a new agent for the task you've laid out and give them a human-like name. When you're done the agent data will persist and you can ask Greg at any time to talk to the agent to pick up a new task.
+To try it out, just ask Greg to spawn a new agent to, for example, do research online. Greg will create a new agent for the task you've laid out and give them a human-like name. When you're done, the agent data will persist and you can ask Greg at any time to talk to the agent to pick up a new task.
 
 You can also manage your subagents through Greg’s tools CLI, which allows you to directly call tools from the command line:
 
@@ -314,7 +316,7 @@ Greg can send you voice messages through his Telegram integration:
 greg telegram send "Hey! How are you?" --voice
 ```
 
-For this to work you do need to set a [ElevenLabs](https://elevenlabs.io/) API key and voice ID in your config. We use ElevenLabs v3 for this. Greg has a voice messaging skill that tells him how to use [Audio Tags](https://elevenlabs.io/blog/v3-audiotags). It produces some of the best computer-generated audio I've heard.
+For this to work, you do need to set an [ElevenLabs](https://elevenlabs.io/) API key and voice ID in your config. We use ElevenLabs v3 for this. Greg has a voice messaging skill that tells him how to use [Audio Tags](https://elevenlabs.io/blog/v3-audiotags). It produces some of the best computer-generated audio I've heard.
 
 ```ts
 const config = {
@@ -341,11 +343,11 @@ const config = {
 
 ## 📦 Hub
 
-Greg ships with a couple of CLI's that I couldn't find good versions of elsewhere. These are available through the `greg hub` command.
+Greg ships with a couple of CLIs that I couldn't find good versions of elsewhere. These are available through the `greg hub` command.
 
-He already knows how to use them as all `hub/*/AGENT.md` files are loaded as skills by default. `greg doctor` will warn you if any of the CLIs doesn't have its dependencies installed. Greg might try to use one of the CLI's, discover he can’t because he's missing dependencies, and ask you about it.
+He already knows how to use them as all `hub/*/AGENT.md` files are loaded as skills by default. `greg doctor` will warn you if any of the CLIs don't have their dependencies installed. Greg might try to use one of the CLIs, discover he can’t because dependencies are missing, and ask you about it.
 
-CLI's in the Hub:
+CLIs in the Hub:
 
 - `greg hub notion` provides a read-only CLI for Notion for Greg to use
 - `greg hub strava` provides a read-only CLI for Strava for Greg to use
@@ -358,7 +360,7 @@ Greg comes with a guard that’s enabled by default. You can turn it off by sett
 
 When enabled, the first thing it does is run all `exec` calls inside a sandbox. The sandbox only allows file reads and networking, nothing else. This ensures the LLM always uses the dedicated file tools to modify files. Those tools ensure file writes are only allowed inside Greg's workspace and the `/tmp` folder.
 
-It will also block any risky tool call (exec, any file writes, and web fetch). When it does it will ask you for permission to run the tool call on Telegram or through the TUI (depending on if you started through `greg tui` or `greg gateway start`):
+It will also block any risky tool call (exec, any file writes, and web fetch). When it does, it will ask you for permission to run the tool call on Telegram or through the TUI (depending on if you started through `greg tui` or `greg gateway start`):
 
 ````md
 💂 Greg is asking to run a tool:
@@ -450,6 +452,6 @@ const config: Config = {
 };
 ```
 
-The purpose of the Guard is to reduce the risk Greg does something you don't want due to misunderstanding or confusion, and exfiltration risk (attackers transfering data without your permission). Next to using the Guard it's important to use a reliable LLM provider and frontier model when using Greg. Providers like Anthropic both run classifiers on incoming data and train their frontier models on prompt injection techniques. Using the newest models helps reduce the risk of prompt injection, and being careful with what you allow Greg to do through the Guard prevents the risk of what could happen in case prompt injection does happen.
+The purpose of the Guard is to reduce the risk Greg does something you don't want due to misunderstanding or confusion, and exfiltration risk (attackers transferring data without your permission). Next to using the Guard it's important to use a reliable LLM provider and frontier model when using Greg. Providers like Anthropic both run classifiers on incoming data and train their frontier models on prompt injection techniques. Using the newest models helps reduce the risk of prompt injection, and being careful with what you allow Greg to do through the Guard prevents the risk of what could happen in case prompt injection does happen.
 
 If you're concerned about privacy and want to use a local model you can configure a [custom model](https://github.com/badlogic/pi-mono/tree/main/packages/ai#custom-models). Be extra careful when you do this because local models don't have the same protection the large providers and frontier models offer.
