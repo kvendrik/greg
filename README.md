@@ -5,18 +5,19 @@ An [OpenClaw](https://openclaw.ai/)-like personal assistant but with _way_ fewer
 ## Features
 
 - 🧠 **Memory**. Greg remembers facts you tell him about yourself as well as conversation notes to Markdown files in your workspace.
-- 🌍 **Web Search & Fetching**. Greg is capable of searching the web using Google Search Grounding. He can then also fetch websites automatically to answer questions.
+- 🌍 **Web Search & Fetching**. Greg is capable of searching the web for answers. He then fetches websites automatically to answer questions.
 - 🌍 **Browser Automation**. When a simple fetch isn't enough, Greg is also capable of controlling your Chrome browser and can therefore do anything online you can do.
 - 👨‍💻 **Command-line Access**. Greg has access to your command line and can therefore do most of the things you do on your computer.
-- 🔨 **Skills**. Greg learns on his own. If he has trouble figuring something out, help him, and then simply say "What have you learned? Write a skill for yourself so you know this next time". He'll create a skill for himself so that in the future he won't struggle.
+- 🔨 **Skills**. Greg learns on his own. When he learns something new he'll create a new skill for himself so that in the future he won't struggle.
 - 💾 **Session Persistence**. Greg persists sessions as JSONL files in your workspace. This way he won't lose context between restarts.
 - 📦 **Auto-Compaction**. When a session reaches 80% of its maximum context window Greg summarizes it and compacts his context. This ensures you can keep talking forever.
 - ❤️ **Heartbeat**. Greg comes with an OpenClaw-style heartbeat. Every X minutes he goes over a `HEARTBEAT.md` file and can send you updates. (`off` by default)
 - 🤖🤖🤖 **Subagents**. Greg can spawn subagents who complete tasks in the background. Subagents can use different models, system prompts, and access than Greg.
-- 🚏 **Supports Most Popular Models**. Greg uses [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) and therefore supports most popular models. He ships with a fallback system that allows you to configure what model should be used in case your preferred model isn't available. You can also define additional models and invoke them for whatever prompt you want using `/` commands.
+- 🚏 **Supports Most Popular Models**. Greg uses [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) and therefore supports most popular models. He ships with a fallback system that allows you to configure what model should be used in case your preferred model isn't available. You can also define additional models and switch between them whenever you want using `/` commands.
 - 💂 **Guarding**. If Greg tries to run tools or commands that you've not pre-approved a separate system will ask for your permission first.
-- 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of sending voice messages by transcribing his responses using [ElevenLabs](https://elevenlabs.io/). This does require an ElevenLabs API key. See "Voice Messages" below for more info.
-- 📱💾 **Telegram & TUI Clients**. Greg comes with a Telegram client to communicate with Greg on the go, and a TUI based on [`pi`](https://shittycodingagent.ai/) for when you're at your computer. Both have voice features. On Telegram you can send voice messages back and forth, and the TUI features a voice mode.
+- 🗣️ **Voice Messages**. Greg ships with a Telegram integration that is capable of both receiving and sending voice messages.
+- 🎙️ **Voice Mode**. Greg comes with a TUI that allows you to speak to Greg without having to touch your keyboard.
+- 📱💾 **Telegram & TUI Clients**. Talk to Greg how you like. He comes with a Telegram integration, a [`pi`](https://shittycodingagent.ai/)-like TUI, and an easy-to-use SDK to create custom clients.
 
 ## Setup
 
@@ -195,6 +196,16 @@ Greg comes with a TUI based on [`pi`](https://shittycodingagent.ai/), available 
 The TUI is a good way to get started because it helps you get familiar with how Greg works. Just like [`pi`](https://shittycodingagent.ai/), Greg's TUI shows you exactly what goes in and comes out. This gives you great insight into how Greg works. In contrast, the Telegram client doesn't show what context gets injected into the system prompt, token usage and cost (unless you ask with the `/status` command), or tool call results. The TUI is meant to help you really monitor what Greg is doing, while the Telegram client is designed to be more conversational and therefore abstracts away details you might not care about when you're on the go.
 
 ![TUI Screenshot](/assets/tui.png)
+
+#### Voice mode
+
+The TUI comes with a voice mode that allows you to talk to Greg without touching your keyboard. It requires an [ElevenLabs](https://elevenlabs.io/) API key and voice ID (see "Voice Messages" below). I'd recommend using it at least once, as talking to your personal agent and having Greg talk back is quite magical:
+
+```bash
+greg tui --voice
+```
+
+#### Print mode
 
 The TUI can also be used to work with Greg through your command-line:
 
