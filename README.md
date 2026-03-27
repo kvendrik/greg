@@ -199,7 +199,7 @@ The TUI is a good way to get started because it helps you get familiar with how 
 
 #### Voice mode
 
-The TUI comes with a voice mode that allows you to talk to Greg without touching your keyboard. It requires an [ElevenLabs](https://elevenlabs.io/) API key and voice ID (see "Voice Messages" below). I'd recommend using it at least once, as talking to your personal agent and having Greg talk back is quite magical:
+The TUI comes with a voice mode that allows you to talk to Greg without touching your keyboard. It requires an [ElevenLabs](https://elevenlabs.io/) API key and voice ID (see "Voice Messages" below). I'd recommend using it at least once, as talking to your personal agent and having it talk back is quite magical:
 
 ```bash
 greg tui --voice
