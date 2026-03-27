@@ -194,8 +194,6 @@ Greg comes with a TUI based on [`pi-coding-agent`](https://shittycodingagent.ai/
 
 ![TUI Screenshot](/assets/tui.png)
 
-> Greg running in its TUI
-
 The TUI can also be used to work with Greg through your command-line:
 
 ```bash
