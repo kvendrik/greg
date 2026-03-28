@@ -17,19 +17,29 @@ Anthropic's Claude Code uses the same shape: compressed context + the N most rec
 import { compact } from './context';
 import { usage } from './context';
 
-// --- compact() ---
-const { messages: newMessages, didCompact, reason } = await compact(messages, {
-  model,           // { model: Model<Api>, key: string }
-  signal,          // optional AbortSignal
-  instructions,    // optional string passed to the summarizer
-  force: false,    // true bypasses threshold checks (used by /compact)
+const {
+  messages: newMessages,
+  didCompact,
+  reason,
+} = await compact(messages, {
+  model, // { model: Model<Api>, key: string }
+  signal, // optional AbortSignal
+  instructions, // optional string passed to the summarizer
+  force: false, // true bypasses threshold checks (used by /compact)
 });
 
-// --- usage() ---
 const ctx = usage(messages);
-ctx.tokens.used;            // current context tokens
-ctx.tokens.window;          // model context window
-ctx.tokens.limit;           // soft compaction threshold
+ctx.tokens.used; // current context tokens
+ctx.tokens.window; // model context window
+ctx.tokens.limit; // soft compaction threshold
 ctx.tokens.percentageLimit; // how full the soft limit is (0-100)
-ctx.cost.session.total;     // cumulative session cost in USD
+ctx.cost.session.total; // cumulative session cost in USD
 ```
+
+## Gaps
+
+- **Summary-on-summary drift** — repeated compactions re-summarize the prior `[Compaction summary]` as if it were a regular message, losing detail each pass. Detect existing summaries in the prefix and pass them as context for incremental update instead of re-summarization. Mirrors LangChain's `moving_summary_buffer` ([source](https://lagnchain.readthedocs.io/en/latest/modules/memory/types/summary_buffer.html)) and Anthropic's guidance to "maximize recall, then iterate to improve precision" ([source](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
+
+- **Strip tool results** - Anthropic recommends stripping old tool results as a lightweight first pass: "once a tool has been called deep in the message history, why would the agent need to see the raw result again?" ([source](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)). Clear raw results before summarizing to reduce noise fed to the summarizer.
+
+— **Use `@anthropic-ai/tokenizer`** - `chars / 4` can miscount for JSON tool output, non-Latin text, or base64 content. Assistant messages already carry real `usage.output` token counts from the API; use those and only fall back to the heuristic for user messages. For exact user-message counts, `@anthropic-ai/tokenizer` is an option. Low urgency since the heuristic only drives budget decisions, not hard limits.
