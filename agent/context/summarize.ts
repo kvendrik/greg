@@ -9,16 +9,18 @@ const SUMMARIZE_SYSTEM = `You are a summarizer. Given a conversation history, pr
 
 export const SUMMARY_PREFIX = '[Compaction summary]\n\n';
 
+export type Instructions = { content: string; strategy: 'replace' | 'append' };
+
 export async function summarize(
   messages: AgentMessage[],
   {
     model,
     signal,
-    instructions,
+    instructions: userInstructions,
   }: {
     model: { model: Model<Api>; key: string };
     signal: AbortSignal;
-    instructions?: string;
+    instructions?: Instructions;
   }
 ): Promise<AgentMessage[]> {
   logger.info(
@@ -26,13 +28,18 @@ export async function summarize(
   );
 
   const transcript = messagesToTranscript(messages);
+  let instructions = SUMMARIZE_SYSTEM;
+
+  if (userInstructions?.strategy === 'replace') {
+    instructions = userInstructions.content;
+  } else if (userInstructions?.strategy === 'append') {
+    instructions = `${instructions}\n\n${userInstructions.content}`;
+  }
 
   const response = await completeSimple(
     model.model,
     {
-      systemPrompt:
-        SUMMARIZE_SYSTEM +
-        (instructions ? `\n\nAdditional instructions: ${instructions}` : ''),
+      systemPrompt: instructions,
       messages: [
         {
           role: 'user',
@@ -100,4 +107,3 @@ function extractTextFromAssistantMessage(msg: {
     .map((b) => b.text)
     .join('');
 }
-

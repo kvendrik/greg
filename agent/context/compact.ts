@@ -6,7 +6,7 @@ import {
   getLatestAssistantUsage,
   usage,
 } from './usage';
-import { summarize } from './summarize';
+import { summarize, type Instructions } from './summarize';
 
 const logger = createLogger('Compact');
 
@@ -25,7 +25,7 @@ export interface CompactResult {
 interface CompactOptions {
   signal?: AbortSignal;
   model: { model: Model<Api>; key: string };
-  instructions?: string;
+  instructions?: Instructions;
   force?: boolean;
 }
 
@@ -43,7 +43,7 @@ export async function compact(
     throw new DOMException('Aborted', 'AbortError');
   }
 
-  const { reached, reason } = reachedLimit(messages, modelEntry.model);
+  const { reached, reason } = checkLimit(messages, modelEntry.model);
   logger.info(reason);
 
   if (!reached) {
@@ -178,7 +178,7 @@ export function split(
   }
 }
 
-export function reachedLimit(
+export function checkLimit(
   messages: AgentMessage[],
   model: Model<Api>
 ): { reached: boolean; reason: string } {
@@ -222,7 +222,7 @@ export function reachedLimit(
   }
 
   const reason = `Context ${currentTokens} tokens exceeded ${softLimit} soft limit`;
-  return { reached: false, reason };
+  return { reached: true, reason };
 }
 
 function estimateTokens(messages: AgentMessage[]): number {
