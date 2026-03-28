@@ -29,41 +29,6 @@ interface CompactOptions {
   force?: boolean;
 }
 
-export class Compact {
-  constructor(private model: { model: Model<Api>; key: string }) {}
-
-  checkLimit(messages: AgentMessage[]): {
-    reached: boolean;
-    reason: string;
-  } {
-    return reachedLimit(messages, this.model.model);
-  }
-
-  split(messages: AgentMessage[]): {
-    compact: AgentMessage[] | null;
-    preserve: AgentMessage[];
-  } {
-    return split(messages, this.model.model);
-  }
-
-  summarize(
-    messages: AgentMessage[],
-    {
-      signal,
-      instructions,
-    }: {
-      signal: AbortSignal;
-      instructions?: string;
-    }
-  ): Promise<AgentMessage[]> {
-    return summarize(messages, {
-      model: this.model,
-      signal,
-      instructions,
-    });
-  }
-}
-
 export async function compact(
   messages: AgentMessage[],
   { signal, model: modelEntry, instructions, force }: CompactOptions
@@ -111,7 +76,7 @@ export async function compact(
   }
 }
 
-function split(
+export function split(
   messages: AgentMessage[],
   model: Model<Api>
 ): {
@@ -213,7 +178,7 @@ function split(
   }
 }
 
-function reachedLimit(
+export function reachedLimit(
   messages: AgentMessage[],
   model: Model<Api>
 ): { reached: boolean; reason: string } {

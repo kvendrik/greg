@@ -15,23 +15,23 @@ const {
 });
 ```
 
-Or use the class to do it manually:
+Or do it manually:
 
 ```ts
-import { Compact } from './context';
+import { checkLimit, split, summarize } from './context';
 
+const model: {model: Model<Api>, key: string} = {...};
 const messages: AgentMessage[] = [];
 
-const compact = new Compact(model); // { model: Model<Api>, key: string }
-const limit = compact.checkLimit(messages);
+const limit = checkLimit(messages, model.model);
 
 if (limit.reached) {
   console.log(`Limit reached: ${limit.reason}.`);
 
-  const { compact, preserve } = compact.split(messages);
+  const { compact, preserve } = split(messages, model.model);
   if (compact == null) return messages;
 
-  const compacted = await compact.summarize(compact);
+  const compacted = await summarize(compact, model);
   return [...compacted, ...preserve];
 }
 

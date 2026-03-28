@@ -1,2 +1,3 @@
 export { usage } from './usage';
-export { compact, type CompactResult } from './compact';
+export { summarize } from './summarize';
+export { compact, type CompactResult, split, reachedLimit } from './compact';
