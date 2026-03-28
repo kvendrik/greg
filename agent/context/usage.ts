@@ -1,8 +1,7 @@
 import { getModels, getProviders } from '@mariozechner/pi-ai';
 import type { KnownProvider, Usage } from '@mariozechner/pi-ai';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
-
-export const CONTEXT_SOFT_LIMIT_RATIO = 0.6;
+import { CONTEXT_SOFT_LIMIT_RATIO } from './compact';
 
 type UsageWithCost = Usage & {
   cost?: {

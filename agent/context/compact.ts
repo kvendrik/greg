@@ -1,15 +1,12 @@
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import { createLogger } from '../../utilities/logger';
-import {
-  CONTEXT_SOFT_LIMIT_RATIO,
-  getLatestAssistantUsage,
-  usage,
-} from './usage';
+import { getLatestAssistantUsage, usage } from './usage';
 import { summarize, type Instructions } from './summarize';
 
 const logger = createLogger('Compact');
 
+export const CONTEXT_SOFT_LIMIT_RATIO = 0.6;
 const LATEST_TURN_CACHE_WRITE_COST_LIMIT_USD = 0.05;
 const LATEST_TURN_CACHE_WRITE_TOKEN_LIMIT_RATIO = 0.4;
 const PRESERVED_TAIL_BUDGET_RATIO = 0.4;
