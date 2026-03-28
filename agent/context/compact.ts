@@ -16,25 +16,57 @@ const PRESERVED_TAIL_BUDGET_RATIO = 0.4;
 const PRESERVED_TURN_TARGETS = [5, 3, 1] as const;
 const CHARS_PER_TOKEN_ESTIMATE = 4;
 
-export type CompactResult = {
+export interface CompactResult {
   messages: AgentMessage[];
   didCompact: boolean;
   reason: string;
-};
+}
+
+interface CompactOptions {
+  signal?: AbortSignal;
+  model: { model: Model<Api>; key: string };
+  instructions?: string;
+  force?: boolean;
+}
+
+export class Compact {
+  constructor(private model: { model: Model<Api>; key: string }) {}
+
+  checkLimit(messages: AgentMessage[]): {
+    reached: boolean;
+    reason: string;
+  } {
+    return reachedLimit(messages, this.model.model);
+  }
+
+  split(messages: AgentMessage[]): {
+    compact: AgentMessage[] | null;
+    preserve: AgentMessage[];
+  } {
+    return split(messages, this.model.model);
+  }
+
+  summarize(
+    messages: AgentMessage[],
+    {
+      signal,
+      instructions,
+    }: {
+      signal: AbortSignal;
+      instructions?: string;
+    }
+  ): Promise<AgentMessage[]> {
+    return summarize(messages, {
+      model: this.model,
+      signal,
+      instructions,
+    });
+  }
+}
 
 export async function compact(
   messages: AgentMessage[],
-  {
-    signal,
-    model: modelEntry,
-    instructions,
-    force,
-  }: {
-    signal?: AbortSignal;
-    model: { model: Model<Api>; key: string };
-    instructions?: string;
-    force?: boolean;
-  }
+  { signal, model: modelEntry, instructions, force }: CompactOptions
 ): Promise<CompactResult> {
   const effectiveSignal = signal ?? new AbortController().signal;
 
@@ -45,72 +77,25 @@ export async function compact(
   if (effectiveSignal.aborted) {
     throw new DOMException('Aborted', 'AbortError');
   }
-  const currentUsage = usage(messages);
-  const contextWindow =
-    currentUsage.tokens.window > 0
-      ? currentUsage.tokens.window
-      : modelEntry.model.contextWindow;
 
-  const softLimit =
-    currentUsage.tokens.limit > 0
-      ? currentUsage.tokens.limit
-      : Math.floor(contextWindow * CONTEXT_SOFT_LIMIT_RATIO);
-  const latestTurnTokenLimit = Math.floor(
-    contextWindow * LATEST_TURN_CACHE_WRITE_TOKEN_LIMIT_RATIO
-  );
-  const currentTokens = currentUsage.tokens.used;
-  const latestUsage = getLatestAssistantUsage(messages);
-  const latestTurnCacheWriteCost =
-    currentUsage.cost.cacheWrite === 0
-      ? undefined
-      : currentUsage.cost.cacheWrite;
-  const latestTurnCacheWriteTokens = latestUsage?.cacheWrite ?? 0;
+  const { reached, reason } = reachedLimit(messages, modelEntry.model);
+  logger.info(reason);
 
-  if (
-    typeof latestTurnCacheWriteCost === 'number' &&
-    latestTurnCacheWriteCost >= LATEST_TURN_CACHE_WRITE_COST_LIMIT_USD
-  ) {
-    const trigger = `Cache write cost $${latestTurnCacheWriteCost.toFixed(4)} exceeded $${LATEST_TURN_CACHE_WRITE_COST_LIMIT_USD.toFixed(2)} threshold`;
-    logger.info(trigger);
-    return doCompact(trigger);
-  }
-
-  if (latestTurnCacheWriteTokens >= latestTurnTokenLimit) {
-    const trigger = `Cache write tokens ${latestTurnCacheWriteTokens} exceeded ${latestTurnTokenLimit} token threshold`;
-    logger.info(trigger);
-    return doCompact(trigger);
-  }
-
-  if (currentTokens <= softLimit) {
-    const reason = `Context is within budget (${currentTokens}/${softLimit} tokens, ${Math.round((currentTokens / softLimit) * 100)}%)`;
-    logger.info(reason);
+  if (!reached) {
     return { messages, didCompact: false, reason };
   }
 
-  const trigger = `Context ${currentTokens} tokens exceeded ${softLimit} soft limit`;
-  logger.info(trigger);
-
-  return doCompact(trigger);
+  return doCompact(reason);
 
   async function doCompact(trigger: string): Promise<CompactResult> {
-    const hasUserMessages = messages.some((msg) => msg.role === 'user');
-    if (!hasUserMessages) {
-      const reason = 'No user messages found';
-      logger.info(reason);
-      return { messages, didCompact: false, reason };
+    const { compact: messagesToCompact, preserve } = split(
+      messages,
+      modelEntry.model
+    );
+
+    if (messagesToCompact === null) {
+      return { messages, didCompact: false, reason: trigger };
     }
-
-    const tailBudget = computeTailBudget();
-    const splitIndex = findBestSplitIndex(tailBudget);
-
-    if (splitIndex === null || splitIndex <= 0) {
-      const reason = 'Preserved tail already covers the full conversation';
-      logger.info(reason);
-      return { messages, didCompact: false, reason };
-    }
-
-    const preserve = messages.slice(splitIndex);
-    const messagesToCompact = messages.slice(0, splitIndex);
 
     const compactedMessages = await summarize(messagesToCompact, {
       model: modelEntry,
@@ -124,16 +109,36 @@ export async function compact(
       reason: trigger,
     };
   }
+}
 
-  function computeTailBudget(): number {
-    const contextWindow = modelEntry.model.contextWindow ?? 0;
+function split(
+  messages: AgentMessage[],
+  model: Model<Api>
+): {
+  compact: AgentMessage[] | null;
+  preserve: AgentMessage[];
+} {
+  const hasUserMessages = messages.some((msg) => msg.role === 'user');
 
-    if (contextWindow <= 0) {
-      return Infinity;
-    }
-
-    return Math.floor(contextWindow * PRESERVED_TAIL_BUDGET_RATIO);
+  if (!hasUserMessages) {
+    const reason = 'No user messages found';
+    logger.info(reason);
+    return { compact: null, preserve: messages };
   }
+
+  const tailBudget = computeTailBudget();
+  const splitIndex = findBestSplitIndex(tailBudget);
+
+  if (splitIndex === null || splitIndex <= 0) {
+    const reason = 'Preserved tail already covers the full conversation';
+    logger.info(reason);
+    return { compact: null, preserve: messages };
+  }
+
+  return {
+    compact: messages.slice(0, splitIndex),
+    preserve: messages.slice(splitIndex),
+  };
 
   function findBestSplitIndex(tailBudget: number): number | null {
     for (const turnTarget of PRESERVED_TURN_TARGETS) {
@@ -196,6 +201,63 @@ export async function compact(
 
     return null;
   }
+
+  function computeTailBudget(): number {
+    const contextWindow = model.contextWindow ?? 0;
+
+    if (contextWindow <= 0) {
+      return Infinity;
+    }
+
+    return Math.floor(contextWindow * PRESERVED_TAIL_BUDGET_RATIO);
+  }
+}
+
+function reachedLimit(
+  messages: AgentMessage[],
+  model: Model<Api>
+): { reached: boolean; reason: string } {
+  const currentUsage = usage(messages);
+  const contextWindow =
+    currentUsage.tokens.window > 0
+      ? currentUsage.tokens.window
+      : model.contextWindow;
+
+  const softLimit =
+    currentUsage.tokens.limit > 0
+      ? currentUsage.tokens.limit
+      : Math.floor(contextWindow * CONTEXT_SOFT_LIMIT_RATIO);
+  const latestTurnTokenLimit = Math.floor(
+    contextWindow * LATEST_TURN_CACHE_WRITE_TOKEN_LIMIT_RATIO
+  );
+  const currentTokens = currentUsage.tokens.used;
+  const latestUsage = getLatestAssistantUsage(messages);
+  const latestTurnCacheWriteCost =
+    currentUsage.cost.cacheWrite === 0
+      ? undefined
+      : currentUsage.cost.cacheWrite;
+  const latestTurnCacheWriteTokens = latestUsage?.cacheWrite ?? 0;
+
+  if (
+    typeof latestTurnCacheWriteCost === 'number' &&
+    latestTurnCacheWriteCost >= LATEST_TURN_CACHE_WRITE_COST_LIMIT_USD
+  ) {
+    const reason = `Cache write cost $${latestTurnCacheWriteCost.toFixed(4)} exceeded $${LATEST_TURN_CACHE_WRITE_COST_LIMIT_USD.toFixed(2)} threshold`;
+    return { reached: true, reason };
+  }
+
+  if (latestTurnCacheWriteTokens >= latestTurnTokenLimit) {
+    const reason = `Cache write tokens ${latestTurnCacheWriteTokens} exceeded ${latestTurnTokenLimit} token threshold`;
+    return { reached: true, reason };
+  }
+
+  if (currentTokens <= softLimit) {
+    const reason = `Context is within budget (${currentTokens}/${softLimit} tokens, ${Math.round((currentTokens / softLimit) * 100)}%)`;
+    return { reached: false, reason };
+  }
+
+  const reason = `Context ${currentTokens} tokens exceeded ${softLimit} soft limit`;
+  return { reached: false, reason };
 }
 
 function estimateTokens(messages: AgentMessage[]): number {

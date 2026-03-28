@@ -15,6 +15,29 @@ const {
 });
 ```
 
+Or use the class to do it manually:
+
+```ts
+import { Compact } from './context';
+
+const messages: AgentMessage[] = [];
+
+const compact = new Compact(model); // { model: Model<Api>, key: string }
+const limit = compact.checkLimit(messages);
+
+if (limit.reached) {
+  console.log(`Limit reached: ${limit.reason}.`);
+
+  const { compact, preserve } = compact.split(messages);
+  if (compact == null) return messages;
+
+  const compacted = await compact.summarize(compact);
+  return [...compacted, ...preserve];
+}
+
+return messages;
+```
+
 ## Why compact
 
 Models lose recall accuracy as context grows ([context rot](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)). Quality can degrade well before hitting the hard token limit ([OpenAI cookbook](https://cookbook.openai.com/examples/context_summarization_with_realtime_api)). The evidence-backed strategy is: **summarize the older prefix, keep recent turns verbatim** ([Anthropic compaction docs](https://docs.anthropic.com/en/docs/build-with-claude/compaction), [LangChain summary-buffer](https://lagnchain.readthedocs.io/en/latest/modules/memory/types/summary_buffer.html)).
