@@ -21,7 +21,7 @@ const {
 
 Compaction makes it possible to talk to your agent indefinitely. When your context window hits a certain size you summarize everything you've spoken about and present the agent with the summarization so that you can keep chatting.
 
-When summarization should occur and how exactly it works can be a bit tricky to get right. That's why I'm sharing [Greg’s](https://github.com/kvendrik/greg) compaction toolkit for [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai), based on evidence-based strategies.
+When summarization should occur and how exactly it works can be a bit tricky to get right. That's why I'm sharing [Greg’s](https://github.com/kvendrik/greg) compaction toolkit for [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai), which combines a bunch of evidence-based strategies for effective compaction.
 
 ## Strategies
 
