@@ -163,7 +163,7 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
         if (content === '') {
           return {
             status: 'error',
-            message: `Compaction requested but no instructions provided.`,
+            message: `Steer requested but no instructions provided.`,
           };
         }
         steer = {

@@ -56,7 +56,7 @@ export class Agent {
   private readonly logger: Logger;
   private readonly config: AgentConfig;
   private readonly callbacks = new Map<string, Callbacks[]>();
-  private readonly primaryModel: Model<Api>;
+  private readonly primaryModelEntry: { model: Model<Api>; key: string };
   private readonly onCompact: CreateOptions['onCompact'];
 
   private abortController: AbortController | null = null;
@@ -99,7 +99,7 @@ export class Agent {
 
     this.core = core;
     this.core.setModel(primaryEntry.model);
-    this.primaryModel = primaryEntry.model;
+    this.primaryModelEntry = primaryEntry;
     this.config = config;
     this.logger = createLogger(`agent/${config.id}`);
     this.onCompact = onCompact;
@@ -144,22 +144,38 @@ export class Agent {
       force,
     }: { signal?: AbortSignal; instructions?: string; force?: boolean }
   ): Promise<AgentMessage[]> {
-    const config = this.config;
     const onCompact = this.onCompact;
+    const opts = { signal, instructions, force };
 
-    const { messages: newMessages, didCompact } = await compact(messages, {
-      signal,
-      config,
-      instructions,
-      force,
-    });
+    let result: Awaited<ReturnType<typeof compact>>;
 
-    if (didCompact) {
-      this.core.replaceMessages(newMessages);
-      await onCompact?.(newMessages);
+    try {
+      result = await compact(messages, {
+        ...opts,
+        model: this.primaryModelEntry,
+      });
+    } catch (err) {
+      if (!isOverloadError(err)) throw err;
+
+      const fallbackEntry = this.config.models.find(
+        (model) => model.role === 'fallback'
+      );
+
+      if (!fallbackEntry) throw err;
+
+      this.logger.warn(
+        `Primary model overloaded during compaction, retrying with ${fallbackEntry.model.name}.`
+      );
+
+      result = await compact(messages, { ...opts, model: fallbackEntry });
     }
 
-    return newMessages;
+    if (result.didCompact) {
+      this.core.replaceMessages(result.messages);
+      await onCompact?.(result.messages);
+    }
+
+    return result.messages;
   }
 
   private getCallbacks(
@@ -465,15 +481,11 @@ export class Agent {
 
       if (this.core.state.error) {
         const isPrimaryModel =
-          this.core.state.model.id === this.primaryModel.id &&
-          this.core.state.model.provider === this.primaryModel.provider;
+          this.core.state.model.id === this.primaryModelEntry.model.id &&
+          this.core.state.model.provider ===
+            this.primaryModelEntry.model.provider;
 
-        if (
-          isPrimaryModel &&
-          (this.core.state.error.includes('overloaded') ||
-            this.core.state.error.includes('rate') ||
-            this.core.state.error.includes('capacity'))
-        ) {
+        if (isPrimaryModel && isOverloadError(this.core.state.error)) {
           const fallbackModel =
             this.config.models.find((model) => model.role === 'fallback')
               ?.model ?? null;
@@ -571,6 +583,15 @@ export class Agent {
     agentHolder.current = agent;
     return agent;
   }
+}
+
+const OVERLOAD_PATTERNS = ['overloaded', 'rate', 'capacity'] as const;
+
+function isOverloadError(err: unknown): boolean {
+  const message =
+    err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+  const lower = message.toLowerCase();
+  return OVERLOAD_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
 function attemptFormatProviderError(error: string): string {

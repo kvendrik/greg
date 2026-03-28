@@ -120,7 +120,7 @@ export function createVoiceEditor(tui: TUI): Tools {
     children.forEach((child) => {
       box.addChild(child);
     });
-    return ['', ...box.render(width), ''];
+    return [...box.render(width)];
   };
 
   const startListeningIfPossible = async (): Promise<void> => {

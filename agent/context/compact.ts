@@ -1,97 +1,56 @@
-import { completeSimple } from '@mariozechner/pi-ai';
+import type { Model, Api } from '@mariozechner/pi-ai';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import type { AgentConfig } from '../types';
 import { createLogger } from '../../utilities/logger';
 import {
   CONTEXT_SOFT_LIMIT_RATIO,
   getLatestAssistantUsage,
   usage,
 } from './usage';
+import { summarize } from './summarize';
 
 const logger = createLogger('Compact');
 
-const SUMMARIZE_SYSTEM = `You are a summarizer. Given a conversation history, produce a concise summary that preserves key facts, decisions, topics, and context needed to continue the conversation. Output only the summary, no preamble.`;
-
 const LATEST_TURN_CACHE_WRITE_COST_LIMIT_USD = 0.05;
 const LATEST_TURN_CACHE_WRITE_TOKEN_LIMIT_RATIO = 0.4;
+const PRESERVED_TAIL_BUDGET_RATIO = 0.4;
+const PRESERVED_TURN_TARGETS = [5, 3, 1] as const;
+const CHARS_PER_TOKEN_ESTIMATE = 4;
 
-function messagesToTranscript(messages: AgentMessage[]): string {
-  const lines: string[] = [];
-  for (const m of messages) {
-    const msg = m as {
-      role: string;
-      content?: string | { type?: string; text?: string }[];
-    };
-    const content = msg.content;
-    if (!content) continue;
-    let text = '';
-    if (typeof content === 'string') {
-      text = content;
-    } else if (Array.isArray(content)) {
-      text = content
-        .filter(
-          (b) =>
-            (b as { type?: string }).type === 'text' &&
-            typeof (b as { text?: string }).text === 'string'
-        )
-        .map((b) => (b as { text: string }).text)
-        .join('');
-    }
-    if (text.trim()) lines.push(`${msg.role}: ${text.trim()}`);
-  }
-  return lines.join('\n\n');
-}
-
-function extractTextFromAssistantMessage(msg: {
-  content?: { type?: string; text?: string }[];
-}): string {
-  const content = msg.content ?? [];
-  return content
-    .filter(
-      (b): b is { type: 'text'; text: string } =>
-        b.type === 'text' && typeof b.text === 'string'
-    )
-    .map((b) => b.text)
-    .join('');
-}
+export type CompactResult = {
+  messages: AgentMessage[];
+  didCompact: boolean;
+  reason: string;
+};
 
 export async function compact(
   messages: AgentMessage[],
   {
     signal,
-    config,
+    model: modelEntry,
     instructions,
     force,
   }: {
     signal?: AbortSignal;
-    config: AgentConfig;
+    model: { model: Model<Api>; key: string };
     instructions?: string;
     force?: boolean;
   }
-): Promise<{ messages: AgentMessage[]; didCompact: boolean }> {
+): Promise<CompactResult> {
   const effectiveSignal = signal ?? new AbortController().signal;
 
   if (force) {
-    return doCompact();
+    return doCompact('Forced');
   }
 
   if (effectiveSignal.aborted) {
     throw new DOMException('Aborted', 'AbortError');
   }
-
-  const primaryEntry = config.models.find((model) => model.role === 'primary');
-  if (!primaryEntry) {
-    throw new Error('No primary model in config.models.');
-  }
-  const model = primaryEntry.model;
   const currentUsage = usage(messages);
   const contextWindow =
     currentUsage.tokens.window > 0
       ? currentUsage.tokens.window
-      : model.contextWindow;
+      : modelEntry.model.contextWindow;
 
-  // compaction can take a long time so the soft limit is 60% of the context window
-  // so that it's faster. better to do it in chunks.
   const softLimit =
     currentUsage.tokens.limit > 0
       ? currentUsage.tokens.limit
@@ -111,55 +70,50 @@ export async function compact(
     typeof latestTurnCacheWriteCost === 'number' &&
     latestTurnCacheWriteCost >= LATEST_TURN_CACHE_WRITE_COST_LIMIT_USD
   ) {
-    logger.info(
-      `Latest turn cache write cost $${latestTurnCacheWriteCost.toFixed(4)} above $${LATEST_TURN_CACHE_WRITE_COST_LIMIT_USD.toFixed(2)} threshold`
-    );
-    return doCompact();
+    const trigger = `Cache write cost $${latestTurnCacheWriteCost.toFixed(4)} exceeded $${LATEST_TURN_CACHE_WRITE_COST_LIMIT_USD.toFixed(2)} threshold`;
+    logger.info(trigger);
+    return doCompact(trigger);
   }
 
   if (latestTurnCacheWriteTokens >= latestTurnTokenLimit) {
-    logger.info(
-      `Latest turn cache write tokens ${latestTurnCacheWriteTokens} above ${latestTurnTokenLimit} token threshold`
-    );
-    return doCompact();
+    const trigger = `Cache write tokens ${latestTurnCacheWriteTokens} exceeded ${latestTurnTokenLimit} token threshold`;
+    logger.info(trigger);
+    return doCompact(trigger);
   }
 
   if (currentTokens <= softLimit) {
-    logger.info(
-      `Current context size: ${currentTokens}/${softLimit} tokens (${Math.round((currentTokens / softLimit) * 100)}%)`
-    );
-    return { messages, didCompact: false };
+    const reason = `Context is within budget (${currentTokens}/${softLimit} tokens, ${Math.round((currentTokens / softLimit) * 100)}%)`;
+    logger.info(reason);
+    return { messages, didCompact: false, reason };
   }
 
-  logger.info(
-    `Current context size ${currentTokens} tokens above ${softLimit} tokens`
-  );
+  const trigger = `Context ${currentTokens} tokens exceeded ${softLimit} soft limit`;
+  logger.info(trigger);
 
-  return doCompact();
+  return doCompact(trigger);
 
-  async function doCompact(): Promise<{
-    messages: AgentMessage[];
-    didCompact: boolean;
-  }> {
-    const preserveStartIndex = findPreservedTailStartIndex(5);
-
-    if (preserveStartIndex === null) {
-      logger.info('Skipping compaction because no user messages were found.');
-      return { messages, didCompact: false };
+  async function doCompact(trigger: string): Promise<CompactResult> {
+    const hasUserMessages = messages.some((msg) => msg.role === 'user');
+    if (!hasUserMessages) {
+      const reason = 'No user messages found';
+      logger.info(reason);
+      return { messages, didCompact: false, reason };
     }
 
-    if (preserveStartIndex <= 0) {
-      logger.info(
-        'Skipping compaction because the preserved tail already covers the full conversation.'
-      );
-      return { messages, didCompact: false };
+    const tailBudget = computeTailBudget();
+    const splitIndex = findBestSplitIndex(tailBudget);
+
+    if (splitIndex === null || splitIndex <= 0) {
+      const reason = 'Preserved tail already covers the full conversation';
+      logger.info(reason);
+      return { messages, didCompact: false, reason };
     }
 
-    const preserve = messages.slice(preserveStartIndex);
-    const messagesToCompact = messages.slice(0, preserveStartIndex);
+    const preserve = messages.slice(splitIndex);
+    const messagesToCompact = messages.slice(0, splitIndex);
 
     const compactedMessages = await summarize(messagesToCompact, {
-      config,
+      model: modelEntry,
       signal: effectiveSignal,
       instructions,
     });
@@ -167,7 +121,34 @@ export async function compact(
     return {
       messages: [...compactedMessages, ...preserve],
       didCompact: true,
+      reason: trigger,
     };
+  }
+
+  function computeTailBudget(): number {
+    const contextWindow = modelEntry.model.contextWindow ?? 0;
+
+    if (contextWindow <= 0) {
+      return Infinity;
+    }
+
+    return Math.floor(contextWindow * PRESERVED_TAIL_BUDGET_RATIO);
+  }
+
+  function findBestSplitIndex(tailBudget: number): number | null {
+    for (const turnTarget of PRESERVED_TURN_TARGETS) {
+      const startIndex = findPreservedTailStartIndex(turnTarget);
+      if (startIndex === null || startIndex <= 0) continue;
+
+      const tail = messages.slice(startIndex);
+      if (estimateTokens(tail) <= tailBudget) {
+        return startIndex;
+      }
+    }
+
+    // All turn-based splits exceed the budget; fall back to a
+    // token-bounded suffix that fits within the budget.
+    return findTokenBoundedSplitIndex(tailBudget);
   }
 
   function findPreservedTailStartIndex(
@@ -193,71 +174,52 @@ export async function compact(
 
     return earliestUserMessageIndex;
   }
+
+  function findTokenBoundedSplitIndex(tailBudget: number): number | null {
+    let runningTokens = 0;
+
+    for (
+      let messageIndex = messages.length - 1;
+      messageIndex >= 0;
+      messageIndex -= 1
+    ) {
+      runningTokens += estimateMessageTokens(messages[messageIndex]);
+
+      if (runningTokens > tailBudget) {
+        const splitIndex = messageIndex + 1;
+        if (splitIndex >= messages.length) {
+          return null;
+        }
+        return splitIndex;
+      }
+    }
+
+    return null;
+  }
 }
 
-async function summarize(
-  messages: AgentMessage[],
-  {
-    config,
-    signal,
-    instructions,
-  }: { config: AgentConfig; signal: AbortSignal; instructions?: string }
-): Promise<AgentMessage[]> {
-  const primaryEntry = config.models.find((model) => model.role === 'primary');
-  if (!primaryEntry) {
-    throw new Error('No primary model in config.models.');
+function estimateTokens(messages: AgentMessage[]): number {
+  let total = 0;
+  for (const message of messages) {
+    total += estimateMessageTokens(message);
   }
-  const model = primaryEntry.model;
-
-  logger.info(`Compacting ${messages.length} messages using ${model.name}...`);
-
-  const transcript = messagesToTranscript(messages);
-  const apiKey = getApiKey(model.provider, config);
-
-  const response = await completeSimple(
-    model,
-    {
-      systemPrompt:
-        SUMMARIZE_SYSTEM +
-        (instructions ? `\n\nAdditional instructions: ${instructions}` : ''),
-      messages: [
-        {
-          role: 'user',
-          content: transcript,
-          timestamp: Date.now(),
-        },
-      ],
-    },
-    { signal, apiKey }
-  );
-
-  const summaryText = extractTextFromAssistantMessage(response).trim();
-
-  if (!summaryText) {
-    throw new Error('Compaction failed: model returned no summary.');
-  }
-
-  const summaryMessage: AgentMessage = {
-    role: 'user',
-    content: `[Previous conversation summary]\n\n${summaryText}`,
-    timestamp: Date.now(),
-  };
-
-  logger.info(`Compaction done...`);
-
-  return [summaryMessage];
+  return total;
 }
 
-function getApiKey(provider: string, config: AgentConfig): string {
-  const key =
-    config.models.find((model) => model.model.provider === provider)?.key ??
-    null;
-
-  if (!key) {
-    throw new Error(
-      `No API key found for provider "${provider}" in config.models.`
-    );
+function estimateMessageTokens(message: AgentMessage): number {
+  const content = (message as { content?: unknown }).content;
+  if (typeof content === 'string') {
+    return Math.ceil(content.length / CHARS_PER_TOKEN_ESTIMATE);
   }
-
-  return key;
+  if (Array.isArray(content)) {
+    let charCount = 0;
+    for (const block of content) {
+      const text = (block as { text?: string }).text;
+      if (typeof text === 'string') {
+        charCount += text.length;
+      }
+    }
+    return Math.ceil(charCount / CHARS_PER_TOKEN_ESTIMATE);
+  }
+  return 0;
 }
