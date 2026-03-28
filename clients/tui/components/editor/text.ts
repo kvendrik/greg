@@ -11,9 +11,10 @@ import pc from 'picocolors';
 import type { Tools } from './index';
 
 const config = await getConfig();
-const globalCommands = listCommands(config).map((command) =>
-  command.replace('/', '')
-);
+const globalCommands = listCommands(config).map((commandInfo) => ({
+  name: commandInfo.command.replace('/', ''),
+  description: commandInfo.description,
+}));
 
 const selectListTheme = {
   selectedPrefix: (text: string) => pc.bold(text),
@@ -39,13 +40,7 @@ export function createTextEditor(tui: TUI): Tools {
   );
 
   editor.setAutocompleteProvider(
-    new CombinedAutocompleteProvider(
-      globalCommands.map((command) => ({
-        name: command,
-        description: '',
-      })),
-      process.env.PWD
-    )
+    new CombinedAutocompleteProvider(globalCommands, process.env.PWD)
   );
 
   return {

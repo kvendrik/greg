@@ -169,6 +169,18 @@ export async function start({
       model = newModel;
       tui.requestRender();
     },
+    onCompactStart(oldMessages) {
+      chat.spinner(`Compacting ${oldMessages.length} messages...`);
+      chat.setDisabled(true);
+    },
+    onCompactDone(newMessages) {
+      chat.addMessage(
+        `Compacted ${newMessages.length} messages to ${newMessages.length} messages`,
+        'System'
+      );
+      chat.hideSpinner();
+      chat.setDisabled(false);
+    },
   });
 
   client.onCommands((commands: Record<string, string>) => {

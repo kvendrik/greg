@@ -57,10 +57,23 @@ function extractTextFromAssistantMessage(msg: {
 
 export async function compact(
   messages: AgentMessage[],
-  signal: AbortSignal | undefined,
-  config: AgentConfig
+  {
+    signal,
+    config,
+    instructions,
+    force,
+  }: {
+    signal?: AbortSignal;
+    config: AgentConfig;
+    instructions?: string;
+    force?: boolean;
+  }
 ): Promise<{ messages: AgentMessage[]; didCompact: boolean }> {
   const effectiveSignal = signal ?? new AbortController().signal;
+
+  if (force) {
+    return doCompact();
+  }
 
   if (effectiveSignal.aborted) {
     throw new DOMException('Aborted', 'AbortError');
@@ -101,30 +114,14 @@ export async function compact(
     logger.info(
       `Latest turn cache write cost $${latestTurnCacheWriteCost.toFixed(4)} above $${LATEST_TURN_CACHE_WRITE_COST_LIMIT_USD.toFixed(2)} threshold`
     );
-
-    const lastMessage = messages[messages.length - 1];
-    const allWithoutLastMessage = messages.slice(0, -1);
-    const compactedMessages = await summarize(allWithoutLastMessage, {
-      config,
-      signal: effectiveSignal,
-    });
-
-    return { messages: [...compactedMessages, lastMessage], didCompact: true };
+    return doCompact();
   }
 
   if (latestTurnCacheWriteTokens >= latestTurnTokenLimit) {
     logger.info(
       `Latest turn cache write tokens ${latestTurnCacheWriteTokens} above ${latestTurnTokenLimit} token threshold`
     );
-
-    const lastMessage = messages[messages.length - 1];
-    const allWithoutLastMessage = messages.slice(0, -1);
-    const compactedMessages = await summarize(allWithoutLastMessage, {
-      config,
-      signal: effectiveSignal,
-    });
-
-    return { messages: [...compactedMessages, lastMessage], didCompact: true };
+    return doCompact();
   }
 
   if (currentTokens <= softLimit) {
@@ -138,20 +135,73 @@ export async function compact(
     `Current context size ${currentTokens} tokens above ${softLimit} tokens`
   );
 
-  const lastMessage = messages[messages.length - 1];
-  const allWithoutLastMessage = messages.slice(0, -1);
+  return doCompact();
 
-  const compactedMessages = await summarize(allWithoutLastMessage, {
-    config,
-    signal: effectiveSignal,
-  });
+  async function doCompact(): Promise<{
+    messages: AgentMessage[];
+    didCompact: boolean;
+  }> {
+    const preserveStartIndex = findPreservedTailStartIndex(5);
 
-  return { messages: [...compactedMessages, lastMessage], didCompact: true };
+    if (preserveStartIndex === null) {
+      logger.info('Skipping compaction because no user messages were found.');
+      return { messages, didCompact: false };
+    }
+
+    if (preserveStartIndex <= 0) {
+      logger.info(
+        'Skipping compaction because the preserved tail already covers the full conversation.'
+      );
+      return { messages, didCompact: false };
+    }
+
+    const preserve = messages.slice(preserveStartIndex);
+    const messagesToCompact = messages.slice(0, preserveStartIndex);
+
+    const compactedMessages = await summarize(messagesToCompact, {
+      config,
+      signal: effectiveSignal,
+      instructions,
+    });
+
+    return {
+      messages: [...compactedMessages, ...preserve],
+      didCompact: true,
+    };
+  }
+
+  function findPreservedTailStartIndex(
+    preservedUserMessages: number
+  ): number | null {
+    let userMessagesSeen = 0;
+    let earliestUserMessageIndex: number | null = null;
+
+    for (
+      let messageIndex = messages.length - 1;
+      messageIndex >= 0;
+      messageIndex -= 1
+    ) {
+      const message = messages[messageIndex];
+      if (message.role === 'user') {
+        earliestUserMessageIndex = messageIndex;
+        userMessagesSeen += 1;
+        if (userMessagesSeen === preservedUserMessages) {
+          return messageIndex;
+        }
+      }
+    }
+
+    return earliestUserMessageIndex;
+  }
 }
 
 async function summarize(
   messages: AgentMessage[],
-  { config, signal }: { config: AgentConfig; signal: AbortSignal }
+  {
+    config,
+    signal,
+    instructions,
+  }: { config: AgentConfig; signal: AbortSignal; instructions?: string }
 ): Promise<AgentMessage[]> {
   const primaryEntry = config.models.find((model) => model.role === 'primary');
   if (!primaryEntry) {
@@ -167,7 +217,9 @@ async function summarize(
   const response = await completeSimple(
     model,
     {
-      systemPrompt: SUMMARIZE_SYSTEM,
+      systemPrompt:
+        SUMMARIZE_SYSTEM +
+        (instructions ? `\n\nAdditional instructions: ${instructions}` : ''),
       messages: [
         {
           role: 'user',

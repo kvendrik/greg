@@ -29,6 +29,7 @@ export const tuiCommand = new Command('tui')
           initialPrompt: combinedPrompt,
           sessionId,
         });
+        return;
       }
 
       if (!combinedPrompt) {

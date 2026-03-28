@@ -6,21 +6,21 @@ export function tui(): TUI {
 
   let hasStoppedTui = false;
 
-  const enterAltScreen = (): void => {
-    process.stdout.write('\x1b[?1049h');
-    process.stdout.write('\x1b[?1007h');
-    process.stdout.write('\x1b[?1000h');
-    process.stdout.write('\x1b[?1002h');
-    process.stdout.write('\x1b[?1006h');
-  };
+  // const enterAltScreen = (): void => {
+  //   process.stdout.write('\x1b[?1049h');
+  //   process.stdout.write('\x1b[?1007h');
+  //   process.stdout.write('\x1b[?1000h');
+  //   process.stdout.write('\x1b[?1002h');
+  //   process.stdout.write('\x1b[?1006h');
+  // };
 
-  const exitAltScreen = (): void => {
-    process.stdout.write('\x1b[?1006l');
-    process.stdout.write('\x1b[?1002l');
-    process.stdout.write('\x1b[?1000l');
-    process.stdout.write('\x1b[?1007l');
-    process.stdout.write('\x1b[?1049l');
-  };
+  // const exitAltScreen = (): void => {
+  //   process.stdout.write('\x1b[?1006l');
+  //   process.stdout.write('\x1b[?1002l');
+  //   process.stdout.write('\x1b[?1000l');
+  //   process.stdout.write('\x1b[?1007l');
+  //   process.stdout.write('\x1b[?1049l');
+  // };
 
   const stopTui = (): void => {
     if (hasStoppedTui) {
@@ -28,7 +28,7 @@ export function tui(): TUI {
     }
     hasStoppedTui = true;
     tui.stop();
-    exitAltScreen();
+    //exitAltScreen();
     process.exit(0);
   };
 
@@ -37,7 +37,7 @@ export function tui(): TUI {
   process.on('uncaughtException', stopTui);
   process.on('unhandledRejection', stopTui);
 
-  enterAltScreen();
+  //enterAltScreen();
 
   tui.addInputListener((input) => {
     if (input === '\u0003') {

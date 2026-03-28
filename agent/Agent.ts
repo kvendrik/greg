@@ -27,6 +27,8 @@ export type Callbacks = Partial<{
 
   onModelChange: (model: Model<Api>) => void;
   onThinkingLevelChange: (thinkingLevel: ThinkingLevel) => void;
+  onCompactStart: (oldMessages: AgentMessage[]) => void;
+  onCompactDone: (newMessages: AgentMessage[]) => void;
 }>;
 
 type Image = {
@@ -55,6 +57,7 @@ export class Agent {
   private readonly config: AgentConfig;
   private readonly callbacks = new Map<string, Callbacks[]>();
   private readonly primaryModel: Model<Api>;
+  private readonly onCompact: CreateOptions['onCompact'];
 
   private abortController: AbortController | null = null;
 
@@ -90,20 +93,8 @@ export class Agent {
         }
         return key;
       },
-      transformContext: async (messages, signal) => {
-        const { messages: newMessages, didCompact } = await compact(
-          messages,
-          signal,
-          config
-        );
-
-        if (didCompact) {
-          core.replaceMessages(newMessages);
-          await onCompact?.(newMessages);
-        }
-
-        return newMessages;
-      },
+      transformContext: (messages, signal) =>
+        this.compact(messages, { signal }),
     });
 
     this.core = core;
@@ -111,6 +102,7 @@ export class Agent {
     this.primaryModel = primaryEntry.model;
     this.config = config;
     this.logger = createLogger(`agent/${config.id}`);
+    this.onCompact = onCompact;
   }
 
   get state(): CoreAgent['state'] {
@@ -142,6 +134,32 @@ export class Agent {
 
   unsubscribe(channelId: string): void {
     this.callbacks.delete(channelId);
+  }
+
+  private async compact(
+    messages: AgentMessage[],
+    {
+      signal,
+      instructions,
+      force,
+    }: { signal?: AbortSignal; instructions?: string; force?: boolean }
+  ): Promise<AgentMessage[]> {
+    const config = this.config;
+    const onCompact = this.onCompact;
+
+    const { messages: newMessages, didCompact } = await compact(messages, {
+      signal,
+      config,
+      instructions,
+      force,
+    });
+
+    if (didCompact) {
+      this.core.replaceMessages(newMessages);
+      await onCompact?.(newMessages);
+    }
+
+    return newMessages;
   }
 
   private getCallbacks(
@@ -253,7 +271,14 @@ export class Agent {
     if (parsed.result.helpRequested) {
       const commands = listCommands(this.config);
       callbacks.onContent?.(
-        ['Available commands:', '', ...commands].join('\n')
+        [
+          'Available commands:',
+          '',
+          ...commands.map(
+            (commandInfo) =>
+              `${commandInfo.command} - ${commandInfo.description}`
+          ),
+        ].join('\n')
       );
       callbacks.onTurnDone?.();
       return;
@@ -299,6 +324,18 @@ export class Agent {
       return;
     }
 
+    if (parsed.result.compact.requested) {
+      const messages = this.core.state.messages;
+      callbacks.onCompactStart?.(messages);
+      const newMessages = await this.compact(messages, {
+        signal: options.signal,
+        instructions: parsed.result.compact.instructions ?? undefined,
+        force: true,
+      });
+      callbacks.onCompactDone?.(newMessages);
+      return;
+    }
+
     const images = input.images;
     const imageContents: ImageContent[] = images.map((img) => ({
       type: 'image' as const,
@@ -307,17 +344,27 @@ export class Agent {
     }));
 
     if (this.core.state.isStreaming) {
-      this.core.followUp({
+      const getMessage = (text: string): AgentMessage => ({
         role: 'user',
         content: [
           ...imageContents,
           {
             type: 'text',
-            text: input.content,
+            text,
           },
         ],
         timestamp: Date.now(),
       });
+
+      const steer = parsed.result.steer;
+
+      if (steer.requested) {
+        this.core.steer(getMessage(steer.instructions));
+        callbacks.onTurnDone?.();
+        return;
+      }
+
+      this.core.followUp(getMessage(input.content));
       callbacks.onTurnDone?.();
       return;
     }

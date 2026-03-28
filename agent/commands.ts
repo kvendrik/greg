@@ -15,6 +15,13 @@ export type ParseCommandsResult = {
   statusRequested: boolean;
   stopRequested: boolean;
   helpRequested: boolean;
+  compact: {
+    requested: boolean;
+    instructions: string | null;
+  };
+  steer:
+    | { requested: true; instructions: string }
+    | { requested: false; instructions: null };
 };
 
 export type ParseCommandsOutput =
@@ -29,22 +36,60 @@ export type ParseCommandsOutput =
 const COMMAND_REGEX = /^\/([^\s:]+)\s*/;
 const THINK_LEVEL_REGEX = /^(off|low|medium|high)\s*/i;
 
-export function listCommands(config: Config): string[] {
+type CommandInfo = {
+  command: string;
+  description: string;
+};
+
+export function listCommands(config: Config): CommandInfo[] {
   const modelCommands = config.models
     .filter(
       (m): m is Config['models'][number] & { command: string } => 'command' in m
     )
-    .map((m) => `/${m.command}`);
+    .map((m) => ({
+      command: `/${m.command}`,
+      description: `Switch to ${m.model.name}`,
+    }));
 
   return [
     ...modelCommands,
-    '/status',
-    '/think off',
-    '/think low',
-    '/think medium',
-    '/think high',
-    '/stop',
-    '/help',
+    {
+      command: '/status',
+      description: 'Show the current session status',
+    },
+    {
+      command: '/compact',
+      description: 'Compact conversation history with optional instructions',
+    },
+    {
+      command: '/think off',
+      description: 'Disable extended reasoning',
+    },
+    {
+      command: '/think low',
+      description: 'Use a low amount of reasoning',
+    },
+    {
+      command: '/think medium',
+      description: 'Use a medium amount of reasoning',
+    },
+    {
+      command: '/think high',
+      description: 'Use a high amount of reasoning',
+    },
+    {
+      command: '/stop',
+      description: 'Stop the active response',
+    },
+    {
+      command: '/steer',
+      description:
+        'Steer the conversation in a specific direction with instructions',
+    },
+    {
+      command: '/help',
+      description: 'Show available commands',
+    },
   ];
 }
 
@@ -56,6 +101,16 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
   let stopRequested = false;
   let helpRequested = false;
 
+  const compact: ParseCommandsResult['compact'] = {
+    requested: false,
+    instructions: null,
+  };
+
+  let steer: ParseCommandsResult['steer'] = {
+    requested: false,
+    instructions: null,
+  };
+
   if (!content.startsWith('/')) {
     return {
       status: 'success',
@@ -65,6 +120,14 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
         statusRequested: false,
         stopRequested: false,
         helpRequested: false,
+        compact: {
+          requested: false,
+          instructions: null,
+        },
+        steer: {
+          requested: false,
+          instructions: null,
+        },
       },
       cleanPrompt: content,
     };
@@ -91,6 +154,24 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
         helpRequested = true;
         break;
       }
+      case 'compact': {
+        compact.requested = true;
+        compact.instructions = content;
+        break;
+      }
+      case 'steer': {
+        if (content === '') {
+          return {
+            status: 'error',
+            message: `Compaction requested but no instructions provided.`,
+          };
+        }
+        steer = {
+          requested: true,
+          instructions: content,
+        };
+        break;
+      }
       case 'think': {
         const levelMatch = THINK_LEVEL_REGEX.exec(content);
         if (!levelMatch) {
@@ -110,7 +191,10 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
               'command' in m && m.command === cmd
           )?.model ?? null;
         if (!modelFromCommand) {
-          const available = listCommands(input.config).join(', ');
+          const available = listCommands(input.config)
+            .map((c) => c.command)
+            .join(', ');
+
           return {
             status: 'error',
             message: `Unknown command: "${cmd}". Available: ${available}`,
@@ -130,6 +214,8 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
       statusRequested,
       stopRequested,
       helpRequested,
+      compact,
+      steer,
     },
     cleanPrompt: content,
   };
