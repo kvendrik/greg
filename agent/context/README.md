@@ -18,6 +18,7 @@ const {
 Or do it manually:
 
 ```ts
+import type { Model, Api } from '@mariozechner/pi-ai';
 import { checkLimit, split, summarize } from './context';
 
 const model: {model: Model<Api>, key: string} = {...};

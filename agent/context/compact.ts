@@ -168,7 +168,7 @@ export function split(
   }
 
   function computeTailBudget(): number {
-    const contextWindow = model.contextWindow ?? 0;
+    const contextWindow = model.contextWindow;
 
     if (contextWindow <= 0) {
       return Infinity;
