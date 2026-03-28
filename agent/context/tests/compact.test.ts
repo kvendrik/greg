@@ -149,9 +149,7 @@ describe('compact', () => {
 
       expect(result.didCompact).toBe(false);
       expect(result.messages).toBe(messages);
-      expect(!result.didCompact && result.reason).toContain(
-        'No user messages'
-      );
+      expect(!result.didCompact && result.reason).toContain('No user messages');
     });
 
     it('skips compaction when preserved tail covers the full conversation', async () => {
@@ -205,10 +203,7 @@ describe('compact', () => {
       let capturedInstructions: string | undefined;
       void mock.module('../summarize', () => ({
         SUMMARY_PREFIX,
-        summarize: (
-          msgs: AgentMessage[],
-          opts: { instructions?: string }
-        ) => {
+        summarize: (msgs: AgentMessage[], opts: { instructions?: string }) => {
           capturedInstructions = opts.instructions;
           summarizeCalls.push(msgs);
           return [summaryMessage('Summary.')];
@@ -220,7 +215,7 @@ describe('compact', () => {
       await freshCompact(messages, {
         model: mockModel,
         force: true,
-        instructions: 'focus on decisions',
+        instructions: { content: 'focus on decisions', strategy: 'append' },
       });
 
       expect(capturedInstructions).toBe('focus on decisions');

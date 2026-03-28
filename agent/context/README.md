@@ -1,6 +1,6 @@
 # 🤖 `compact()`
 
-#### A compaction toolkit for [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai)
+#### A context compaction toolkit for [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai)
 
 ```ts
 import { compact } from './context';
