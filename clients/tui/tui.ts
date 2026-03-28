@@ -174,10 +174,7 @@ export async function start({
       chat.setDisabled(true);
     },
     onCompactDone(newMessages) {
-      chat.addMessage(
-        `Compacted ${newMessages.length} messages to ${newMessages.length} messages`,
-        'System'
-      );
+      chat.addMessage(`Compacted to ${newMessages.length} messages`, 'System');
       chat.hideSpinner();
       chat.setDisabled(false);
     },

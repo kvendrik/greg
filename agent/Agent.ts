@@ -343,12 +343,19 @@ export class Agent {
     if (parsed.result.compact.requested) {
       const messages = this.core.state.messages;
       callbacks.onCompactStart?.(messages);
-      const newMessages = await this.compact(messages, {
-        signal: options.signal,
-        instructions: parsed.result.compact.instructions ?? undefined,
-        force: true,
-      });
-      callbacks.onCompactDone?.(newMessages);
+      try {
+        const newMessages = await this.compact(messages, {
+          signal: options.signal,
+          instructions: parsed.result.compact.instructions ?? undefined,
+          force: true,
+        });
+        callbacks.onCompactDone?.(newMessages);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(message);
+        callbacks.onError?.(message);
+        return;
+      }
       return;
     }
 
