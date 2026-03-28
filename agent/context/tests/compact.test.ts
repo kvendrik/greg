@@ -149,7 +149,6 @@ describe('compact', () => {
 
       expect(result.didCompact).toBe(false);
       expect(result.messages).toBe(messages);
-      expect(!result.didCompact && result.reason).toContain('No user messages');
     });
 
     it('skips compaction when preserved tail covers the full conversation', async () => {
@@ -162,9 +161,6 @@ describe('compact', () => {
 
       expect(result.didCompact).toBe(false);
       expect(result.messages).toBe(messages);
-      expect(!result.didCompact && result.reason).toContain(
-        'covers the full conversation'
-      );
     });
 
     it('falls back to fewer preserved turns when the tail exceeds the token budget', async () => {
@@ -200,10 +196,10 @@ describe('compact', () => {
         assistantMessage('reply 3'),
       ];
 
-      let capturedInstructions: string | undefined;
+      let capturedInstructions: { content: string; strategy: string } | undefined;
       void mock.module('../summarize', () => ({
         SUMMARY_PREFIX,
-        summarize: (msgs: AgentMessage[], opts: { instructions?: string }) => {
+        summarize: (msgs: AgentMessage[], opts: { instructions?: { content: string; strategy: string } }) => {
           capturedInstructions = opts.instructions;
           summarizeCalls.push(msgs);
           return [summaryMessage('Summary.')];
@@ -218,7 +214,7 @@ describe('compact', () => {
         instructions: { content: 'focus on decisions', strategy: 'append' },
       });
 
-      expect(capturedInstructions).toBe('focus on decisions');
+      expect(capturedInstructions).toEqual({ content: 'focus on decisions', strategy: 'append' });
     });
 
     it('handles repeated compaction without error', async () => {

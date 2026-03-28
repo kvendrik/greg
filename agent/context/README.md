@@ -19,13 +19,13 @@ const {
 
 ## Why
 
-Models lose recall accuracy as context grows ([context rot](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)). Quality can degrade well before hitting the hard token limit ([OpenAI cookbook](https://cookbook.openai.com/examples/context_summarization_with_realtime_api)). The evidence-backed strategy is: **summarize the older prefix, keep recent turns verbatim** ([Anthropic compaction docs](https://docs.anthropic.com/en/docs/build-with-claude/compaction), [LangChain summary-buffer](https://langchain.readthedocs.io/en/latest/modules/memory/types/summary_buffer.html)).
+Compaction makes it possible to talk to your agent indefinitely. When your context window hits a certain size you summarize everything you've spoken about and present the agent with the summarization so that you can keep chatting.
 
-This folder contains a [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) toolkit for effective compaction based on evidence-based strategies.
+When summarization should occur and how exactly it works can be a bit tricky to get right. That's why I'm sharing [Greg’s](https://github.com/kvendrik/greg) compaction toolkit for [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai), based on evidence-based strategies.
 
 ## Strategies
 
-- **Compact before hitting the hard limit** — model recall drops well before the hard context window. Compact proactively at a soft threshold, not at the edge ([OpenAI cookbook](https://cookbook.openai.com/examples/context_summarization_with_realtime_api), [Anthropic](https://docs.anthropic.com/en/docs/build-with-claude/compaction)).
+- **Compact before hitting the hard limit** — model recall drops well before the hard context window. Compact proactively at a soft threshold, not at the edge ([OpenAI cookbook](https://cookbook.openai.com/examples/context_summarization_with_realtime_api), [Anthropic post on compaction](https://docs.anthropic.com/en/docs/build-with-claude/compaction), [Anthropic post on context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
 - **Keeps recent turns verbatim** — the most recent exchanges carry the highest signal. Summarize the older prefix, never the tail ([Anthropic](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents), [LangChain summary-buffer](https://langchain.readthedocs.io/en/latest/modules/memory/types/summary_buffer.html)). Anthropic's Claude Code uses the same shape: compressed context + the N most recently accessed items ([source](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
 - **Uses cost as a secondary signal** — large cache write costs indicate a bloated context even if token counts look fine. We use cost thresholds alongside token thresholds ([Anthropic prompt caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching)).
 
@@ -42,9 +42,9 @@ Coming soon:
 
 When you call `compact()`:
 
-1. **checkLimit()** — checks thresholds (cache write cost, cache write tokens, soft token limit). First match fires a `reached: true`. This mirrors Anthropic's token-threshold trigger and OpenAI's `compact_threshold`.
-2. **split()** — finds the boundary between "prefix to summarize" and "tail to preserve." We try to keep 5 recent user turns, then 3, then 1, each checked against a token budget (40% of context window). Falls back to the largest token-bounded suffix that fits. Token-bounded retention follows the LangChain `max_token_limit` pattern.
-3. **summarize()** — sends the messages to compact to the LLM with a summarization prompt. Custom instructions replace the default prompt (when `instructions.strategy` is set to `replace`), matching Anthropic's `instructions` parameter behavior.
+1. **`checkLimit()`** — checks thresholds (cache write cost, cache write tokens, soft token limit). First match fires a `reached: true`. This mirrors Anthropic's token-threshold trigger and OpenAI's `compact_threshold`.
+2. **`split()`** — finds the boundary between "prefix to summarize" and "tail to preserve." We try to keep 5 recent user turns, then 3, then 1, each checked against a token budget (40% of context window). Falls back to the largest token-bounded suffix that fits. Token-bounded retention follows the LangChain `max_token_limit` pattern.
+3. **`summarize()`** — sends the messages to compact to the LLM with a summarization prompt. Custom instructions replace the default prompt (when `instructions.strategy` is set to `replace`), matching Anthropic's `instructions` parameter behavior.
 4. **Reassemble** — We put together the messages to preserve from `split()` and the `summary` for a new array of messages.
 
 ## Manual API
