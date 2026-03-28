@@ -2,7 +2,6 @@
 
 ```ts
 import { compact } from './context';
-import { usage } from './context';
 
 const {
   messages: newMessages,
@@ -12,15 +11,8 @@ const {
   model, // { model: Model<Api>, key: string }
   signal, // optional AbortSignal
   instructions, // optional string passed to the summarizer
-  force: false, // true bypasses threshold checks (used by /compact)
+  force: false, // true bypasses threshold checks
 });
-
-const ctx = usage(messages);
-ctx.tokens.used; // current context tokens
-ctx.tokens.window; // model context window
-ctx.tokens.limit; // soft compaction threshold
-ctx.tokens.percentageLimit; // how full the soft limit is (0-100)
-ctx.cost.session.total; // cumulative session cost in USD
 ```
 
 ## Why compact
