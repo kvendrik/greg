@@ -2,8 +2,12 @@
 
 #### A context compaction toolkit for [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai)
 
+```
+bun add @kvendrik/compact
+```
+
 ```ts
-import { compact } from './context';
+import { compact } from '@kvendrik/compact';
 
 const {
   messages: newMessages,
@@ -21,18 +25,21 @@ const {
 
 Compaction makes it possible to talk to your agent indefinitely. When your context window hits a certain size you summarize everything you've spoken about and present the agent with the summarization so that you can keep chatting.
 
-When summarization should occur and how exactly it works can be a bit tricky to get right. That's why I'm sharing [Greg’s](https://github.com/kvendrik/greg) compaction toolkit for [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai), which combines a bunch of evidence-based strategies for effective compaction.
+When summarization should occur and how exactly it works can be a bit tricky to get right. That's why I'm sharing [Greg’s](https://github.com/kvendrik/greg) compaction toolkit, which combines a bunch of evidence-based strategies for effective compaction.
+
+## Where this fits in
+
+Both [Anthropic](https://docs.anthropic.com/en/docs/build-with-claude/compaction) and [OpenAI](https://developers.openai.com/api/docs/guides/context-management) offer server-side compaction APIs, and [`pi-coding-agent`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/core/compaction/compaction.ts) ships its own compaction logic tied to its own `SessionManager`. This library is for developers building on [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai) directly — without `pi-coding-agent` session management — who want client-side compaction with evidence-based defaults.
+
+> As a side-note. If you’re looking into compaction systems you might also be interested in [OpenClaw’s compaction logic](https://github.com/openclaw/openclaw/blob/main/src/agents/compaction.ts) which is also written for `pi` and similar to this library’s logic.
 
 ## Strategies
 
-- **Compact before hitting the hard limit** — model recall drops well before the hard context window. Compact proactively at a soft threshold, not at the edge ([OpenAI cookbook](https://cookbook.openai.com/examples/context_summarization_with_realtime_api), [Anthropic post on compaction](https://docs.anthropic.com/en/docs/build-with-claude/compaction), [Anthropic post on context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
-- **Keeps recent turns verbatim** — the most recent exchanges carry the highest signal. Summarize the older prefix, never the tail ([Anthropic](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents), [LangChain summary-buffer](https://langchain.readthedocs.io/en/latest/modules/memory/types/summary_buffer.html)). Anthropic's Claude Code uses the same shape: compressed context + the N most recently accessed items ([source](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
+- **Keep summaries intact** — every summarization pass discards detail. We update summaries incrementally rather than re-summarizing from scratch ([LangChain `moving_summary_buffer`](https://langchain-doc.readthedocs.io/en/latest/modules/memory/types/summary_buffer.html)).
+- **Keep recent turns verbatim** — the most recent exchanges carry the highest signal. Summarize the older prefix, never the tail ([Anthropic](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents), [LangChain summary-buffer](https://langchain-doc.readthedocs.io/en/latest/modules/memory/types/summary_buffer.html)). Anthropic's Claude Code uses the same shape: compressed context + the N most recently accessed items ([source](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
 - **Use cost as a secondary signal** — large cache write costs indicate a bloated context even if token counts look fine. We use cost thresholds alongside token thresholds ([Anthropic prompt caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching)).
-
-Coming soon:
-
-- **Keeps summaries intact** — every summarization pass discards detail. We update summaries incrementally rather than re-summarizing from scratch ([LangChain `moving_summary_buffer`](https://langchain.readthedocs.io/en/latest/modules/memory/types/summary_buffer.html)).
-- **We don't summarize old tool call results** — raw tool output is useful when fresh but redundant once acted on. Clearing old results is the lightest-touch compaction step ([Anthropic](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
+- **Compact before hitting the hard limit** — model recall drops well before the hard context window. Compact proactively at a soft threshold, not at the edge ([OpenAI cookbook](https://cookbook.openai.com/examples/context_summarization_with_realtime_api), [Anthropic post on compaction](https://docs.anthropic.com/en/docs/build-with-claude/compaction), [Anthropic post on context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
+- **Don't summarize old tool call results** — raw tool output is useful when fresh but redundant once acted on. Clearing old results is the lightest-touch compaction step ([Anthropic](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
 
 ## What you should know
 
@@ -51,12 +58,12 @@ When you call `compact()`:
 
 ```ts
 import type { Model, Api } from '@mariozechner/pi-ai';
-import { checkLimit, split, summarize } from './context';
+import { checkLimit, split, summarize } from '@kvendrik/compact';
 
 const model: {model: Model<Api>, key: string} = {...};
 const messages: AgentMessage[] = [];
 
-const limit = checkLimit(messages, model.model);
+const limit = checkLimit(messages, {model: model.model});
 
 if (limit.reached) {
   console.log(`Limit reached: ${limit.reason}.`);
@@ -74,9 +81,3 @@ if (limit.reached) {
 
 return messages;
 ```
-
-## Gaps
-
-Separate from the "Coming soon" list above:
-
-- **Use `@anthropic-ai/tokenizer`** - `chars / 4` can miscount for JSON tool output, non-Latin text, or base64 content. Assistant messages already carry real `usage.output` token counts from the API; use those and only fall back to the heuristic for user messages. For exact user-message counts, `@anthropic-ai/tokenizer` is an option. Low urgency since the heuristic only drives budget decisions, not hard limits.

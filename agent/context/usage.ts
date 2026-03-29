@@ -1,7 +1,10 @@
-import { getModels, getProviders } from '@mariozechner/pi-ai';
-import type { KnownProvider, Usage } from '@mariozechner/pi-ai';
+import {
+  getModels,
+  getProviders,
+  type KnownProvider,
+  type Usage,
+} from '@mariozechner/pi-ai';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import { CONTEXT_SOFT_LIMIT_RATIO } from './compact';
 
 type UsageWithCost = Usage & {
   cost?: {
@@ -20,30 +23,30 @@ type MessageWithUsage = AgentMessage & {
   usage: UsageWithCost;
 };
 
-function hasUsage(msg: AgentMessage): msg is MessageWithUsage {
+function hasUsage(msg: AgentMessage | undefined): msg is MessageWithUsage {
   return (
     (msg as { role?: string }).role === 'assistant' &&
     typeof (msg as { usage?: Usage }).usage?.input === 'number'
   );
 }
 
-function getContextTokensFromUsage(usage: UsageWithCost): number {
-  return usage.input + usage.cacheRead + usage.cacheWrite;
+function getContextTokensFromUsage(msgUsage: UsageWithCost): number {
+  return msgUsage.input + msgUsage.cacheRead + msgUsage.cacheWrite;
 }
 
-function hasMeaningfulUsage(usage: UsageWithCost): boolean {
+function hasMeaningfulUsage(msgUsage: UsageWithCost): boolean {
   return (
-    usage.input > 0 ||
-    usage.output > 0 ||
-    usage.cacheRead > 0 ||
-    usage.cacheWrite > 0 ||
-    usage.totalTokens > 0 ||
-    (typeof usage.cost === 'object' && usage.cost.total > 0)
+    msgUsage.input > 0 ||
+    msgUsage.output > 0 ||
+    msgUsage.cacheRead > 0 ||
+    msgUsage.cacheWrite > 0 ||
+    msgUsage.totalTokens > 0 ||
+    (typeof msgUsage.cost === 'object' && msgUsage.cost.total > 0)
   );
 }
 
 export function getLatestAssistantUsage(
-  messages: AgentMessage[]
+  messages: AgentMessage[],
 ): UsageWithCost | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
@@ -56,7 +59,7 @@ export function getLatestAssistantUsage(
 }
 
 function getLatestAssistantMessageWithUsage(
-  messages: AgentMessage[]
+  messages: AgentMessage[],
 ): MessageWithUsage | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
@@ -69,7 +72,7 @@ function getLatestAssistantMessageWithUsage(
 }
 
 function getLatestAssistantMessageWithMeaningfulUsage(
-  messages: AgentMessage[]
+  messages: AgentMessage[],
 ): MessageWithUsage | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
@@ -108,7 +111,7 @@ function getSessionCostTotals(messages: AgentMessage[]): {
       cacheRead: 0,
       cacheWrite: 0,
       total: 0,
-    }
+    },
   );
 }
 
@@ -118,7 +121,7 @@ function getContextWindowFromMessage(message: MessageWithUsage | null): number {
   }
 
   const knownProvider = getProviders().find(
-    (provider): provider is KnownProvider => provider === message.provider
+    (provider): provider is KnownProvider => provider === message.provider,
   );
 
   if (knownProvider === undefined) {
@@ -127,7 +130,7 @@ function getContextWindowFromMessage(message: MessageWithUsage | null): number {
 
   const model = getModels(knownProvider).find(
     (candidate) =>
-      candidate.name === message.model || candidate.id === message.model
+      candidate.name === message.model || candidate.id === message.model,
   );
 
   return model?.contextWindow ?? 0;
@@ -144,8 +147,7 @@ function deriveContextTokens(messages: AgentMessage[]): number {
     const message = messages[i];
     if (hasUsage(message)) {
       sawAssistantUsage = true;
-      const usage = message.usage;
-      const contextTokens = getContextTokensFromUsage(usage);
+      const contextTokens = getContextTokensFromUsage(message.usage);
       if (contextTokens > 0) {
         return contextTokens;
       }
@@ -157,7 +159,7 @@ function deriveContextTokens(messages: AgentMessage[]): number {
   }
 
   throw new Error(
-    'Cannot derive context tokens: no assistant message with provider usage found.'
+    'Cannot derive context tokens: no assistant message with provider usage found.',
   );
 }
 
@@ -190,10 +192,6 @@ interface ContextUsage {
     window: number;
     /** Percent of the context window currently used, clamped to `100`. */
     percentageWindow: number;
-    /** Soft compaction threshold derived from the context window. */
-    limit: number;
-    /** Percent of the soft compaction threshold currently used, clamped to `100`. */
-    percentageLimit: number;
   };
   cost: Cost & {
     /** Total cost charged across all assistant turns in the session, in USD. */
@@ -201,39 +199,46 @@ interface ContextUsage {
   };
 }
 
+const ZERO_COST: Cost = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  total: 0,
+};
+
+function buildCostStats(
+  latestCost: Cost | undefined,
+  sessionCost: Cost,
+): ContextUsage['cost'] {
+  const base = latestCost ?? ZERO_COST;
+  return { ...base, session: sessionCost };
+}
+
 export function usage(messages: AgentMessage[]): ContextUsage {
   const latestMessage = getLatestAssistantMessageWithUsage(messages);
   const latestDisplayMessage =
     getLatestAssistantMessageWithMeaningfulUsage(messages) ?? latestMessage;
+  const displayUsage = latestDisplayMessage?.usage ?? null;
   const latestCost =
     latestDisplayMessage === null ? undefined : latestDisplayMessage.usage.cost;
   const sessionCost = getSessionCostTotals(messages);
   const usedTokens = deriveContextTokens(messages);
   const contextWindow = getContextWindowFromMessage(latestMessage);
-  const softLimit = Math.floor(contextWindow * CONTEXT_SOFT_LIMIT_RATIO);
 
   return {
     tokens: {
-      input: latestDisplayMessage?.usage.input ?? 0,
-      output: latestDisplayMessage?.usage.output ?? 0,
-      cacheRead: latestDisplayMessage?.usage.cacheRead ?? 0,
-      cacheWrite: latestDisplayMessage?.usage.cacheWrite ?? 0,
+      input: displayUsage?.input ?? 0,
+      output: displayUsage?.output ?? 0,
+      cacheRead: displayUsage?.cacheRead ?? 0,
+      cacheWrite: displayUsage?.cacheWrite ?? 0,
       used: usedTokens,
       window: contextWindow,
       percentageWindow:
         contextWindow === 0
           ? 0
           : Math.min(100, (usedTokens / contextWindow) * 100),
-      limit: softLimit,
-      percentageLimit: Math.min(100, (usedTokens / softLimit) * 100),
     },
-    cost: {
-      input: latestCost?.input ?? 0,
-      output: latestCost?.output ?? 0,
-      cacheRead: latestCost?.cacheRead ?? 0,
-      cacheWrite: latestCost?.cacheWrite ?? 0,
-      total: latestCost?.total ?? 0,
-      session: sessionCost,
-    },
+    cost: buildCostStats(latestCost, sessionCost),
   };
 }

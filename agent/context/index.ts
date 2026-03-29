@@ -1,3 +1,5 @@
 export { usage } from './usage';
 export { summarize } from './summarize';
-export { compact, type CompactResult, split, checkLimit } from './compact';
+export { compact, type CompactResult } from './compact';
+export { split } from './split';
+export { checkLimit } from './checkLimit';

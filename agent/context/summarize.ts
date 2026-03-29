@@ -1,15 +1,14 @@
-import { completeSimple } from '@mariozechner/pi-ai';
-import type { Model, Api } from '@mariozechner/pi-ai';
+import { completeSimple, type Model, type Api } from '@mariozechner/pi-ai';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import { createLogger } from '../../utilities/logger';
-
-const logger = createLogger('Summarize');
 
 const SUMMARIZE_SYSTEM = `You are a summarizer. Given a conversation history, produce a concise summary that preserves key facts, decisions, topics, and context needed to continue the conversation. Output only the summary, no preamble.`;
 
 export const SUMMARY_PREFIX = '[Compaction summary]\n\n';
 
-export type Instructions = { content: string; strategy: 'replace' | 'append' };
+export interface Instructions {
+  content: string;
+  strategy: 'replace' | 'append';
+}
 
 export async function summarize(
   messages: AgentMessage[],
@@ -23,10 +22,6 @@ export async function summarize(
     instructions?: Instructions;
   }
 ): Promise<AgentMessage[]> {
-  logger.info(
-    `Compacting ${messages.length} messages using ${model.model.name}...`
-  );
-
   const transcript = messagesToTranscript(messages);
   let instructions = SUMMARIZE_SYSTEM;
 
@@ -63,8 +58,6 @@ export async function summarize(
     timestamp: Date.now(),
   };
 
-  logger.info(`Compaction done...`);
-
   return [summaryMessage];
 }
 
@@ -75,22 +68,34 @@ function messagesToTranscript(messages: AgentMessage[]): string {
       role: string;
       content?: string | { type?: string; text?: string }[];
     };
+
+    if (msg.role === 'tool') {
+      lines.push('tool: [tool output omitted]');
+      continue;
+    }
+
     const content = msg.content;
-    if (!content) continue;
+    if (content === undefined) {
+      continue;
+    }
     let text = '';
     if (typeof content === 'string') {
       text = content;
     } else if (Array.isArray(content)) {
       text = content
-        .filter(
-          (b) =>
-            (b as { type?: string }).type === 'text' &&
+        .filter((b) => {
+          const block = b as { type?: string };
+          return (
+            block.type === 'text' &&
             typeof (b as { text?: string }).text === 'string'
-        )
+          );
+        })
         .map((b) => (b as { text: string }).text)
         .join('');
     }
-    if (text.trim()) lines.push(`${msg.role}: ${text.trim()}`);
+    if (text.trim() !== '') {
+      lines.push(`${msg.role}: ${text.trim()}`);
+    }
   }
   return lines.join('\n\n');
 }
