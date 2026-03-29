@@ -45,9 +45,8 @@ function hasMeaningfulUsage(msgUsage: UsageWithCost): boolean {
   );
 }
 
-
 function getLatestAssistantMessageWithUsage(
-  messages: AgentMessage[],
+  messages: AgentMessage[]
 ): MessageWithUsage | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
@@ -60,7 +59,7 @@ function getLatestAssistantMessageWithUsage(
 }
 
 function getLatestAssistantMessageWithMeaningfulUsage(
-  messages: AgentMessage[],
+  messages: AgentMessage[]
 ): MessageWithUsage | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
@@ -99,7 +98,7 @@ function getSessionCostTotals(messages: AgentMessage[]): {
       cacheRead: 0,
       cacheWrite: 0,
       total: 0,
-    },
+    }
   );
 }
 
@@ -109,7 +108,7 @@ function getContextWindowFromMessage(message: MessageWithUsage | null): number {
   }
 
   const knownProvider = getProviders().find(
-    (provider): provider is KnownProvider => provider === message.provider,
+    (provider): provider is KnownProvider => provider === message.provider
   );
 
   if (knownProvider === undefined) {
@@ -118,7 +117,7 @@ function getContextWindowFromMessage(message: MessageWithUsage | null): number {
 
   const model = getModels(knownProvider).find(
     (candidate) =>
-      candidate.name === message.model || candidate.id === message.model,
+      candidate.name === message.model || candidate.id === message.model
   );
 
   return model?.contextWindow ?? 0;
@@ -147,7 +146,7 @@ function deriveContextTokens(messages: AgentMessage[]): number {
   }
 
   throw new Error(
-    'Cannot derive context tokens: no assistant message with provider usage found.',
+    'Cannot derive context tokens: no assistant message with provider usage found.'
   );
 }
 
@@ -197,7 +196,7 @@ const ZERO_COST: Cost = {
 
 function buildCostStats(
   latestCost: Cost | undefined,
-  sessionCost: Cost,
+  sessionCost: Cost
 ): ContextUsage['cost'] {
   const base = latestCost ?? ZERO_COST;
   return { ...base, session: sessionCost };
