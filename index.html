@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>compact()</title>
+    <title>Greg — OpenClaw-like personal assistant</title>
     <style>
       * {
         margin: 0;
@@ -29,7 +29,21 @@
         font-size: 3rem;
       }
       h1 {
-        font-family: monospace;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          'Noto Sans',
+          sans-serif,
+          'Apple Color Emoji',
+          'Segoe UI Emoji',
+          'Segoe UI Symbol',
+          'Noto Color Emoji';
       }
       a {
         color: inherit;
@@ -75,21 +89,16 @@
   <body>
     <main>
       <div>🤖</div>
-      <h1><a href="https://kvendrik.com/greg">greg</a>/compact</h1>
+      <h1>Greg</h1>
       <p>
-        A context compaction toolkit for
-        <a href="https://github.com/badlogic/pi-mono/tree/main/packages/ai"
-          >pi-ai</a
-        >.
+        An <a href="https://openclaw.ai/">OpenClaw</a>-like personal assistant
       </p>
       <p>
-        <code>bun add @kvendrik/compact</code>
+        <code>bun add -g @kvendrik/greg && greg quickstart</code>
       </p>
-      <a
-        class="button"
-        href="https://github.com/kvendrik/greg/blob/main/agent/context/"
-        >View on Github</a
-      >
+      <a class="button" href="https://github.com/kvendrik/greg">
+        View on Github
+      </a>
     </main>
   </body>
 </html>
