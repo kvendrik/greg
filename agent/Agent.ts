@@ -152,6 +152,9 @@ export class Agent {
     try {
       result = await compact(messages, {
         ...opts,
+        instructions: instructions
+          ? { content: instructions, strategy: 'append' }
+          : undefined,
         model: this.primaryModelEntry,
       });
     } catch (err) {
@@ -167,7 +170,13 @@ export class Agent {
         `Primary model overloaded during compaction, retrying with ${fallbackEntry.model.name}.`
       );
 
-      result = await compact(messages, { ...opts, model: fallbackEntry });
+      result = await compact(messages, {
+        ...opts,
+        model: fallbackEntry,
+        instructions: instructions
+          ? { content: instructions, strategy: 'append' }
+          : undefined,
+      });
     }
 
     if (result.didCompact) {
