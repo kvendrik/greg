@@ -1,4 +1,4 @@
-# 🤖 `compact()`
+# 🧰 `compact()`
 
 #### A context compaction toolkit for [`pi-ai`](https://github.com/badlogic/pi-mono/tree/main/packages/ai)
 
