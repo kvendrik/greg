@@ -37,9 +37,9 @@ Both [Anthropic](https://docs.anthropic.com/en/docs/build-with-claude/compaction
 
 - **Keep summaries intact** — every summarization pass discards detail. We never re-summarize existing summaries; they're preserved as-is and new summaries are added alongside them ([LangChain `moving_summary_buffer`](https://langchain-doc.readthedocs.io/en/latest/modules/memory/types/summary_buffer.html)).
 - **Keep recent turns verbatim** — the most recent exchanges carry the highest signal. Summarize the older prefix, never the tail ([Anthropic](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents), [LangChain summary-buffer](https://langchain-doc.readthedocs.io/en/latest/modules/memory/types/summary_buffer.html)). Anthropic's Claude Code uses the same shape: compressed context + the N most recently accessed items ([source](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
-- **Use cost as a secondary signal** — large cache write costs indicate a bloated context even if token counts look fine. We use cost thresholds alongside token thresholds ([Anthropic prompt caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching)).
-- **Compact before hitting the hard limit** — model recall drops well before the hard context window. Compact proactively at a soft threshold, not at the edge ([OpenAI cookbook](https://cookbook.openai.com/examples/context_summarization_with_realtime_api), [Anthropic post on compaction](https://docs.anthropic.com/en/docs/build-with-claude/compaction), [Anthropic post on context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
+- **Compact before hitting the hard limit** — model recall drops well before the hard context window. We compact at a configurable soft token limit (defaults to 60% of the context window), matching the industry-standard approach used by [Claude Code](https://docs.anthropic.com/en/docs/build-with-claude/compaction), [OpenAI](https://developers.openai.com/api/docs/guides/context-management), and [LangChain](https://langchain-doc.readthedocs.io/en/latest/modules/memory/types/summary_buffer.html).
 - **Don't summarize old tool call results** — raw tool output is useful when fresh but redundant once acted on. Clearing old results is the lightest-touch compaction step ([Anthropic](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)).
+- **Compress tool results in-place** — no matter if we compact the messages or not we do run tool result compression on it which truncates tool results older than the last 3 user turns.
 
 ## What you should know
 
@@ -49,7 +49,7 @@ Both [Anthropic](https://docs.anthropic.com/en/docs/build-with-claude/compaction
 
 When you call `compact()`:
 
-1. **`checkLimit()`** — checks thresholds (cache write cost, cache write tokens, soft token limit). First match fires a `reached: true`. This mirrors Anthropic's token-threshold trigger and OpenAI's `compact_threshold`.
+1. **`checkLimit()`** — checks whether context tokens exceed the soft token limit (defaults to 60% of the context window). Returns `reached: true` when the limit is crossed.
 2. **`split()`** — finds the boundary between "prefix to summarize" and "tail to preserve." We try to keep 5 recent user turns, then 3, then 1, each checked against a token budget (40% of context window). Falls back to the largest token-bounded suffix that fits. Token-bounded retention follows the LangChain `max_token_limit` pattern.
 3. **`summarize()`** — sends the messages to compact to the LLM with a summarization prompt. Custom instructions replace the default prompt (when `instructions.strategy` is set to `replace`), matching Anthropic's `instructions` parameter behavior.
 4. **Reassemble** — We put together the messages to preserve from `split()` and the `summary` for a new array of messages.
@@ -58,7 +58,7 @@ When you call `compact()`:
 
 ```ts
 import type { Model, Api } from '@mariozechner/pi-ai';
-import { checkLimit, split, summarize } from '@kvendrik/compact';
+import { checkLimit, split, summarize, compressToolResults } from '@kvendrik/compact';
 
 const model: {model: Model<Api>, key: string} = {...};
 const messages: AgentMessage[] = [];
@@ -79,5 +79,5 @@ if (limit.reached) {
   return [...compacted, ...preserve];
 }
 
-return messages;
+return compressToolResults(messages);
 ```

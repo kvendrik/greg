@@ -1,8 +1,9 @@
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import { checkLimit, type Limits, DEFAULT_LIMITS } from './checkLimit';
+import { checkLimit, type Limits } from './checkLimit';
 import { split } from './split';
 import { summarize, type Instructions } from './summarize';
+import { compressToolResults } from './compress';
 
 export interface CompactResult {
   messages: AgentMessage[];
@@ -20,7 +21,7 @@ interface CompactOptions {
 
 export async function compact(
   messages: AgentMessage[],
-  { signal, model, instructions, force, limits }: CompactOptions,
+  { signal, model, instructions, force, limits }: CompactOptions
 ): Promise<CompactResult> {
   const effectiveSignal = signal ?? new AbortController().signal;
 
@@ -34,14 +35,15 @@ export async function compact(
 
   const { reached, reason } = checkLimit(messages, {
     model: model.model,
-    limits: {
-      ...DEFAULT_LIMITS,
-      ...limits,
-    },
+    limits,
   });
 
   if (!reached) {
-    return { messages, didCompact: false, reason };
+    return {
+      messages: compressToolResults(messages),
+      didCompact: false,
+      reason,
+    };
   }
 
   return doCompact(reason);
@@ -49,7 +51,7 @@ export async function compact(
   async function doCompact(trigger: string): Promise<CompactResult> {
     const { compact: messagesToCompact, preserve } = split(
       messages,
-      model.model,
+      model.model
     );
 
     if (messagesToCompact === null) {
@@ -63,7 +65,7 @@ export async function compact(
     });
 
     return {
-      messages: [...compactedMessages, ...preserve],
+      messages: [...compactedMessages, ...compressToolResults(preserve)],
       didCompact: true,
       reason: trigger,
     };

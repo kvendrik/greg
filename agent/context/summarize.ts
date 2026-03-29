@@ -1,5 +1,6 @@
 import { completeSimple, type Model, type Api } from '@mariozechner/pi-ai';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import { compressToolResults } from './compress';
 
 const SUMMARIZE_SYSTEM = `You are a summarizer. Given a conversation history, produce a concise summary that preserves key facts, decisions, topics, and context needed to continue the conversation. Output only the summary, no preamble.`;
 
@@ -61,24 +62,15 @@ export async function summarize(
   return [summaryMessage];
 }
 
-function messagesToTranscript(messages: AgentMessage[]): string {
+function messagesToTranscript(allMessages: AgentMessage[]): string {
   const lines: string[] = [];
-  for (const m of messages) {
-    const msg = m as {
-      role: string;
-      content?: string | { type?: string; text?: string }[];
-    };
 
-    if (msg.role === 'tool') {
-      lines.push('tool: [tool output omitted]');
-      continue;
-    }
+  const messages = compressToolResults(allMessages);
 
+  for (const msg of messages) {
     const content = msg.content;
-    if (content === undefined) {
-      continue;
-    }
     let text = '';
+
     if (typeof content === 'string') {
       text = content;
     } else if (Array.isArray(content)) {
@@ -93,10 +85,12 @@ function messagesToTranscript(messages: AgentMessage[]): string {
         .map((b) => (b as { text: string }).text)
         .join('');
     }
+
     if (text.trim() !== '') {
       lines.push(`${msg.role}: ${text.trim()}`);
     }
   }
+
   return lines.join('\n\n');
 }
 

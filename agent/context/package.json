@@ -2,11 +2,11 @@
   "name": "@kvendrik/compact",
   "version": "0.1.0",
   "description": "A context compaction toolkit for pi-ai",
-  "module": "src/index.ts",
+  "module": "./index.ts",
   "type": "module",
   "license": "MIT",
   "files": [
-    "src",
+    "*.ts",
     "README.md"
   ],
   "repository": {
@@ -22,7 +22,7 @@
   ],
   "scripts": {
     "test": "bun test",
-    "lint": "eslint src/",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:all": "bun test && bun lint && bun typecheck"
   },

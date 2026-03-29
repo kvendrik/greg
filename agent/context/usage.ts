@@ -45,18 +45,6 @@ function hasMeaningfulUsage(msgUsage: UsageWithCost): boolean {
   );
 }
 
-export function getLatestAssistantUsage(
-  messages: AgentMessage[],
-): UsageWithCost | null {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (hasUsage(message)) {
-      return message.usage;
-    }
-  }
-
-  return null;
-}
 
 function getLatestAssistantMessageWithUsage(
   messages: AgentMessage[],
