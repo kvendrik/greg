@@ -136,7 +136,7 @@ export const chat = (
             return box.render(width);
           }
 
-          const box = new Box(1, 1, (text) => text);
+          const box = new Box(1, 0, (text) => text);
           box.addChild(renderedContent);
           return box.render(width);
         };

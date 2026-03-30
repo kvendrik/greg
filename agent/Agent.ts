@@ -241,6 +241,18 @@ export class Agent {
         );
         extraCallbacks?.onThinkingLevelChange?.(thinkingLevel);
       },
+      onCompactStart: (oldMessages: AgentMessage[]) => {
+        channelCallbacks.forEach((callback) =>
+          callback.onCompactStart?.(oldMessages)
+        );
+        extraCallbacks?.onCompactStart?.(oldMessages);
+      },
+      onCompactDone: (newMessages: AgentMessage[]) => {
+        channelCallbacks.forEach((callback) =>
+          callback.onCompactDone?.(newMessages)
+        );
+        extraCallbacks?.onCompactDone?.(newMessages);
+      },
     };
   }
 

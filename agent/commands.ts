@@ -94,7 +94,7 @@ export function listCommands(config: Config): CommandInfo[] {
 }
 
 export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
-  let content = input.content.trim();
+  let content = input.content;
   let model: ConfigModel | null = null;
   let thinkingLevel: ThinkingLevel | null = null;
   let statusRequested = false;
@@ -139,7 +139,7 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
 
     const cmd = match[1];
     const fullMatch = match[0];
-    content = content.slice(fullMatch.length).trim();
+    content = stripBracketAnnotations(content).slice(fullMatch.length).trim();
 
     switch (cmd) {
       case 'status': {
@@ -219,4 +219,9 @@ export function parseCommands(input: ParseCommandsInput): ParseCommandsOutput {
     },
     cleanPrompt: content,
   };
+}
+
+/** Removes bracketed tags (e.g. `[Sent from the TUI]`) from prompts. */
+function stripBracketAnnotations(text: string): string {
+  return text.replace(/\[[^\]]*\]/g, '').trim();
 }

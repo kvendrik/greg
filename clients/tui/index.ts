@@ -42,7 +42,6 @@ export const tuiCommand = new Command('tui')
         );
       }
 
-      process.env.GREG_LOG = 'silent';
       await gateway.start();
       const session = gateway.get(sessionId);
 

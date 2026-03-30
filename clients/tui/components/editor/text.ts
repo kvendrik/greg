@@ -35,7 +35,7 @@ export function createTextEditor(tui: TUI): Tools {
       selectList: selectListTheme,
     },
     {
-      paddingX: 1,
+      paddingX: 2,
     }
   );
 
@@ -73,13 +73,16 @@ export function createTextEditor(tui: TUI): Tools {
           0,
           cursorIndex + cursorToken.length
         );
+
         const lineAfterPlaceholder = contentLine.slice(
           cursorIndex + cursorToken.length
         );
+
         const placeholder = truncateToWidth(
           pc.dim('Message or / for commands...'),
           visibleWidth(lineAfterPlaceholder)
         );
+
         const placeholderWidth = visibleWidth(placeholder);
 
         contentLines[placeholderLineIndex] =

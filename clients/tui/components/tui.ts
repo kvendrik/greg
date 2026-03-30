@@ -22,7 +22,8 @@ export function tui(): TUI {
   //   process.stdout.write('\x1b[?1049l');
   // };
 
-  const stopTui = (): void => {
+  const stopTui = (reason?: unknown): void => {
+    console.error(reason);
     if (hasStoppedTui) {
       return;
     }

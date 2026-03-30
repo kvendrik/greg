@@ -9,7 +9,7 @@ export interface Limits {
   softTokenLimit?: number;
 }
 
-const DEFAULT_LIMITS: Required<Limits> = {
+export const DEFAULT_LIMITS: Required<Limits> = {
   softTokenLimit: 60,
 };
 
@@ -20,7 +20,7 @@ interface CheckOptions {
 
 export function checkLimit(
   messages: AgentMessage[],
-  options: CheckOptions,
+  options: CheckOptions
 ): { reached: boolean; reason: string } {
   const model = options.model;
   const limits = {

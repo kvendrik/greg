@@ -3,6 +3,7 @@ import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
 import { truncateToWidth, visibleWidth } from '@mariozechner/pi-tui';
 import pc from 'picocolors';
 import type { Session } from '../../../gateway';
+import { DEFAULT_LIMITS } from '../../../agent/context/checkLimit';
 
 type FooterOptions = {
   width: number;
@@ -120,10 +121,13 @@ function formatUsageFooter(usage: Session['usage'] | null): {
   ].join(' ');
 
   const windowUsage = `${usage.tokens.percentageWindow.toFixed(1)}%/${formatCompactNumber(usage.tokens.window)}`;
-  const limitUsage = `${usage.tokens.percentageLimit.toFixed(1)}%/${formatCompactNumber(usage.tokens.limit)}`;
+
+  const softLimit = usage.tokens.window * (DEFAULT_LIMITS.softTokenLimit / 100);
+  const contextMax = Math.min(100, (usage.tokens.used / softLimit) * 100);
+  const limitUsage = `${contextMax.toFixed(1)}%/${formatCompactNumber(softLimit)}`;
 
   return {
-    left: `${pc.dim(usageSummary)} ${pc.dim('W')}${contextColor(usage.tokens.percentageWindow, windowUsage)} ${pc.dim('C')}${contextColor(usage.tokens.percentageLimit, limitUsage)}`,
+    left: `${pc.dim(usageSummary)} ${pc.dim('W')}${contextColor(usage.tokens.percentageWindow, windowUsage)} ${pc.dim('C')}${contextColor(contextMax, limitUsage)}`,
     right: null,
   };
 
