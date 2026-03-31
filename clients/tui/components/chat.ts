@@ -182,6 +182,7 @@ export const chat = (
         if (showSpinner) {
           if (lastIsYou) renderedLines.push('');
           renderedLines.push(` ${loader.render(width - 1)[1]}`);
+          renderedLines.push('');
         }
         return [...renderedLines, ...editor.render(width)];
       },

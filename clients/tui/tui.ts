@@ -245,7 +245,9 @@ export async function start({
     }
 
     void activeClient
-      .prompt(`${message}\n\n[Sent from the TUI]`)
+      .prompt(
+        `${message}\n\n[Sent from the TUI]${voiceMode ? '[Greg is running in voice mode. Replies will be spoken out loud. Make sure responses do not use formatting and can be read out loud without confusion.]' : ''}`
+      )
       .then(() => {
         stream?.close();
         stream = null;

@@ -116,7 +116,7 @@ export function createVoiceEditor(tui: TUI): Tools {
   };
 
   const renderVoiceBox = (width: number, children: Component[]): string[] => {
-    const box = new Box(1, 1, (text) => pc.bgBlack(text));
+    const box = new Box(2, 1, (text) => pc.bgBlack(text));
     children.forEach((child) => {
       box.addChild(child);
     });
@@ -279,5 +279,6 @@ export function createVoiceEditor(tui: TUI): Tools {
       }
     },
     setCommands() {},
+    resetCommands() {},
   };
 }
