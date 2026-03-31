@@ -1,4 +1,6 @@
+- [ ] Polish TUI rendering
+  - [ ] System messages have the wrong padding
+  - [ ] Rerendering doesn't work well so TUI often doesn't fill window e.g. after Ctrl+O toggling
 - [ ] Pre-exec policy for dangerous patterns
 - [ ] Make gateway logs accessible from sandboxed exec environment (pm2 log piping)
-- [ ] Support `open` URLs from sandbox
 - [ ] Allow `/` command for primary model
