@@ -1,5 +1,10 @@
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
-import { truncateToWidth, visibleWidth } from '@mariozechner/pi-tui';
+import {
+  truncateToWidth,
+  visibleWidth,
+  matchesKey,
+  Key,
+} from '@mariozechner/pi-tui';
 import pc from 'picocolors';
 import { tui as createTui } from './components/tui';
 import { chat as createChat, type Stream } from './components/chat';
@@ -91,15 +96,16 @@ export async function start({
         ...chat.component.render(width),
       ];
 
-      const availableBodyRows =
-        Math.max(
-          0,
-          tui.terminal.rows - headerLines.length - footerLines.length
-        ) * 3;
+      // const availableBodyRows =
+      //   Math.max(
+      //     0,
+      //     tui.terminal.rows - headerLines.length - footerLines.length
+      //   ) * 3;
 
       const renderedLines = [
         ...headerLines,
-        ...bodyLines.slice(-availableBodyRows),
+        //...bodyLines.slice(-availableBodyRows),
+        ...bodyLines,
         ...footerLines,
       ];
 
@@ -112,6 +118,10 @@ export async function start({
       return renderedLines;
     },
     handleInput: (input: string) => {
+      if (matchesKey(input, Key.ctrl('o'))) {
+        chat.toggleToolMessages();
+        return;
+      }
       chat.component.handleInput?.(input);
     },
     invalidate: () => {},
@@ -312,7 +322,9 @@ export async function start({
 
   function helpMessage(): string {
     const memoryInfo = getMemoryInfo(config);
-    return `
+    return `    Controls:
+      Ctrl+O - Toggle tool messages
+
     Usage Legend:
       ↑ fresh input tokens
       ↓ output tokens

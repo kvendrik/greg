@@ -48,7 +48,7 @@ export async function client(
       }
       onPermissionRequest?.(details.commands);
       const reply = await callbacks.getReply(
-        `💂 Need permission to run tool: \n\n${pc.yellow(details.toolName)}${pc.dim(`(${details.prettyParams})`)}`
+        `${pc.dim('💂 Need permission to run tool:')}\n\n${pc.yellow(details.toolName)}${pc.dim(`(${details.prettyParams})`)}`
       );
       onPermissionRequestDone?.();
       return reply;

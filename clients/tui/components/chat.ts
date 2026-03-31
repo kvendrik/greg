@@ -27,6 +27,7 @@ interface Tools {
   setDisabled: (disabled: boolean) => void;
   setCommands: (commands: Record<string, string>) => void;
   resetCommands: () => void;
+  toggleToolMessages: () => void;
 }
 
 type Role = 'Greg' | 'System' | 'Tool';
@@ -42,6 +43,7 @@ export const chat = (
   { voiceMode }: { voiceMode: boolean }
 ): Tools => {
   let streamOpen = false;
+  let showToolMessages = false;
   let showSpinner = false;
   let isSpinnerRunning = false;
   let onSubmit: (message: string) => void = () => {};
@@ -84,6 +86,10 @@ export const chat = (
     setCommands: editor.setCommands,
     resetCommands: () => {
       editor.resetCommands();
+    },
+    toggleToolMessages: () => {
+      showToolMessages = !showToolMessages;
+      tui.requestRender();
     },
     onSubmit: (callback: (message: string) => void) => {
       onSubmit = callback;
@@ -145,35 +151,34 @@ export const chat = (
             return box.render(width);
           }
 
+          if (message.role === 'Greg') {
+            const box = new Box(1, 1, (text) => text);
+            box.addChild(renderedContent);
+            return box.render(width);
+          }
+
           if (message.role === 'Tool') {
+            if (!showToolMessages) {
+              return [];
+            }
             const box = new Box(1, 0, (text) => pc.dim(text));
             box.addChild(renderedContent);
             return box.render(width);
           }
 
-          if (message.role === 'System') {
-            const text = new Text(pc.dim(`System: ${message.content}`));
-            return text.render(width);
-          }
-
           const box = new Box(1, 0, (text) => text);
-          box.addChild(renderedContent);
+          box.addChild(new Text(pc.dim(`System: ${message.content}`)));
           return box.render(width);
         };
 
         const renderedLines: string[] = [];
 
-        for (const [index, message] of messages.entries()) {
-          if (index > 0) renderedLines.push('');
+        for (const [, message] of messages.entries()) {
           renderedLines.push(...renderMessage(message));
         }
 
-        if (showSpinner) {
-          renderedLines.push(...loader.render(width));
-          return [...renderedLines, ...editor.render(width)];
-        } else {
-          return [...renderedLines, '', '', ...editor.render(width)];
-        }
+        if (showSpinner) renderedLines.push(...loader.render(width));
+        return [...renderedLines, ...editor.render(width)];
       },
       handleInput: (input) => {
         editor.handleInput(input);
