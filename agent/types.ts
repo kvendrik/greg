@@ -113,7 +113,6 @@ export interface AgentConfig {
         profiles: AllowedProfiles;
       };
       files?: {
-        read: string[];
         write: string[];
       };
     };

@@ -4,31 +4,21 @@ import type { AgentConfig } from '../../types';
 import { getWorkspacePath } from '../../utilities';
 
 const projectRoot = resolve(join(__dirname, '../../../'));
-const getDefaultAllowedPaths = (config: AgentConfig): string[] => [
-  resolve(getWorkspacePath(config)),
-  resolve(join(tmpdir(), 'greg')),
-  projectRoot,
-  `!${join(projectRoot, 'agent')}`,
-];
 
-export function isAllowed(
-  forAction: 'read' | 'write' | 'read-write',
-  path: string,
-  config: AgentConfig
-): boolean {
+const getDefaultAllowedPaths = (config: AgentConfig): { write: string[] } => ({
+  write: [
+    resolve(getWorkspacePath(config)),
+    tmpdir(),
+    projectRoot,
+    `!${join(projectRoot, 'agent')}`,
+  ],
+});
+
+export function isAllowed(path: string, config: AgentConfig): boolean {
   const absolutePath = resolve(expandPath(path));
+  return get('write');
 
-  if (forAction === 'read') {
-    return get('read');
-  }
-
-  if (forAction === 'write') {
-    return get('write');
-  }
-
-  return get('read') && get('write');
-
-  function get(action: 'read' | 'write'): boolean {
+  function get(action: 'write'): boolean {
     const all = getRoots(action, config);
     return (
       all.allow.some((root) => absolutePath.startsWith(root)) &&
@@ -38,7 +28,7 @@ export function isAllowed(
 }
 
 export function getRoots(
-  forAction: 'read' | 'write',
+  forAction: 'write',
   config: AgentConfig
 ): {
   allow: string[];
@@ -47,7 +37,7 @@ export function getRoots(
   const guardFiles = config.tools.guard.files;
   const extraPaths =
     guardFiles === undefined ? [] : guardFiles[forAction].map(expandPath);
-  const all = [...getDefaultAllowedPaths(config), ...extraPaths];
+  const all = [...getDefaultAllowedPaths(config)[forAction], ...extraPaths];
   return {
     allow: all.filter((root) => !root.startsWith('!')),
     deny: all

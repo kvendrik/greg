@@ -51,7 +51,16 @@ export function evaluate({
     const mode = (toolNames.read as readonly string[]).includes(toolName)
       ? 'read'
       : 'write';
-    const allowed = isAllowed(mode, rawPath, context.config);
+
+    if (mode === 'read') {
+      return {
+        allowed: true,
+        reason: null,
+      };
+    }
+
+    const allowed = isAllowed(rawPath, context.config);
+
     return {
       allowed,
       reason: allowed ? null : `${rawPath} is not allowed for mode: ${mode}`,

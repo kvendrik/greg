@@ -125,7 +125,7 @@ function isToolTmpAllowed(toolName: string): boolean {
   const now = new Date();
   const allowedUntil = tmpAllowedTools.get(toolName) ?? null;
   const isAllowed = Boolean(allowedUntil && allowedUntil > now);
-  if (isAllowed) {
+  if (allowedUntil && !isAllowed) {
     tmpAllowedTools.delete(toolName);
   }
   return isAllowed;

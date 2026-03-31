@@ -11,6 +11,7 @@ import { version } from '../../package.json';
 import { getInfo as getMemoryInfo } from '../../agent/tools/memory';
 import { play, synthesizeToBuffer } from '../../voice/speech';
 import { validate as validateConfig, get as getConfig } from '../../config';
+import { prettify } from '../../agent/tools/utilities/policy/prettify';
 
 interface StartOptions {
   voiceMode: boolean;
@@ -66,7 +67,6 @@ export async function start({
       }).render(width);
 
       const footerLines = [
-        '',
         ...footer({
           width,
           sessionId,
@@ -91,10 +91,11 @@ export async function start({
         ...chat.component.render(width),
       ];
 
-      const availableBodyRows = Math.max(
-        0,
-        tui.terminal.rows - headerLines.length - footerLines.length
-      );
+      const availableBodyRows =
+        Math.max(
+          0,
+          tui.terminal.rows - headerLines.length - footerLines.length
+        ) * 3;
 
       const renderedLines = [
         ...headerLines,
@@ -126,6 +127,11 @@ export async function start({
     throw new Error('TUI usage requires a valid config');
   }
 
+  const toolCalls = new Map<
+    string,
+    { name: string; args: Record<string, unknown> }
+  >();
+
   setLoadingMessage('Creating client');
   client = await createClient(sessionId, {
     onTurnStart() {
@@ -134,11 +140,20 @@ export async function start({
     onContent: (chunk) => {
       stream?.append(chunk);
     },
-    onToolcall(name) {
+    onToolcall(id, name, args) {
       chat.spinner(`Calling ${name}()`);
+      toolCalls.set(id, { name, args });
     },
-    onToolcallResult(name, result) {
-      chat.addMessage(result, 'Tool');
+    onToolcallResult(id, name, result) {
+      const call = toolCalls.get(id) ?? null;
+      if (call === null) {
+        return;
+      }
+      chat.addMessage(
+        `${pc.yellow(call.name)}(${prettify(call.args)})\n\n${result}`,
+        'Tool'
+      );
+      stream?.reset();
     },
     onTurnStop() {
       finishTurn();
@@ -180,8 +195,12 @@ export async function start({
     },
   });
 
-  client.onCommands((commands: Record<string, string>) => {
+  client.onPermissionRequest((commands: Record<string, string>) => {
     chat.setCommands(commands);
+  });
+
+  client.onPermissionRequestDone(() => {
+    chat.resetCommands();
   });
 
   chat.onSubmit(handleMessage);

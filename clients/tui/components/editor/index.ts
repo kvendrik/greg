@@ -8,6 +8,7 @@ export interface Tools {
   setDisabled: (disabled: boolean) => void;
   handleInput: (input: string) => void;
   setCommands: (commands: Record<string, string>) => void;
+  resetCommands: () => void;
 }
 
 export function editor(tui: TUI, { voiceMode }: { voiceMode: boolean }): Tools {

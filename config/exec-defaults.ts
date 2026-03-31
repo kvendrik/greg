@@ -117,8 +117,8 @@ export const profiles = {
       ['sessions'],
       ['skills'],
       ['telegram', 'send'],
-      ['hub', 'notion'],
-      ['hub', 'strava'],
+      ['hub', 'notion', '*'],
+      ['hub', 'strava', '*'],
     ],
     denyFlags: [],
     allowFlags: {
@@ -127,6 +127,11 @@ export const profiles = {
       '-v': { takesValue: false },
       '--verbose': { takesValue: false },
       '--voice': { takesValue: false },
+      '--json': { takesValue: false },
+      '-n': {
+        takesValue: true,
+        value: { type: 'int', min: 1, max: 200 },
+      },
     },
   },
   gog_read: {
@@ -323,7 +328,7 @@ export const profiles = {
   },
 } satisfies AllowedProfiles;
 
-export const readOnly: AllowedBins<typeof profiles> = {
+export const readOnly: AllowedBins = {
   '/usr/bin/wc': { profiles: ['coreutils_read'] },
   '/usr/bin/uniq': { profiles: ['coreutils_read'] },
   '/usr/bin/grep': { profiles: ['coreutils_read'] },
@@ -361,35 +366,6 @@ export const readOnly: AllowedBins<typeof profiles> = {
   '~/.bun/bin/greg': { profiles: ['greg_read'] },
 };
 
-export const safeWrite: AllowedBins<typeof profiles> = {
+export const safeWrite: AllowedBins = {
   '/opt/homebrew/bin/gog': { profiles: ['gog_write'] },
 };
-
-export function merge<P extends AllowedProfiles>(
-  ...bins: AllowedBins<P>[]
-): AllowedBins<P> {
-  const merged: AllowedBins<P> = {};
-
-  for (const binConfig of bins) {
-    for (const [binPath, binEntry] of Object.entries(binConfig)) {
-      if (!Object.hasOwn(merged, binPath)) {
-        merged[binPath] = { profiles: [...binEntry.profiles] };
-        continue;
-      }
-      const existing = merged[binPath];
-
-      // Union profiles, preserving existing order and de-duping.
-      const seenProfiles = new Set(existing.profiles);
-      const combinedProfiles = [...existing.profiles];
-      for (const profileName of binEntry.profiles) {
-        if (seenProfiles.has(profileName)) continue;
-        seenProfiles.add(profileName);
-        combinedProfiles.push(profileName);
-      }
-
-      merged[binPath] = { profiles: combinedProfiles };
-    }
-  }
-
-  return merged;
-}

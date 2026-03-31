@@ -28,13 +28,10 @@ type Profile = {
 };
 
 export type AllowedProfiles = Record<string, Profile>;
-export type AllowedBinsEntry<P extends AllowedProfiles = AllowedProfiles> = {
-  profiles: (keyof P)[];
+export type AllowedBinsEntry = {
+  profiles: string[];
 };
-export type AllowedBins<P extends AllowedProfiles = AllowedProfiles> = Record<
-  string,
-  AllowedBinsEntry<P>
->;
+export type AllowedBins = Record<string, AllowedBinsEntry>;
 
 export const execPolicyToolNames = ['execve', 'execve_pipeline'] as const;
 

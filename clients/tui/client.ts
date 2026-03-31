@@ -14,7 +14,10 @@ import pc from 'picocolors';
 
 export interface Client {
   prompt: (content: string) => Promise<void>;
-  onCommands: (callback: (commands: Record<string, string>) => void) => void;
+  onPermissionRequest: (
+    callback: (commands: Record<string, string>) => void
+  ) => void;
+  onPermissionRequestDone: (callback: () => void) => void;
   usage: gateway.Session['usage'];
 }
 
@@ -24,7 +27,9 @@ export async function client(
     getReply?: (message: string) => Promise<string>;
   }
 ): Promise<Client> {
-  let onCommands: ((commands: Record<string, string>) => void) | null = null;
+  let onPermissionRequest: ((commands: Record<string, string>) => void) | null =
+    null;
+  let onPermissionRequestDone: (() => void) | null = null;
 
   const { setGetReply } = await gateway.start();
 
@@ -41,10 +46,11 @@ export async function client(
       if (!callbacks.getReply) {
         return '';
       }
-      onCommands?.(details.commands);
+      onPermissionRequest?.(details.commands);
       const reply = await callbacks.getReply(
-        `${pc.yellow(details.toolName)}${pc.dim(`(${details.prettyParams})`)}`
+        `💂 Need permission to run tool: \n\n${pc.yellow(details.toolName)}${pc.dim(`(${details.prettyParams})`)}`
       );
+      onPermissionRequestDone?.();
       return reply;
     });
   }
@@ -53,8 +59,13 @@ export async function client(
     get usage() {
       return session.usage;
     },
-    onCommands: (callback: (commands: Record<string, string>) => void) => {
-      onCommands = callback;
+    onPermissionRequest: (
+      callback: (commands: Record<string, string>) => void
+    ) => {
+      onPermissionRequest = callback;
+    },
+    onPermissionRequestDone: (callback: () => void) => {
+      onPermissionRequestDone = callback;
     },
     prompt: async (content: string): Promise<void> =>
       session.prompt(

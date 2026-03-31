@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { get as getConfig } from '../config';
 import { get as getTools } from '../agent/tools';
 import type { ToolContext } from '../agent/types';
@@ -209,6 +209,18 @@ function coerceCliStringValue(
   return value;
 }
 
+function parseBooleanFlag(value: string | boolean): boolean {
+  if (typeof value === 'boolean') return value;
+
+  const normalizedValue = value.trim().toLowerCase();
+  if (['true', '1', 'yes', 'y', 'on'].includes(normalizedValue)) return true;
+  if (['false', '0', 'no', 'n', 'off'].includes(normalizedValue)) return false;
+
+  throw new InvalidArgumentError(
+    `Invalid boolean value "${value}". Use true/false, 1/0, yes/no, or on/off.`
+  );
+}
+
 const program = new Command();
 
 program
@@ -254,8 +266,11 @@ async function main(): Promise<void> {
           cmd.option(`${opt} <number>`, desc, (v: string) => Number(v));
         }
       } else if (propType === 'boolean') {
-        if (isRequired) cmd.requiredOption(opt, desc);
-        else cmd.option(opt, desc);
+        if (isRequired) {
+          cmd.requiredOption(`${opt} [boolean]`, desc, parseBooleanFlag, false);
+        } else {
+          cmd.option(`${opt} [boolean]`, desc, parseBooleanFlag);
+        }
       } else {
         const metavar = `<${placeholder}>`;
         if (isRequired) cmd.requiredOption(`${opt} ${metavar}`, desc);

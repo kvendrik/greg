@@ -122,11 +122,10 @@ const config: Config = {
       },
       /**
        * Optional:
-       * Define what root paths Greg can read and write to.
-       * ~/.greg and /tmp/greg are allowed by default.
+       * Define what root paths Greg can write to.
+       * ~/.greg/workspace, /tmp, and Greg's code folder (apart from `./agent`) are allowed by default.
        */
       files: {
-        read: ['~/path/to/code'],
         write: ['~/path/to/code', '!~/path/to/code/but/not/this/folder'],
       },
     },
@@ -460,7 +459,7 @@ const config: Config = {
 };
 ```
 
-Next, you can control where Greg can both read and write files to. By default he's allowed to both read and write to `~/.greg/workspace` and `/tmp/greg`. You can allow more paths through `tools.guard.files`:
+Next, you can control where Greg can write files to. By default he's allowed to write to `~/.greg/workspace`, `/tmp`, and his own code folder (apart from `./agent`). You can allow more paths through `tools.guard.files`:
 
 ```ts
 import { exec } from '@kvendrik/greg/config';
@@ -470,7 +469,6 @@ const config: Config = {
   guard: {
       ...
       files: {
-        read: ['~/path/to/code'],
         write: ['~/path/to/code', '!~/path/to/code/but/not/this/folder'],
       },
     },

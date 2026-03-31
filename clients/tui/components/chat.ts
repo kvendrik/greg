@@ -12,6 +12,7 @@ export interface Stream {
   append: (chunk: string) => void;
   value: () => string;
   close: () => void;
+  reset: () => void;
 }
 
 interface Tools {
@@ -24,6 +25,7 @@ interface Tools {
   hideSpinner: () => void;
   setDisabled: (disabled: boolean) => void;
   setCommands: (commands: Record<string, string>) => void;
+  resetCommands: () => void;
 }
 
 type Role = 'Greg' | 'System' | 'Tool';
@@ -79,6 +81,9 @@ export const chat = (
   return {
     setDisabled: editor.setDisabled,
     setCommands: editor.setCommands,
+    resetCommands: () => {
+      editor.resetCommands();
+    },
     onSubmit: (callback: (message: string) => void) => {
       onSubmit = callback;
     },
@@ -97,6 +102,9 @@ export const chat = (
       let messageIndex: number | null = null;
 
       return {
+        reset: () => {
+          messageIndex = null;
+        },
         append: (chunk: string) => {
           if (messageIndex === null) {
             messages.push({ role, content: chunk });
@@ -136,6 +144,12 @@ export const chat = (
             return box.render(width);
           }
 
+          if (message.role === 'Tool') {
+            const box = new Box(1, 0, (text) => pc.dim(text));
+            box.addChild(renderedContent);
+            return box.render(width);
+          }
+
           const box = new Box(1, 0, (text) => text);
           box.addChild(renderedContent);
           return box.render(width);
@@ -148,9 +162,12 @@ export const chat = (
           renderedLines.push(...renderMessage(message));
         }
 
-        if (showSpinner) renderedLines.push(...loader.render(width));
-
-        return [...renderedLines, '', ...editor.render(width)];
+        if (showSpinner) {
+          renderedLines.push(...loader.render(width));
+          return [...renderedLines, ...editor.render(width)];
+        } else {
+          return [...renderedLines, '', '', ...editor.render(width)];
+        }
       },
       handleInput: (input) => {
         editor.handleInput(input);

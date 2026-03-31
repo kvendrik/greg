@@ -24,6 +24,11 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
             'When true (default), extract main content with Readability. Set false if the first result looks wrong (novelty layouts, heavy UI) to use normalized full body text instead.',
         })
       ),
+      max_chars: Type.Optional(
+        Type.Number({
+          description: `Maximum characters of page content to return (default ${DEFAULT_MAX_CHARS}). Increase when you need more of the page (e.g. long docs), decrease to save context.`,
+        })
+      ),
     }),
 
     async execute(_id, params, signal) {
@@ -31,12 +36,17 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
         throw new DOMException('Aborted', 'AbortError');
       }
 
-      const { url: urlInput, use_readability: useReadabilityParam } =
-        params as {
-          url: string;
-          use_readability: boolean | undefined;
-        };
+      const {
+        url: urlInput,
+        use_readability: useReadabilityParam,
+        max_chars: maxCharsParam,
+      } = params as {
+        url: string;
+        use_readability: boolean | undefined;
+        max_chars: number | undefined;
+      };
       const useReadability = useReadabilityParam !== false;
+      const maxChars = maxCharsParam ?? DEFAULT_MAX_CHARS;
 
       let url: string;
       try {
@@ -111,10 +121,10 @@ Returns { url: string, title: string, content: string, truncated: boolean }`,
           useReadability,
         });
 
-        const truncated = capped || content.length > MAX_CHARS;
+        const truncated = capped || content.length > maxChars;
         const trimmedContent =
-          content.length > MAX_CHARS
-            ? content.slice(0, MAX_CHARS) + '\n\n[truncated]'
+          content.length > maxChars
+            ? content.slice(0, maxChars) + '\n\n[truncated]'
             : content;
 
         const details = {
@@ -311,7 +321,7 @@ async function guardedFetch(
 }
 
 const FETCH_TIMEOUT_MS = 15_000;
-const MAX_CHARS = 20_000;
+const DEFAULT_MAX_CHARS = 20_000;
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5MB
 
 function extractContent(

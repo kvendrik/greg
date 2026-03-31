@@ -11,6 +11,7 @@ import { get as getTools } from './tools';
 import { formatDate, getWorkspacePath } from './utilities';
 import type { AgentConfig, ToolContext } from './types';
 import { createLogger, type Logger } from '../utilities/logger';
+import { path } from '../config';
 
 export type Callbacks = Partial<{
   onTurnStart: (prompt: PromptInput) => void;
@@ -18,8 +19,8 @@ export type Callbacks = Partial<{
   onContent: (chunk: string) => void;
   onThinking: (chunk: string) => void;
 
-  onToolcall: (name: string, args: Record<string, unknown>) => void;
-  onToolcallResult?: (name: string, result: string) => void;
+  onToolcall: (id: string, name: string, args: Record<string, unknown>) => void;
+  onToolcallResult?: (id: string, name: string, result: string) => void;
 
   onTurnDone: (newMessages?: AgentMessage[]) => void;
   onTurnStop: () => void;
@@ -213,11 +214,17 @@ export class Agent {
         channelCallbacks.forEach((callback) => callback.onThinking?.(chunk));
         extraCallbacks?.onThinking?.(chunk);
       },
-      onToolcall: (name: string, args: Record<string, unknown>) => {
+      onToolcall: (id: string, name: string, args: Record<string, unknown>) => {
         channelCallbacks.forEach((callback) =>
-          callback.onToolcall?.(name, args)
+          callback.onToolcall?.(id, name, args)
         );
-        extraCallbacks?.onToolcall?.(name, args);
+        extraCallbacks?.onToolcall?.(id, name, args);
+      },
+      onToolcallResult: (id: string, name: string, result: string) => {
+        channelCallbacks.forEach((callback) =>
+          callback.onToolcallResult?.(id, name, result)
+        );
+        extraCallbacks?.onToolcallResult?.(id, name, result);
       },
       onTurnDone: (messages?: AgentMessage[]) => {
         channelCallbacks.forEach((callback) => callback.onTurnDone?.(messages));
@@ -459,6 +466,7 @@ export class Agent {
           break;
         case 'tool_execution_start':
           callbacks.onToolcall?.(
+            event.toolCallId,
             event.toolName,
             (event as { args?: Record<string, unknown> }).args ?? {}
           );
@@ -469,6 +477,7 @@ export class Agent {
         case 'tool_execution_end':
           this.logger.info(JSON.stringify(event.result));
           callbacks.onToolcallResult?.(
+            event.toolCallId,
             event.toolName,
             JSON.stringify(event.result)
           );
@@ -648,6 +657,7 @@ Prompts may include explicit hints about how or where a message was sent (for ex
 ## Environment
 - The code you're running on is at: ${process.cwd()}.
 - Your workspace is at: ${getWorkspacePath(config)}. This is where you store your memory and notes.
+- Your config is at: ${path}.
 
 ### Error reporting
 If any tool call returns an error, always explicitly tell the user:
