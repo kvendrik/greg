@@ -23,7 +23,7 @@ export function tui(): TUI {
   // };
 
   const stopTui = (reason?: unknown): void => {
-    console.error(reason);
+    if (reason) console.error(reason);
     if (hasStoppedTui) {
       return;
     }

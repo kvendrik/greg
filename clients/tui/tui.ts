@@ -323,7 +323,7 @@ export async function start({
   function helpMessage(): string {
     const memoryInfo = getMemoryInfo(config);
     return `    Controls:
-      Ctrl+O - Toggle tool messages
+      Ctrl+O - Toggle tool results
 
     Usage Legend:
       ↑ fresh input tokens

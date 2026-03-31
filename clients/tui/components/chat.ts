@@ -141,18 +141,18 @@ export const chat = (
         const renderMessage = (message: ChatMessage): string[] => {
           const renderedContent = markdown({
             content: message.content,
-            paddingX: 1,
+            paddingX: 0,
             paddingY: 0,
           });
 
           if (message.role === 'You') {
-            const box = new Box(1, 1, (text) => pc.bgBlack(text));
+            const box = new Box(2, 1, (text) => pc.bgBlack(text));
             box.addChild(renderedContent);
             return box.render(width);
           }
 
           if (message.role === 'Greg') {
-            const box = new Box(1, 1, (text) => text);
+            const box = new Box(2, 1, (text) => text);
             box.addChild(renderedContent);
             return box.render(width);
           }
@@ -161,12 +161,12 @@ export const chat = (
             if (!showToolMessages) {
               return [];
             }
-            const box = new Box(1, 0, (text) => pc.dim(text));
+            const box = new Box(2, 1, (text) => pc.dim(text));
             box.addChild(renderedContent);
             return box.render(width);
           }
 
-          const box = new Box(1, 0, (text) => text);
+          const box = new Box(2, 1, (text) => text);
           box.addChild(new Text(pc.dim(`System: ${message.content}`)));
           return box.render(width);
         };
@@ -177,7 +177,12 @@ export const chat = (
           renderedLines.push(...renderMessage(message));
         }
 
-        if (showSpinner) renderedLines.push(...loader.render(width));
+        const lastIsYou = messages[messages.length - 1]?.role === 'You';
+
+        if (showSpinner) {
+          if (lastIsYou) renderedLines.push('');
+          renderedLines.push(` ${loader.render(width - 1)[1]}`);
+        }
         return [...renderedLines, ...editor.render(width)];
       },
       handleInput: (input) => {
