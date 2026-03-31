@@ -42,7 +42,7 @@ bun link
 2. Set up the config file in `~/.greg/config.ts`
 
 ```ts
-import { type Config, exec, getModel } from '@kvendrik/greg/config';
+import { type Config, getModel } from '@kvendrik/greg/config';
 
 const config: Config = {
   models: [
@@ -115,10 +115,10 @@ const config: Config = {
        */
       exec: {
         profiles: exec.profiles,
-        allowBins: exec.merge<typeof exec.profiles>(
-          exec.readOnly,
-          exec.safeWrite
-        ),
+        allowBins: {
+          ...exec.readOnly,
+          ...exec.safeWrite,
+        },
       },
       /**
        * Optional:
@@ -448,10 +448,10 @@ const config: Config = {
       ...
       exec: {
         profiles: exec.profiles,
-        allowBins: exec.merge<typeof exec.profiles>(
-          exec.readOnly,
-          exec.safeWrite
-        ),
+        allowBins: {
+          ...exec.readOnly,
+          ...exec.safeWrite
+        },
       },
     },
   },

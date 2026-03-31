@@ -3,6 +3,7 @@ import {
   type TUI,
   CancellableLoader,
   Box,
+  Text,
 } from '@mariozechner/pi-tui';
 import pc from 'picocolors';
 import { markdown } from './markdown';
@@ -148,6 +149,11 @@ export const chat = (
             const box = new Box(1, 0, (text) => pc.dim(text));
             box.addChild(renderedContent);
             return box.render(width);
+          }
+
+          if (message.role === 'System') {
+            const text = new Text(pc.dim(`System: ${message.content}`));
+            return text.render(width);
           }
 
           const box = new Box(1, 0, (text) => text);

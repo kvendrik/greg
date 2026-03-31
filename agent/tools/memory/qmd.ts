@@ -3,6 +3,7 @@ import { resolve, join } from 'path';
 import { createStore, DEFAULT_MULTI_GET_MAX_BYTES } from '@tobilu/qmd';
 import type { QMDStore, SearchResult } from '@tobilu/qmd';
 import { createLogger } from '../../../utilities/logger';
+import { projectRoot } from '../../../config';
 
 const logger = createLogger('QMD');
 
@@ -333,7 +334,7 @@ function runQmd(
   return new Promise((resolve) => {
     const child = spawn('bun', ['run', 'qmd', ...args], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      cwd: options.cwd ?? process.cwd(),
+      cwd: projectRoot,
       shell: false,
     });
 

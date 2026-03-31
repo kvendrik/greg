@@ -19,7 +19,8 @@ export const home = process.env.TEST_ENV
   ? join(tmpdir(), '.greg')
   : join(homedir(), '.greg');
 
-const workspace = join(home, 'workspace');
+export const projectRoot = join(import.meta.dir, '..');
+export const workspace = join(home, 'workspace');
 export const path = join(home, 'config.ts');
 
 /** Minimal config for automated runs; must load as ESM (dynamic import). */

@@ -28,8 +28,8 @@ export async function start({
 
   const tui = createTui();
   const chat = createChat(tui, { voiceMode });
-
   const config = await getConfig();
+
   let model = config.models.find((entry) => entry.role === 'primary')?.model;
 
   if (!model) {
@@ -331,6 +331,6 @@ ${memoryInfo.map((info) => `      ${info.location.replace(process.env.HOME ?? ''
 
     Loaded skills:
 ${skills.map((skill) => `      ${skill.location.replace(process.env.HOME ?? '', '~')}`).join('\n')}
-    `;
+`;
   }
 }

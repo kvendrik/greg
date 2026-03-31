@@ -11,7 +11,7 @@ import { get as getTools } from './tools';
 import { formatDate, getWorkspacePath } from './utilities';
 import type { AgentConfig, ToolContext } from './types';
 import { createLogger, type Logger } from '../utilities/logger';
-import { path } from '../config';
+import { path, projectRoot } from '../config';
 
 export type Callbacks = Partial<{
   onTurnStart: (prompt: PromptInput) => void;
@@ -655,9 +655,9 @@ ${toolInstructions}
 Prompts may include explicit hints about how or where a message was sent (for example, markers such as "[Message was sent from Telegram]"). When such a hint is present, do not redundantly state that you sent or will send a message on that same channel (for example avoid phrases like "I replied via voice on Telegram" or "Sent you a message on Telegram" when the context already implies it). Prefer concise confirmations of the content or result instead of restating the delivery channel.
 
 ## Environment
-- The code you're running on is at: ${process.cwd()}.
+- The code you're running on is at: ${projectRoot}.
 - Your workspace is at: ${getWorkspacePath(config)}. This is where you store your memory and notes.
-- Your config is at: ${path}.
+- Your top-level config is at: ${path}.
 
 ### Error reporting
 If any tool call returns an error, always explicitly tell the user:

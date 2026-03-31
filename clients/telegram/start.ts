@@ -8,7 +8,7 @@ if (!config.telegram) {
   throw new Error('Telegram client is not configured.');
 }
 
-const { setGetReply, stop } = await start();
+const { setGetReply, stop } = await start(config);
 
 await startTelegramClient();
 
